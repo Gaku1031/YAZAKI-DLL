@@ -92,7 +92,7 @@ __declspec(dllexport) BOOL __stdcall InitializeDLL(const char* model_dir);
 
 /**
  * @brief 血圧解析開始
- * @param request_id リクエストID (形式: "yyyyMMddHHmmssfff_driverCode")
+ * @param request_id リクエストID (形式: "yyyyMMddHHmmssfff_customerCode_driverCode")
  * @param height 身長 (cm, 整数)
  * @param weight 体重 (kg, 整数)
  * @param sex 性別 (BP_SEX_MALE=1, BP_SEX_FEMALE=2)
@@ -108,7 +108,7 @@ __declspec(dllexport) BOOL __stdcall InitializeDLL(const char* model_dir);
  * }
  * 
  * int error_count = StartBloodPressureAnalysis(
- *     "20250106120000001_DRIVER001",
+ *     "20250106120000001_CUSTOMER001_DRIVER001",
  *     170, 70, BP_SEX_MALE,
  *     "C:\\Videos\\measurement.webm",
  *     OnBPResult
@@ -132,7 +132,7 @@ __declspec(dllexport) int __stdcall StartBloodPressureAnalysis(
  * 
  * @example
  * @code
- * if (CancelBloodPressureProcessing("20250106120000001_DRIVER001")) {
+ * if (CancelBloodPressureProcessing("20250106120000001_CUSTOMER001_DRIVER001")) {
  *     printf("処理中断成功\n");
  * }
  * @endcode
@@ -147,7 +147,7 @@ __declspec(dllexport) BOOL __stdcall CancelBloodPressureProcessing(const char* r
  * 
  * @example
  * @code
- * const char* status = GetBloodPressureStatus("20250106120000001_DRIVER001");
+ * const char* status = GetBloodPressureStatus("20250106120000001_CUSTOMER001_DRIVER001");
  * if (strcmp(status, BP_STATUS_PROCESSING) == 0) {
  *     printf("処理中...\n");
  * }
@@ -172,19 +172,20 @@ __declspec(dllexport) const char* __stdcall GetDLLVersion(void);
 
 /**
  * @brief リクエストID生成ヘルパー
+ * @param customer_code 顧客コード
  * @param driver_code 乗務員コード
- * @param buffer 生成されたリクエストIDを格納するバッファ (最低32文字)
+ * @param buffer 生成されたリクエストIDを格納するバッファ (最低48文字)
  * @return 生成されたリクエストID文字列
- * @note バッファサイズは32文字以上確保すること
+ * @note バッファサイズは48文字以上確保すること
  * 
  * @example
  * @code
  * char request_id[64];
- * GenerateRequestID("DRIVER001", request_id);
+ * GenerateRequestID("CUSTOMER001", "DRIVER001", request_id);
  * printf("生成されたID: %s\n", request_id);
  * @endcode
  */
-__declspec(dllexport) const char* __stdcall GenerateRequestID(const char* driver_code, char* buffer);
+__declspec(dllexport) const char* __stdcall GenerateRequestID(const char* customer_code, const char* driver_code, char* buffer);
 
 /**
  * @brief 動画ファイル検証

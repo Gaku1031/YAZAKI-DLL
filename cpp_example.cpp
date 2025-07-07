@@ -47,7 +47,7 @@ typedef int (*StartBPAnalysisFunc)(const char*, int, int, int, const char*, BPAn
 typedef BOOL (*CancelBPProcessingFunc)(const char*);
 typedef const char* (*GetBPStatusFunc)(const char*);
 typedef const char* (*GetDLLVersionFunc)(void);
-typedef const char* (*GenerateRequestIDFunc)(const char*, char*);
+typedef const char* (*GenerateRequestIDFunc)(const char*, const char*, char*);
 typedef BOOL (*ValidateMovieFileFunc)(const char*);
 
 int main() {
@@ -90,7 +90,7 @@ int main() {
     
     // リクエストID生成
     char request_id_buffer[64];
-    const char* request_id = GenerateRequestID("DRIVER001", request_id_buffer);
+    const char* request_id = GenerateRequestID("CUSTOMER001", "DRIVER001", request_id_buffer);
     std::cout << "生成されたリクエストID: " << request_id << std::endl;
     
     // 動画ファイルパス設定
