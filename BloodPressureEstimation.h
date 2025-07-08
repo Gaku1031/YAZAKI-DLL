@@ -30,17 +30,17 @@ typedef struct {
 
 /**
  * @brief 血圧解析結果コールバック関数型
- * @param request_id リクエストID
- * @param sbp 収縮期血圧 (mmHg)
- * @param dbp 拡張期血圧 (mmHg)
- * @param csv_data PPGローデータ (CSV形式)
+ * @param requestId リクエストID
+ * @param maxBloodPressure 最高血圧 (mmHg)
+ * @param minBloodPressure 最低血圧 (mmHg)
+ * @param measureRowData PPGローデータ (CSV形式)
  * @param errors エラー情報配列 (NULL=エラーなし)
  */
 typedef void (*BPAnalysisCallback)(
-    const char* request_id,
-    int sbp,
-    int dbp,
-    const char* csv_data,
+    const char* requestId,
+    int maxBloodPressure,
+    int minBloodPressure,
+    const char* measureRowData,
     const BPErrorInfo* errors
 );
 
@@ -92,13 +92,13 @@ __declspec(dllexport) BOOL __stdcall InitializeDLL(const char* model_dir);
 
 /**
  * @brief 血圧解析開始
- * @param request_id リクエストID (形式: "yyyyMMddHHmmssfff_customerCode_driverCode")
+ * @param requestId リクエストID (形式: "${yyyyMMddHHmmssfff}_${顧客コード}_${乗務員コード}")
  * @param height 身長 (cm, 整数)
  * @param weight 体重 (kg, 整数)
  * @param sex 性別 (BP_SEX_MALE=1, BP_SEX_FEMALE=2)
- * @param movie_path WebM動画ファイルの絶対パス
+ * @param measurementMoviePath WebM動画ファイルの絶対パス
  * @param callback 結果通知用コールバック関数 (NULL可)
- * @return エラー数 (0=成功, >0=エラー発生)
+ * @return エラーコード文字列 (NULL=成功, エラー発生時はエラーコード)
  * @note 非同期処理。結果はコールバックで通知される
  * 
  * @example
@@ -107,53 +107,53 @@ __declspec(dllexport) BOOL __stdcall InitializeDLL(const char* model_dir);
  *     printf("血圧結果: %s - SBP:%d, DBP:%d\n", req_id, sbp, dbp);
  * }
  * 
- * int error_count = StartBloodPressureAnalysis(
- *     "20250106120000001_CUSTOMER001_DRIVER001",
+ * const char* error_code = StartBloodPressureAnalysis(
+ *     "20250707083524932_9000000001_0000012345",
  *     170, 70, BP_SEX_MALE,
  *     "C:\\Videos\\measurement.webm",
  *     OnBPResult
  * );
  * @endcode
  */
-__declspec(dllexport) int __stdcall StartBloodPressureAnalysis(
-    const char* request_id,
+__declspec(dllexport) const char* __stdcall StartBloodPressureAnalysis(
+    const char* requestId,
     int height,
     int weight,
     int sex,
-    const char* movie_path,
+    const char* measurementMoviePath,
     BPAnalysisCallback callback
 );
 
 /**
  * @brief 血圧解析処理中断
- * @param request_id 中断対象のリクエストID
+ * @param requestId 中断対象のリクエストID
  * @return 成功=TRUE, 失敗=FALSE
  * @note 処理中の解析を強制中断する
  * 
  * @example
  * @code
- * if (CancelBloodPressureProcessing("20250106120000001_CUSTOMER001_DRIVER001")) {
+ * if (CancelBloodPressureProcessing("20250707083524932_9000000001_0000012345")) {
  *     printf("処理中断成功\n");
  * }
  * @endcode
  */
-__declspec(dllexport) BOOL __stdcall CancelBloodPressureProcessing(const char* request_id);
+__declspec(dllexport) BOOL __stdcall CancelBloodPressureProcessing(const char* requestId);
 
 /**
  * @brief 血圧解析処理状況取得
- * @param request_id 状況確認対象のリクエストID
+ * @param requestId 状況確認対象のリクエストID
  * @return 処理状況文字列 (BP_STATUS_NONE | BP_STATUS_PROCESSING)
  * @note 処理完了はコールバックで通知されるため、状況には含まれない
  * 
  * @example
  * @code
- * const char* status = GetBloodPressureStatus("20250106120000001_CUSTOMER001_DRIVER001");
+ * const char* status = GetBloodPressureStatus("20250707083524932_9000000001_0000012345");
  * if (strcmp(status, BP_STATUS_PROCESSING) == 0) {
  *     printf("処理中...\n");
  * }
  * @endcode
  */
-__declspec(dllexport) const char* __stdcall GetBloodPressureStatus(const char* request_id);
+__declspec(dllexport) const char* __stdcall GetBloodPressureStatus(const char* requestId);
 
 /**
  * @brief DLLバージョン情報取得
@@ -172,8 +172,8 @@ __declspec(dllexport) const char* __stdcall GetDLLVersion(void);
 
 /**
  * @brief リクエストID生成ヘルパー
- * @param customer_code 顧客コード
- * @param driver_code 乗務員コード
+ * @param customerCode 顧客コード
+ * @param driverCode 乗務員コード
  * @param buffer 生成されたリクエストIDを格納するバッファ (最低48文字)
  * @return 生成されたリクエストID文字列
  * @note バッファサイズは48文字以上確保すること
@@ -181,15 +181,15 @@ __declspec(dllexport) const char* __stdcall GetDLLVersion(void);
  * @example
  * @code
  * char request_id[64];
- * GenerateRequestID("CUSTOMER001", "DRIVER001", request_id);
+ * GenerateRequestID("9000000001", "0000012345", request_id);
  * printf("生成されたID: %s\n", request_id);
  * @endcode
  */
-__declspec(dllexport) const char* __stdcall GenerateRequestID(const char* customer_code, const char* driver_code, char* buffer);
+__declspec(dllexport) const char* __stdcall GenerateRequestID(const char* customerCode, const char* driverCode, char* buffer);
 
 /**
  * @brief 動画ファイル検証
- * @param movie_path 動画ファイルパス
+ * @param moviePath 動画ファイルパス
  * @return 有効=TRUE, 無効=FALSE
  * @note WebM形式、30秒、30fps、1280x720の条件をチェック
  * 
@@ -200,7 +200,7 @@ __declspec(dllexport) const char* __stdcall GenerateRequestID(const char* custom
  * }
  * @endcode
  */
-__declspec(dllexport) BOOL __stdcall ValidateMovieFile(const char* movie_path);
+__declspec(dllexport) BOOL __stdcall ValidateMovieFile(const char* moviePath);
 
 #ifdef __cplusplus
 }

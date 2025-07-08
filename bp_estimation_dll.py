@@ -24,6 +24,7 @@ from scipy.signal import savgol_filter
 import pywt
 from scipy.stats import zscore
 import logging
+import re
 
 # ログ設定
 logging.basicConfig(level=logging.INFO)
@@ -355,33 +356,31 @@ class BloodPressureDLL:
 
     def start_blood_pressure_analysis(self, request_id: str, height: int, weight: int, 
                                     sex: int, measurement_movie_path: str, 
-                                    callback: Optional[Callable] = None) -> List[ErrorInfo]:
+                                    callback: Optional[Callable] = None) -> Optional[str]:
         """血圧解析開始"""
-        errors = []
         
         # 初期化チェック
         if not self.is_initialized:
-            errors.append(ErrorInfo(ErrorCode.DLL_NOT_INITIALIZED, "DLLが初期化されていません"))
-            return errors
+            return ErrorCode.DLL_NOT_INITIALIZED
         
         # パラメータ検証
         if not request_id or not measurement_movie_path:
-            errors.append(ErrorInfo(ErrorCode.INVALID_INPUT_PARAMETERS, "必須パラメータが不足しています"))
-            return errors
+            return ErrorCode.INVALID_INPUT_PARAMETERS
+        
+        # リクエストID形式の検証 (${yyyyMMddHHmmssfff}_${顧客コード}_${乗務員コード})
+        if not self._validate_request_id(request_id):
+            return ErrorCode.INVALID_INPUT_PARAMETERS
         
         if not os.path.exists(measurement_movie_path):
-            errors.append(ErrorInfo(ErrorCode.INVALID_INPUT_PARAMETERS, "動画ファイルが存在しません"))
-            return errors
+            return ErrorCode.INVALID_INPUT_PARAMETERS
         
         if not (1 <= sex <= 2):
-            errors.append(ErrorInfo(ErrorCode.INVALID_INPUT_PARAMETERS, "性別は1または2である必要があります"))
-            return errors
+            return ErrorCode.INVALID_INPUT_PARAMETERS
         
         # 処理中チェック
         with self.lock:
             if request_id in self.processing_requests:
-                errors.append(ErrorInfo(ErrorCode.REQUEST_DURING_PROCESSING, "同一リクエストIDで処理中です"))
-                return errors
+                return ErrorCode.REQUEST_DURING_PROCESSING
             
             # 処理開始
             self.request_status[request_id] = ProcessingStatus.PROCESSING
@@ -392,7 +391,7 @@ class BloodPressureDLL:
             self.processing_requests[request_id] = thread
             thread.start()
         
-        return errors
+        return None  # 成功時はNone
 
     def _process_blood_pressure_analysis(self, request_id: str, height: int, weight: int,
                                        sex: int, measurement_movie_path: str,
@@ -410,7 +409,7 @@ class BloodPressureDLL:
             
             # 成功時のコールバック
             if callback:
-                callback(request_id, sbp, dbp, csv_data, [])
+                callback(request_id, sbp, dbp, csv_data, None)
             
             logger.info(f"血圧解析完了: {request_id} - SBP: {sbp}, DBP: {dbp}")
             
@@ -445,6 +444,13 @@ class BloodPressureDLL:
     def get_version_info(self) -> str:
         """バージョン情報取得"""
         return self.version
+    
+    def _validate_request_id(self, request_id: str) -> bool:
+        """リクエストID形式の検証"""
+        # 形式: ${yyyyMMddHHmmssfff}_${顧客コード}_${乗務員コード}
+        # 例: 20250707083524932_9000000001_0000012345
+        pattern = r'^\d{17}_\w+_\w+$'
+        return re.match(pattern, request_id) is not None
 
 # グローバルDLLインスタンス
 dll_instance = BloodPressureDLL()
@@ -455,11 +461,11 @@ def initialize_dll(model_dir: str = "models") -> bool:
     return dll_instance.initialize(model_dir)
 
 def start_bp_analysis(request_id: str, height: int, weight: int, sex: int,
-                     movie_path: str, callback_func=None) -> int:
+                     movie_path: str, callback_func=None) -> Optional[str]:
     """血圧解析開始"""
-    errors = dll_instance.start_blood_pressure_analysis(
+    error_code = dll_instance.start_blood_pressure_analysis(
         request_id, height, weight, sex, movie_path, callback_func)
-    return len(errors)
+    return error_code
 
 def cancel_bp_processing(request_id: str) -> bool:
     """血圧解析中断"""
@@ -473,13 +479,18 @@ def get_dll_version() -> str:
     """DLLバージョン取得"""
     return dll_instance.get_version_info()
 
+def generate_request_id(customer_code: str, driver_code: str) -> str:
+    """リクエストID生成"""
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]  # yyyyMMddHHmmssfff
+    return f"{timestamp}_{customer_code}_{driver_code}"
+
 # テスト用のコールバック関数
-def test_callback(request_id: str, sbp: int, dbp: int, csv_data: str, errors: List[ErrorInfo]):
+def test_callback(request_id: str, max_bp: int, min_bp: int, csv_data: str, errors: List[ErrorInfo]):
     """テスト用コールバック"""
     print(f"=== 血圧解析結果 ===")
     print(f"Request ID: {request_id}")
-    print(f"収縮期血圧: {sbp} mmHg")
-    print(f"拡張期血圧: {dbp} mmHg")
+    print(f"最高血圧: {max_bp} mmHg")
+    print(f"最低血圧: {min_bp} mmHg")
     print(f"CSVデータサイズ: {len(csv_data)} 文字")
     
     if errors:
@@ -503,19 +514,19 @@ if __name__ == "__main__":
         print("DLL初期化成功")
         
         # テスト用パラメータ
-        test_request_id = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}_TEST001"
+        test_request_id = generate_request_id("9000000001", "0000012345")
         test_height = 170
         test_weight = 70
         test_sex = 1  # 男性
         test_movie_path = "sample-data/100万画素.webm"
         
         # 血圧解析実行
-        error_count = start_bp_analysis(
+        error_code = start_bp_analysis(
             test_request_id, test_height, test_weight, test_sex,
             test_movie_path, test_callback
         )
         
-        if error_count == 0:
+        if error_code is None:
             print("血圧解析開始成功")
             
             # 処理状況監視
@@ -527,6 +538,6 @@ if __name__ == "__main__":
                 time.sleep(1)
                 
         else:
-            print(f"血圧解析開始失敗: {error_count} エラー")
+            print(f"血圧解析開始失敗: {error_code}")
     else:
         print("DLL初期化失敗")

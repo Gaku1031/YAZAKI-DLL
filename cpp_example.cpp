@@ -18,13 +18,13 @@ std::string g_result_message;
 /**
  * @brief 血圧解析結果コールバック関数
  */
-void OnBloodPressureResult(const char* request_id, int sbp, int dbp, 
-                          const char* csv_data, const BPErrorInfo* errors) {
+void OnBloodPressureResult(const char* requestId, int maxBloodPressure, int minBloodPressure, 
+                          const char* measureRowData, const BPErrorInfo* errors) {
     std::cout << "=== 血圧解析結果 ===" << std::endl;
-    std::cout << "Request ID: " << request_id << std::endl;
-    std::cout << "収縮期血圧: " << sbp << " mmHg" << std::endl;
-    std::cout << "拡張期血圧: " << dbp << " mmHg" << std::endl;
-    std::cout << "CSVデータサイズ: " << strlen(csv_data) << " 文字" << std::endl;
+    std::cout << "Request ID: " << requestId << std::endl;
+    std::cout << "最高血圧: " << maxBloodPressure << " mmHg" << std::endl;
+    std::cout << "最低血圧: " << minBloodPressure << " mmHg" << std::endl;
+    std::cout << "CSVデータサイズ: " << strlen(measureRowData) << " 文字" << std::endl;
     
     if (errors != nullptr) {
         std::cout << "エラー発生:" << std::endl;
@@ -43,7 +43,7 @@ void OnBloodPressureResult(const char* request_id, int sbp, int dbp,
  * @brief DLL関数ポインタ型定義
  */
 typedef BOOL (*InitializeDLLFunc)(const char*);
-typedef int (*StartBPAnalysisFunc)(const char*, int, int, int, const char*, BPAnalysisCallback);
+typedef const char* (*StartBPAnalysisFunc)(const char*, int, int, int, const char*, BPAnalysisCallback);
 typedef BOOL (*CancelBPProcessingFunc)(const char*);
 typedef const char* (*GetBPStatusFunc)(const char*);
 typedef const char* (*GetDLLVersionFunc)(void);
@@ -90,7 +90,7 @@ int main() {
     
     // リクエストID生成
     char request_id_buffer[64];
-    const char* request_id = GenerateRequestID("CUSTOMER001", "DRIVER001", request_id_buffer);
+    const char* request_id = GenerateRequestID("9000000001", "0000012345", request_id_buffer);
     std::cout << "生成されたリクエストID: " << request_id << std::endl;
     
     // 動画ファイルパス設定
@@ -115,10 +115,10 @@ int main() {
     std::cout << "  動画: " << movie_path << std::endl;
     
     // 血圧解析開始
-    int error_count = StartBPAnalysis(request_id, height, weight, sex, movie_path, OnBloodPressureResult);
+    const char* error_code = StartBPAnalysis(request_id, height, weight, sex, movie_path, OnBloodPressureResult);
     
-    if (error_count > 0) {
-        std::cerr << "エラー: 血圧解析開始に失敗しました（エラー数: " << error_count << "）" << std::endl;
+    if (error_code != nullptr) {
+        std::cerr << "エラー: 血圧解析開始に失敗しました（エラーコード: " << error_code << "）" << std::endl;
         FreeLibrary(hDLL);
         return -1;
     }
