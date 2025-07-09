@@ -1,5 +1,5 @@
 """
-血圧推定DLL - Windows 32-bit DLL インターフェース
+血圧推定DLL - Windows 64-bit DLL インターフェース
 ctypesを使用してWindows DLLとして公開
 """
 
