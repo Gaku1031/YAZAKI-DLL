@@ -12,7 +12,7 @@ build_exe_options = {
     "packages": [
         "cv2", "mediapipe", "numpy", "scipy", "sklearn", "pandas", 
         "joblib", "pywt", "threading", "ctypes", "logging", "collections",
-        "datetime", "time", "json", "pathlib"
+        "datetime", "time", "json", "pathlib", "re"
     ],
     "excludes": [
         "tkinter", "matplotlib", "PyQt5", "PyQt6", "PySide2", "PySide6",
@@ -30,7 +30,8 @@ build_exe_options = {
         ("models/", "models/"),
         ("sample-data/", "sample-data/"),
         ("bp_estimation_dll.py", "bp_estimation_dll.py"),
-        ("dll_interface.py", "dll_interface.py")
+        ("dll_interface.py", "dll_interface.py"),
+        ("BloodPressureEstimation.h", "BloodPressureEstimation.h")
     ],
     "zip_include_packages": "*",
     "zip_exclude_packages": [],
