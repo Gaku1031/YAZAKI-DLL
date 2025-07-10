@@ -485,7 +485,7 @@ import os
 import sys
 
 # 基本設定
-APP_NAME = "BloodPressureEstimation_FaceMeshOnly"
+APP_NAME = "BloodPressureEstimation"
 SCRIPT_PATH = "bp_estimation_facemesh_only.py"
 
 # MediaPipe不要コンポーネントの除外（大幅サイズ削減）
@@ -673,8 +673,8 @@ def build_facemesh_only_dll():
         print("✓ PyInstallerビルド成功")
         
         # 生成されたEXEをDLLにリネーム
-        exe_path = Path("dist") / "BloodPressureEstimation_FaceMeshOnly.exe"
-        dll_path = Path("dist") / "BloodPressureEstimation_FaceMeshOnly.dll"
+        exe_path = Path("dist") / "BloodPressureEstimation.exe"
+        dll_path = Path("dist") / "BloodPressureEstimationy.dll"
         
         if exe_path.exists():
             exe_path.rename(dll_path)
