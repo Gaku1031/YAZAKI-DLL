@@ -15,7 +15,7 @@ def test_dll_with_sample_video():
     print("=== サンプル動画を使用したDLL実動作テスト ===")
     
     # 1. DLLファイル存在確認
-    dll_path = Path("dist") / "BloodPressureEstimation_SpecCompliant.dll"
+    dll_path = Path("dist") / "BloodPressureEstimation.dll"
     if not dll_path.exists():
         print(f"✗ DLLファイルが見つかりません: {dll_path}")
         print("先にビルドを実行してください: python build_spec_compliant_dll.py")
