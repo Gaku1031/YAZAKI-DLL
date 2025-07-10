@@ -1,0 +1,24 @@
+# バランス調整済み血圧推定DLL用の依存関係
+# 20MB目標、精度維持、軽量化のバランス
+
+# ビルド関連
+pyinstaller>=6.1.0
+
+# 画像処理（軽量版）
+opencv-python-headless==4.8.1.78
+
+# MediaPipe（FaceMesh使用）
+mediapipe==0.10.7
+
+# 数値計算
+numpy==1.24.3
+
+# 機械学習（軽量版）
+scikit-learn==1.3.0
+joblib==1.3.2
+
+# 信号処理（バンドパスフィルタ用）
+scipy==1.10.1
+
+# Windows DLL開発用
+pywin32>=306; sys_platform == "win32"
