@@ -201,7 +201,7 @@ def build_spec_compliant_dll():
     # PyInstallerコマンド
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "BloodPressureEstimation.spec",
+        "BloodPressureEstimation_SpecCompliant.spec",
         "--clean",
         "--noconfirm",
         "--log-level=WARN"
@@ -214,7 +214,7 @@ def build_spec_compliant_dll():
         
         # 生成されたEXEをDLLにリネーム
         exe_path = Path("dist") / "BloodPressureEstimation.exe"
-        dll_path = Path("dist") / "BloodPressureEstimation.dll"
+        dll_path = Path("dist") / "BloodPressureEstimation_SpecCompliant.dll"
         
         if exe_path.exists():
             exe_path.rename(dll_path)
