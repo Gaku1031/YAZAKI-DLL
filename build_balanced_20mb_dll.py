@@ -571,7 +571,7 @@ def generate_request_id(customer_code: str, driver_code: str) -> str:
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
     return f"{timestamp}_{customer_code}_{driver_code}"
 
-# Windows DLL エクスポート用
+# Windows DLL エクスポート用（C#呼び出し対応）
 if sys.platform.startswith('win'):
     import ctypes
     from ctypes import wintypes
@@ -586,20 +586,22 @@ if sys.platform.startswith('win'):
         ctypes.c_void_p         # errors
     )
     
-    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_char_p)
+    # C#からの呼び出しを可能にするエクスポート関数
     def InitializeDLL(model_dir_ptr):
-        """DLL初期化（Windows DLL）"""
+        """DLL初期化（C#呼び出し対応）"""
         try:
-            model_dir = ctypes.string_at(model_dir_ptr).decode('utf-8') if model_dir_ptr else "models"
+            if model_dir_ptr:
+                model_dir = ctypes.string_at(model_dir_ptr).decode('utf-8')
+            else:
+                model_dir = "models"
             return initialize_dll(model_dir)
-        except:
+        except Exception as e:
+            print(f"InitializeDLL error: {e}")
             return False
     
-    @ctypes.WINFUNCTYPE(ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int, 
-                       ctypes.c_int, ctypes.c_char_p, CallbackType)
     def StartBloodPressureAnalysisRequest(request_id_ptr, height, weight, sex, 
                                         movie_path_ptr, callback):
-        """血圧解析リクエスト（Windows DLL）"""
+        """血圧解析リクエスト（C#呼び出し対応）"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             movie_path = ctypes.string_at(movie_path_ptr).decode('utf-8')
@@ -613,30 +615,52 @@ if sys.platform.startswith('win'):
                 request_id, height, weight, sex, movie_path, py_callback)
             return error_code.encode('utf-8') if error_code else b""
         except Exception as e:
+            print(f"StartBloodPressureAnalysisRequest error: {e}")
             return str(e).encode('utf-8')
     
-    @ctypes.WINFUNCTYPE(ctypes.c_char_p, ctypes.c_char_p)
     def GetProcessingStatus(request_id_ptr):
-        """処理状況取得（Windows DLL）"""
+        """処理状況取得（C#呼び出し対応）"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
-            return get_processing_status(request_id).encode('utf-8')
-        except:
+            result = get_processing_status(request_id)
+            return result.encode('utf-8')
+        except Exception as e:
+            print(f"GetProcessingStatus error: {e}")
             return b"none"
     
-    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_char_p)
     def CancelBloodPressureAnalysis(request_id_ptr):
-        """血圧解析中断（Windows DLL）"""
+        """血圧解析中断（C#呼び出し対応）"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             return cancel_blood_pressure_analysis(request_id)
-        except:
+        except Exception as e:
+            print(f"CancelBloodPressureAnalysis error: {e}")
             return False
     
-    @ctypes.WINFUNCTYPE(ctypes.c_char_p)
     def GetVersionInfo():
-        """バージョン情報取得（Windows DLL）"""
-        return get_version_info().encode('utf-8')
+        """バージョン情報取得（C#呼び出し対応）"""
+        try:
+            return get_version_info().encode('utf-8')
+        except Exception as e:
+            print(f"GetVersionInfo error: {e}")
+            return b"v1.0.0"
+    
+    # C#互換性のためのCDECL関数型定義
+    InitializeDLL.argtypes = [ctypes.c_char_p]
+    InitializeDLL.restype = ctypes.c_bool
+    
+    StartBloodPressureAnalysisRequest.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, 
+                                                 ctypes.c_int, ctypes.c_char_p, CallbackType]
+    StartBloodPressureAnalysisRequest.restype = ctypes.c_char_p
+    
+    GetProcessingStatus.argtypes = [ctypes.c_char_p]
+    GetProcessingStatus.restype = ctypes.c_char_p
+    
+    CancelBloodPressureAnalysis.argtypes = [ctypes.c_char_p]
+    CancelBloodPressureAnalysis.restype = ctypes.c_bool
+    
+    GetVersionInfo.argtypes = []
+    GetVersionInfo.restype = ctypes.c_char_p
 
 # テスト用
 if __name__ == "__main__":
@@ -833,26 +857,17 @@ a.binaries = balanced_file_exclusion(a.binaries)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
-exe = EXE(
+# C#からアクセス可能なDLL形式でビルド
+dll = SHARED(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
+    exclude_binaries=False,
     name=APP_NAME,
     debug=False,
-    bootloader_ignore_signals=False,
     strip=True,
-    upx=True,  # 適度なUPX圧縮
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=True,
     console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
+    icon=None
 )
 '''
     
@@ -907,7 +922,7 @@ def build_balanced_dll():
             shutil.rmtree(dir_name)
             print(f"✓ {dir_name}/ クリーンアップ")
     
-    # PyInstallerコマンド
+    # PyInstallerコマンド（DLL形式で）
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "BloodPressureEstimation_Balanced20MB.spec",
@@ -921,15 +936,28 @@ def build_balanced_dll():
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         print("✓ PyInstallerビルド成功")
         
-        # 生成されたEXEをDLLにリネーム
-        exe_path = Path("dist") / "BloodPressureEstimation.exe"
+        # DLLファイル確認（SHAREDで生成される）
         dll_path = Path("dist") / "BloodPressureEstimation.dll"
+        exe_path = Path("dist") / "BloodPressureEstimation.exe"
         
-        if exe_path.exists():
+        # EXEで生成された場合はDLLにリネーム
+        if exe_path.exists() and not dll_path.exists():
             exe_path.rename(dll_path)
+        
+        if dll_path.exists():
             size_mb = dll_path.stat().st_size / (1024 * 1024)
             print(f"✓ バランス調整済みDLL作成成功: {dll_path}")
             print(f"  サイズ: {size_mb:.1f} MB")
+            
+            # C#エクスポート確認のためのdumpbin相当チェック
+            print("\\n=== C#エクスポート確認 ===")
+            print("注意: Windows環境でdumpbin /exports を実行してエクスポート関数を確認してください")
+            print("期待されるエクスポート関数:")
+            print("- InitializeDLL")
+            print("- StartBloodPressureAnalysisRequest")
+            print("- GetProcessingStatus")
+            print("- CancelBloodPressureAnalysis")
+            print("- GetVersionInfo")
             
             if size_mb <= 20:
                 print("🎉 目標20MB以下達成！")
@@ -941,7 +969,7 @@ def build_balanced_dll():
                 print(f"⚠️ サイズ{size_mb:.1f}MBは目標を超えています")
                 return False
         else:
-            print("✗ EXEファイルが見つかりません")
+            print("✗ DLLファイルが見つかりません")
             return False
             
     except subprocess.CalledProcessError as e:
