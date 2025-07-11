@@ -8,15 +8,15 @@ echo.
 
 REM 必要なファイルの存在確認
 echo Checking required files...
-if not exist "BloodPressureEstimation.cpp" (
-    echo ERROR: BloodPressureEstimation.cpp not found
+if not exist "BloodPressureEstimation_Fixed.cpp" (
+    echo ERROR: BloodPressureEstimation_Fixed.cpp not found
     echo Please run 'python create_cpp_wrapper_dll.py' first
     pause
     exit /b 1
 )
 
-if not exist "BloodPressureEstimation.h" (
-    echo ERROR: BloodPressureEstimation.h not found
+if not exist "BloodPressureEstimation_Fixed.h" (
+    echo ERROR: BloodPressureEstimation_Fixed.h not found
     pause
     exit /b 1
 )
@@ -41,7 +41,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 REM Python開発ヘッダー確認
 python -c "import sysconfig; print('Python include:', sysconfig.get_path('include'))"
-python -c "import sys; print('Python library path:', sys.prefix + '/libs')"
+python -c "import sys; print('Python library path:', sys.base_prefix + '\\libs')"
 echo.
 
 REM Visual Studio環境設定
@@ -77,7 +77,7 @@ echo.
 REM Python情報取得
 echo Getting Python configuration...
 for /f "tokens=*" %%i in ('python -c "import sysconfig; print(sysconfig.get_path('include'))"') do set PYTHON_INCLUDE=%%i
-for /f "tokens=*" %%i in ('python -c "import sys; print(sys.prefix + '/libs')"') do set PYTHON_LIBS=%%i
+for /f "tokens=*" %%i in ('python -c "import sys; print(sys.base_prefix + '\\libs')"') do set PYTHON_LIBS=%%i
 for /f "tokens=*" %%i in ('python -c "import sys; print('python' + str(sys.version_info.major) + str(sys.version_info.minor))"') do set PYTHON_LIB_NAME=%%i
 
 echo Python include path: %PYTHON_INCLUDE%
@@ -89,7 +89,7 @@ REM 直接コンパイル（CMakeを使わない）
 echo Compiling C++ source...
 cl.exe /EHsc /MD /I"%PYTHON_INCLUDE%" ^
     /DBLOODPRESSURE_EXPORTS ^
-    /LD BloodPressureEstimation.cpp ^
+    /LD BloodPressureEstimation_Fixed.cpp ^
     /link /DEF:BloodPressureEstimation.def ^
     /LIBPATH:"%PYTHON_LIBS%" %PYTHON_LIB_NAME%.lib ^
     /OUT:build\dist\BloodPressureEstimation.dll
