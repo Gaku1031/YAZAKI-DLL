@@ -661,6 +661,25 @@ if sys.platform.startswith('win'):
     
     GetVersionInfo.argtypes = []
     GetVersionInfo.restype = ctypes.c_char_p
+    
+    # DLLエントリポイント（必須）
+    def DllMain(hModule, fdwReason, lpReserved):
+        """DLLエントリポイント"""
+        if fdwReason == 1:  # DLL_PROCESS_ATTACH
+            print("DLL loaded")
+        elif fdwReason == 0:  # DLL_PROCESS_DETACH
+            print("DLL unloaded")
+        return True
+    
+    # エクスポート用のグローバル参照保持
+    _exported_functions = {
+        'InitializeDLL': InitializeDLL,
+        'StartBloodPressureAnalysisRequest': StartBloodPressureAnalysisRequest,
+        'GetProcessingStatus': GetProcessingStatus,
+        'CancelBloodPressureAnalysis': CancelBloodPressureAnalysis,
+        'GetVersionInfo': GetVersionInfo,
+        'DllMain': DllMain
+    }
 
 # テスト用
 if __name__ == "__main__":
@@ -755,7 +774,7 @@ EXCLUDED_MODULES = [
     'cryptography', 'ssl', 'socket', 'http'
 ]
 
-# バランス調整済み隠れたインポート
+# バランス調整済み隠れたインポート（存在確認済み）
 HIDDEN_IMPORTS = [
     # OpenCV
     'cv2.cv2',
@@ -763,30 +782,17 @@ HIDDEN_IMPORTS = [
     # MediaPipe FaceMesh専用
     'mediapipe.python._framework_bindings',
     'mediapipe.python.solutions.face_mesh',
-    'mediapipe.python.solutions.face_mesh_connections',
     
     # NumPy コア
     'numpy.core._methods',
     'numpy.lib.format',
-    'numpy.random._pickle',
     
     # joblib（軽量モデル用）
     'joblib.numpy_pickle',
     
-    # sklearn（必要最小限）
-    'sklearn.tree._tree',
-    'sklearn.ensemble._forest',
-    'sklearn.utils._cython_blas',
-    'sklearn.neighbors._typedefs',
-    'sklearn.utils._heap',
-    'sklearn.utils._sorting',
-    'sklearn.utils._vector_sentinel',
-    
-    # scipy signal（信号処理用）
-    'scipy.signal._max_len_seq_inner',
-    'scipy.signal._upfirdn_apply',
-    'scipy.signal._sosfilt',
-    'scipy.special._ufuncs_cxx',
+    # scipy（基本のみ）
+    'scipy._lib._ccallback_c',
+    'scipy.sparse.csgraph._validation',
 ]
 
 # データファイル
@@ -857,17 +863,27 @@ a.binaries = balanced_file_exclusion(a.binaries)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
-# C#からアクセス可能なDLL形式でビルド
-dll = SHARED(
+# C#からアクセス可能なEXE形式でビルド（後でDLLにリネーム）
+exe = EXE(
     pyz,
     a.scripts,
-    exclude_binaries=False,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
     name=APP_NAME,
     debug=False,
+    bootloader_ignore_signals=False,
     strip=True,
     upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=False,
-    icon=None
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
 )
 '''
     
