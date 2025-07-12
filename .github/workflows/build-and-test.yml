@@ -1,0 +1,215 @@
+name: Build and Test Blood Pressure DLL
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  SOLUTION_FILE_PATH: .
+  BUILD_CONFIGURATION: Release
+  
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        architecture: 'x64'
+        
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if (Test-Path requirements_balanced_20mb.txt) {
+          pip install -r requirements_balanced_20mb.txt
+        }
+        pip install opencv-python-headless mediapipe numpy scipy scikit-learn joblib
+      shell: powershell
+      
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.3
+      
+    - name: Setup Visual Studio environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+        
+    - name: Create Python module files
+      run: |
+        python create_cpp_wrapper_dll.py
+      shell: powershell
+      
+    - name: Build C++ DLL
+      run: |
+        .\scripts\build-dll.ps1
+      shell: powershell
+      
+    - name: Verify DLL exports
+      run: |
+        if (Test-Path "build\dist\BloodPressureEstimation.dll") {
+          Write-Host "✓ DLL created successfully"
+          dumpbin /exports build\dist\BloodPressureEstimation.dll
+        } else {
+          Write-Host "✗ DLL build failed"
+          exit 1
+        }
+      shell: powershell
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '6.0.x'
+        
+    - name: Build C# Test Project
+      run: |
+        dotnet build tests/CSharpTest/BloodPressureTest.csproj --configuration Release
+      shell: powershell
+      
+    - name: Copy DLL and dependencies for testing
+      run: |
+        # Create test directory
+        New-Item -ItemType Directory -Path "test-output" -Force
+        
+        # Copy DLL
+        Copy-Item "build\dist\BloodPressureEstimation.dll" "test-output\"
+        
+        # Copy Python module
+        Copy-Item "bp_estimation_simple.py" "test-output\"
+        
+        # Copy Python DLLs
+        $pythonDir = python -c "import sys; import os; print(os.path.dirname(sys.executable))"
+        $pythonVersion = python -c "import sys; print('python' + str(sys.version_info.major) + str(sys.version_info.minor))"
+        
+        if (Test-Path "$pythonDir\$pythonVersion.dll") {
+          Copy-Item "$pythonDir\$pythonVersion.dll" "test-output\"
+        }
+        
+        # Copy Visual C++ Runtime DLLs
+        $vcDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+        foreach ($dll in $vcDlls) {
+          if (Test-Path "$pythonDir\$dll") {
+            Copy-Item "$pythonDir\$dll" "test-output\"
+          }
+        }
+        
+        # Copy test executable
+        Copy-Item "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe" "test-output\"
+        Copy-Item "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.dll" "test-output\"
+        Copy-Item "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.runtimeconfig.json" "test-output\"
+        
+        # Copy test data
+        if (Test-Path "tests\test-data") {
+          Copy-Item "tests\test-data" "test-output\" -Recurse
+        }
+        
+        # Copy sample-data if available (fallback)
+        if ((Test-Path "sample-data") -and (-not (Test-Path "test-output\test-data"))) {
+          Copy-Item "sample-data" "test-output\test-data" -Recurse
+        }
+        
+        # Create models directory
+        New-Item -ItemType Directory -Path "test-output\models" -Force
+      shell: powershell
+      
+    - name: Run C# Integration Tests
+      run: |
+        cd test-output
+        Write-Host "=== Running Blood Pressure DLL Integration Tests ==="
+        Write-Host "Working directory: $(Get-Location)"
+        Write-Host "Files in directory:"
+        Get-ChildItem | Format-Table Name, Length
+        
+        # Run the test
+        .\BloodPressureTest.exe
+        
+        # Check exit code
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "✓ Integration tests passed"
+        } else {
+          Write-Host "✗ Integration tests failed with exit code: $LASTEXITCODE"
+          exit 1
+        }
+      shell: powershell
+      
+    - name: Package DLL with dependencies
+      run: |
+        # Create distribution package
+        New-Item -ItemType Directory -Path "distribution" -Force
+        
+        # Copy DLL and essential files
+        Copy-Item "build\dist\BloodPressureEstimation.dll" "distribution\"
+        Copy-Item "bp_estimation_simple.py" "distribution\"
+        
+        # Copy Python DLLs
+        $pythonDir = python -c "import sys; import os; print(os.path.dirname(sys.executable))"
+        $pythonVersion = python -c "import sys; print('python' + str(sys.version_info.major) + str(sys.version_info.minor))"
+        
+        Copy-Item "$pythonDir\$pythonVersion.dll" "distribution\"
+        
+        # Copy runtime DLLs
+        $vcDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+        foreach ($dll in $vcDlls) {
+          if (Test-Path "$pythonDir\$dll") {
+            Copy-Item "$pythonDir\$dll" "distribution\"
+          }
+        }
+        
+        # Create README
+        "# Blood Pressure Estimation DLL`n" + 
+        "`n## Files Included`n" +
+        "- BloodPressureEstimation.dll - Main DLL`n" +
+        "- bp_estimation_simple.py - Python module`n" +
+        "- python311.dll - Python runtime`n" +
+        "- vcruntime140*.dll - Visual C++ runtime`n" +
+        "- msvcp140.dll - C++ standard library`n" +
+        "`n## Usage`n" +
+        "1. Place all files in the same directory as your C# application`n" +
+        "2. Reference BloodPressureEstimation.dll in your C# project`n" +
+        "3. Call the exported functions as shown in the test examples`n" +
+        "`n## Test Results`n" +
+        "This package was built and tested successfully on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')`n" +
+        "Commit: ${{ github.sha }}" | Out-File -FilePath "distribution\README.txt" -Encoding UTF8
+        
+        Write-Host "Distribution package created:"
+        Get-ChildItem "distribution" | Format-Table Name, Length
+      shell: powershell
+      
+    - name: Upload DLL Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: BloodPressureEstimation-DLL-${{ github.sha }}
+        path: distribution/
+        retention-days: 30
+        
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ github.sha }}
+        path: test-output/
+        retention-days: 7
+        
+    - name: Upload Build Logs
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: build-logs-${{ github.sha }}
+        path: |
+          build/
+          *.log
+        retention-days: 7
