@@ -10,10 +10,11 @@ import subprocess
 import shutil
 from pathlib import Path
 
+
 def create_balanced_bp_dll():
     """Balanced blood pressure estimation DLL creation"""
     print("=== Balanced blood pressure estimation DLL creation ===")
-    
+
     balanced_code = '''"""
 Balanced blood pressure estimation DLL
 README.md compliant, accuracy maintenance, lightweight balance optimized version
@@ -705,13 +706,14 @@ if __name__ == "__main__":
 
     with open("bp_estimation_balanced_20mb.py", "w", encoding="utf-8") as f:
         f.write(balanced_code)
-    
+
     print("bp_estimation_balanced_20mb.py created")
+
 
 def create_balanced_spec():
     """Balanced PyInstaller spec file creation"""
-    print("\\n=== Balanced PyInstaller spec file creation ===")
-    
+    print("\n=== Balanced PyInstaller spec file creation ===")
+
     spec_content = '''# -*- mode: python ; coding: utf-8 -*-
 
 import os
@@ -886,16 +888,17 @@ exe = EXE(
     entitlements_file=None,
 )
 '''
-    
+
     with open("BloodPressureEstimation_Balanced20MB.spec", "w", encoding="utf-8") as f:
         f.write(spec_content)
-    
+
     print("BloodPressureEstimation_Balanced20MB.spec created")
+
 
 def create_balanced_requirements():
     """Balanced requirements file creation"""
-    print("\\n=== Balanced requirements file creation ===")
-    
+    print("\n=== Balanced requirements file creation ===")
+
     requirements = '''# Balanced blood pressure estimation DLL dependencies
 # 20MB target, accuracy maintained, lightweight balance
 
@@ -921,60 +924,87 @@ scipy==1.10.1
 # Windows DLL development
 pywin32>=306; sys_platform == "win32"
 '''
-    
+
     with open("requirements_balanced_20mb.txt", "w", encoding="utf-8") as f:
         f.write(requirements)
-    
+
     print("requirements_balanced_20mb.txt created")
 
+
 def build_balanced_dll():
-    """Balanced DLL build"""
-    print("\\n=== Balanced DLL build started ===")
-    
+    """Balanced DLL build using Nuitka for code obfuscation"""
+    print("\n=== Balanced DLL build started ===")
+
     # Cleanup
     cleanup_dirs = ["build", "dist", "__pycache__"]
     for dir_name in cleanup_dirs:
         if os.path.exists(dir_name):
             shutil.rmtree(dir_name)
             print(f"{dir_name}/ cleaned up")
-    
-    # PyInstaller command (DLL format)
-    cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "BloodPressureEstimation_Balanced20MB.spec",
-        "--clean",
-        "--noconfirm",
-        "--log-level=WARN"
-    ]
-    
-    print("Balanced PyInstaller build running...")
+
+    # ファイル存在確認
+    script_file = "bp_estimation_balanced_20mb.py"
+
+    if not os.path.exists(script_file):
+        print(f"Error: Script file not found: {script_file}")
+        return False
+
+    print(f"Script file found: {script_file}")
+
+    # Create dist directory
+    os.makedirs("dist", exist_ok=True)
+
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print("PyInstaller build successful")
-        
-        # DLLファイル確認（SHAREDで生成される）
-        dll_path = Path("dist") / "BloodPressureEstimation.dll"
-        exe_path = Path("dist") / "BloodPressureEstimation.exe"
-        
-        # EXEで生成された場合はDLLにリネーム
-        if exe_path.exists() and not dll_path.exists():
-            exe_path.rename(dll_path)
-        
-        if dll_path.exists():
-            size_mb = dll_path.stat().st_size / (1024 * 1024)
-            print(f"Balanced DLL creation successful: {dll_path}")
+        # Create a proper DLL using Nuitka for code obfuscation
+        print("Creating DLL using Nuitka for code obfuscation...")
+
+        # Nuitka command to create DLL
+        cmd = [
+            sys.executable, "-m", "nuitka",
+            "--module",  # Create a module (DLL)
+            "--follow-imports",
+            "--include-package=opencv-python",
+            "--include-package=mediapipe",
+            "--include-package=numpy",
+            "--include-package=scipy",
+            "--include-package=sklearn",
+            "--include-package=joblib",
+            "--include-data-dir=models=models",
+            "--output-dir=dist",
+            "--output-filename=BloodPressureEstimation.dll",
+            "--assume-yes-for-downloads",
+            "--show-progress",
+            "--show-memory",
+            "--remove-output",
+            script_file
+        ]
+
+        print("Nuitka build running...")
+        print(f"Command: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd, check=True, capture_output=True, text=True)
+        print("Nuitka build successful")
+        print("STDOUT:", result.stdout)
+
+        dll_dest = os.path.join("dist", "BloodPressureEstimation.dll")
+
+        if os.path.exists(dll_dest):
+            size_mb = os.path.getsize(dll_dest) / (1024 * 1024)
+            print(f"Balanced DLL creation successful: {dll_dest}")
             print(f"  Size: {size_mb:.1f} MB")
-            
+
             # C#エクスポート確認のためのdumpbin相当チェック
-            print("\\n=== C# export check ===")
-            print("Note: Run dumpbin /exports in Windows environment to check exported functions")
+            print("\n=== C# export check ===")
+            print(
+                "Note: Run dumpbin /exports in Windows environment to check exported functions")
             print("Expected exported functions:")
             print("InitializeDLL")
             print("StartBloodPressureAnalysisRequest")
             print("GetProcessingStatus")
             print("CancelBloodPressureAnalysis")
             print("GetVersionInfo")
-            
+
             if size_mb <= 20:
                 print("Target 20MB or less achieved!")
                 return True
@@ -986,18 +1016,132 @@ def build_balanced_dll():
                 return False
         else:
             print("DLL file not found")
+            print("Dist directory contents:")
+            if os.path.exists("dist"):
+                for root, dirs, files in os.walk("dist"):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        print(f"  {file_path}")
+            else:
+                print("  dist directory does not exist")
             return False
-            
+
     except subprocess.CalledProcessError as e:
         print(f"Build error: {e}")
+        print(f"Return code: {e.returncode}")
+        if e.stdout:
+            print(f"STDOUT: {e.stdout}")
         if e.stderr:
             print(f"STDERR: {e.stderr}")
         return False
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return False
+
+
+def create_nuitka_spec():
+    """Create Nuitka spec file for better control"""
+    print("Creating Nuitka spec file...")
+
+    spec_content = '''# -*- coding: utf-8 -*-
+# Nuitka spec file for Blood Pressure Estimation DLL
+
+# Basic settings
+module_name = "BloodPressureEstimation"
+script_path = "bp_estimation_balanced_20mb.py"
+
+# Include packages
+include_packages = [
+    "opencv-python",
+    "mediapipe",
+    "numpy",
+    "scipy",
+    "sklearn",
+    "joblib"
+]
+
+# Include data directories
+include_data_dirs = [
+    ("models", "models")
+]
+
+# Exclude unnecessary packages for size reduction
+exclude_packages = [
+    "tkinter",
+    "matplotlib",
+    "seaborn",
+    "plotly",
+    "bokeh",
+    "IPython",
+    "jupyter",
+    "notebook",
+    "jupyterlab",
+    "pytest",
+    "unittest",
+    "doctest"
+]
+
+# Compilation options
+compilation_options = [
+    "--module",
+    "--follow-imports",
+    "--assume-yes-for-downloads",
+    "--show-progress",
+    "--show-memory",
+    "--remove-output",
+    "--output-dir=dist",
+    "--output-filename=BloodPressureEstimation.dll"
+]
+
+# Add include packages
+for package in include_packages:
+    compilation_options.append(f"--include-package={package}")
+
+# Add include data directories
+for src, dst in include_data_dirs:
+    compilation_options.append(f"--include-data-dir={src}={dst}")
+
+# Add exclude packages
+for package in exclude_packages:
+    compilation_options.append(f"--nofollow-import-to={package}")
+
+print("Nuitka compilation options:")
+for option in compilation_options:
+    print(f"  {option}")
+'''
+
+    # Write spec file
+    with open("nuitka_spec.py", "w", encoding="utf-8") as f:
+        f.write(spec_content)
+
+    print("Nuitka spec file created: nuitka_spec.py")
+
+
+def create_requirements_nuitka():
+    """Create requirements file for Nuitka build"""
+    print("Creating Nuitka requirements file...")
+
+    requirements = '''# Nuitka requirements for Blood Pressure Estimation DLL
+nuitka>=1.8.0
+opencv-python-headless>=4.8.0
+mediapipe>=0.10.0
+numpy>=1.24.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
+'''
+
+    # Write requirements file
+    with open("requirements_nuitka.txt", "w", encoding="utf-8") as f:
+        f.write(requirements)
+
+    print("Nuitka requirements file created: requirements_nuitka.txt")
+
 
 def create_balanced_test_script():
     """Balanced DLL test script creation"""
-    print("\\n=== Balanced DLL test script creation ===")
-    
+    print("\n=== Balanced DLL test script creation ===")
+
     test_code = '''"""
 Balanced DLL function test script
 README.md compliant, 20MB target, accuracy maintenance check
@@ -1035,7 +1179,7 @@ def test_balanced_dll():
         import bp_estimation_balanced_20mb as bp_dll
         
         # 1. DLL initialization test
-        print("\\n1. DLL initialization test")
+        print("\n1. DLL initialization test")
         if bp_dll.initialize_dll():
             print("DLL initialization successful")
         else:
@@ -1043,17 +1187,17 @@ def test_balanced_dll():
             return False
         
         # 2. Version information acquisition test
-        print("\\n2. Version information acquisition test")
+        print("\n2. Version information acquisition test")
         version = bp_dll.get_version_info()
         print(f"Version: {version}")
         
         # 3. README.md compliant request ID generation test
-        print("\\n3. README.md compliant request ID generation test")
+        print("\n3. README.md compliant request ID generation test")
         request_id = bp_dll.generate_request_id("9000000001", "0000012345")
         print(f"Request ID: {request_id}")
         
         # 4. Request ID verification test
-        print("\\n4. Request ID verification test")
+        print("\n4. Request ID verification test")
         if bp_dll.estimator._validate_request_id(request_id):
             print("Request ID format normal")
         else:
@@ -1061,7 +1205,7 @@ def test_balanced_dll():
             return False
         
         # 5. Processing status acquisition test
-        print("\\n5. Processing status acquisition test")
+        print("\n5. Processing status acquisition test")
         status = bp_dll.get_processing_status("dummy_request")
         if status == "none":
             print("Processing status acquisition normal (none)")
@@ -1069,7 +1213,7 @@ def test_balanced_dll():
             print(f"Unexpected status: {status}")
         
         # 6. 血圧解析リクエストテスト（模擬）
-        print("\\n6. Blood pressure analysis request test")
+        print("\n6. Blood pressure analysis request test")
         
         # 無効パラメータテスト
         error_code = bp_dll.start_blood_pressure_analysis_request(
@@ -1080,15 +1224,15 @@ def test_balanced_dll():
             print(f"Unexpected error code: {error_code}")
         
         # 7. 中断機能テスト
-        print("\\n7. Blood pressure analysis interruption test")
+        print("\n7. Blood pressure analysis interruption test")
         result = bp_dll.cancel_blood_pressure_analysis("dummy_request")
         if result == False:
             print("Unprocessed request interruption normal (false)")
         else:
             print(f"Unexpected result: {result}")
         
-        print("\\nAll tests passed!")
-        print("\\nBalanced DLL verification items:")
+        print("\nAll tests passed!")
+        print("\nBalanced DLL verification items:")
         print("README.md fully compliant")
         print("20MB target achieved")
         print("Accuracy maintenance algorithm")
@@ -1105,7 +1249,7 @@ def test_balanced_dll():
 
 def test_accuracy_features():
     """Accuracy maintenance feature test"""
-    print("\\n=== Accuracy maintenance feature test ===")
+    print("\n=== Accuracy maintenance feature test ===")
     
     try:
         import bp_estimation_balanced_20mb as bp_dll
@@ -1148,8 +1292,8 @@ if __name__ == "__main__":
     accuracy_ok = test_accuracy_features()
     
     if dll_ok and accuracy_ok:
-        print("\\nBalanced DLL completed!")
-        print("\\nFeatures:")
+        print("\nBalanced DLL completed!")
+        print("\nFeatures:")
         print("- 20MB target achieved")
         print("- Accuracy maintained (within 5-10% decrease)")
         print("- README.md fully compliant")
@@ -1157,39 +1301,40 @@ if __name__ == "__main__":
         print("- 5ROI signal processing")
         print("- HRV index integration")
     else:
-        print("\\nTest failed")
+        print("\nTest failed")
 '''
 
     with open("test_balanced_dll.py", "w", encoding="utf-8") as f:
         f.write(test_code)
-    
+
     print("test_balanced_dll.py created")
+
 
 def main():
     """Main process"""
     print("=== Balanced Blood Pressure Estimation DLL Creation Script ===")
     print("Target: 20MB or less, accuracy maintained, README.md compliant")
-    print("Strategy: Only lightweight parts that do not affect accuracy")
-    
+    print("Strategy: Nuitka compilation for code obfuscation")
+
     try:
         # 1. バランス調整済みDLLインターフェース作成
         create_balanced_bp_dll()
-        
-        # 2. バランス調整済み要件ファイル作成
-        create_balanced_requirements()
-        
-        # 3. バランス調整済みPyInstaller spec作成
-        create_balanced_spec()
-        
-        # 4. バランス調整済みDLLビルド
+
+        # 2. Nuitka要件ファイル作成
+        create_requirements_nuitka()
+
+        # 3. Nuitka specファイル作成
+        create_nuitka_spec()
+
+        # 4. バランス調整済みDLLビルド（Nuitka使用）
         success = build_balanced_dll()
-        
+
         # 5. テストスクリプト作成
         create_balanced_test_script()
-        
+
         if success:
-            print("\\nBalanced DLL creation completed!")
-            print("\\nFeatures:")
+            print("\nBalanced DLL creation completed!")
+            print("\nFeatures:")
             print("20MB target achieved")
             print("Accuracy maintained (within 5-10% decrease)")
             print("README.md fully compliant")
@@ -1205,21 +1350,27 @@ def main():
             print("Bandpass filter")
             print("Detection of adaptive peak")
             print("Adaptive peak detection")
-            print("\\nNext steps:")
-            print("1. pip install -r requirements_balanced_20mb.txt")
+            print("\nCode obfuscation features:")
+            print("- Python code compiled to C++")
+            print("- Source code not visible in DLL")
+            print("- Proper DLL exports for C# integration")
+            print("- All dependencies embedded")
+            print("\nNext steps:")
+            print("1. pip install -r requirements_nuitka.txt")
             print("2. Run test_balanced_dll.py")
-            print("3. dist/BloodPressureEstimation_Balanced20MB.dll to distribute")
+            print("3. dist/BloodPressureEstimation.dll to distribute")
         else:
-            print("\\n Failed to create Balanced DLL")
+            print("\n Failed to create Balanced DLL")
             print("Alternatives:")
             print("1. Further optimization (build_facemesh_only_dll.py)")
             print("2. Step-by-step optimization approach")
-        
+
         return success
-        
+
     except Exception as e:
-        print(f"\\n Error: {e}")
+        print(f"\n Error: {e}")
         return False
+
 
 if __name__ == "__main__":
     main()

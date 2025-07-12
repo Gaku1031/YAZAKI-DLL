@@ -127,7 +127,7 @@ def balanced_file_exclusion(binaries):
             'pose_landmark', 'hand_landmark', 'holistic', 'objectron', 
             'selfie', 'audio', 'text', 'drawing'
         ]):
-            print(f"MediaPipe不要コンポーネント除外: {name}")
+            print(f"MediaPipe unused component excluded: {name}")
             continue
         
         # 大きなTensorFlowコンポーネント除外
@@ -135,7 +135,7 @@ def balanced_file_exclusion(binaries):
             'tensorflow-lite', 'tf_lite', 'tflite', 'tensorboard',
             'tf_debug', 'tf_profiler', 'tf_distribute'
         ]):
-            print(f"TensorFlow重いコンポーネント除外: {name}")
+            print(f"TensorFlow heavy component excluded: {name}")
             continue
         
         # システムライブラリ除外
@@ -149,7 +149,7 @@ def balanced_file_exclusion(binaries):
         try:
             if os.path.exists(path) and os.path.getsize(path) > 7 * 1024 * 1024:
                 file_size_mb = os.path.getsize(path) / (1024*1024)
-                print(f"大きなファイル除外: {name} ({file_size_mb:.1f}MB)")
+                print(f"Large file excluded: {name} ({file_size_mb:.1f}MB)")
                 continue
         except:
             pass
@@ -162,6 +162,7 @@ a.binaries = balanced_file_exclusion(a.binaries)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
+# EXE形式でビルド（DLLとして使用可能）
 exe = EXE(
     pyz,
     a.scripts,
