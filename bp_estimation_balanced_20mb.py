@@ -54,7 +54,6 @@ except ImportError:
 
 # README.md compliant error code definitions
 
-
 class ErrorCode:
     DLL_NOT_INITIALIZED = "1001"
     DEVICE_CONNECTION_FAILED = "1002"
@@ -556,9 +555,8 @@ estimator = BalancedBPEstimator()
 
 # README.md compliant export functions
 
-
 def initialize_dll(model_dir: str = "models") -> bool:
-    """DLL initialization"""
+    """DLL initialization (C# call compatible)"""
     return estimator.initialize(model_dir)
 
 
@@ -591,7 +589,7 @@ def generate_request_id(customer_code: str, driver_code: str) -> str:
     return f"{timestamp}_{customer_code}_{driver_code}"
 
 
-# Windows DLL export for
+# Windows DLL export functions
 if sys.platform.startswith('win'):
     import ctypes
     from ctypes import wintypes
@@ -659,7 +657,7 @@ if sys.platform.startswith('win'):
         """Version information retrieval (Windows DLL)"""
         return get_version_info().encode('utf-8')
 
-# Test
+# Test function
 if __name__ == "__main__":
     print("Balanced blood pressure estimation DLL test")
 

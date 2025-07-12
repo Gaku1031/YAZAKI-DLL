@@ -589,7 +589,6 @@ if sys.platform.startswith('win'):
     
     # Export function to allow C# calls
     def InitializeDLL(model_dir_ptr):
-        """DLL initialization (C# call compatible)"""
         try:
             if model_dir_ptr:
                 model_dir = ctypes.string_at(model_dir_ptr).decode('utf-8')
