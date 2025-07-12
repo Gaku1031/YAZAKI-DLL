@@ -1,5 +1,5 @@
 """
-C/C++ラッパーDLL作成スクリプト
+C/C++ wrapper
 C#から呼び出し可能なDLLをC++で作成し、内部でPythonエンジンを呼び出す
 """
 
@@ -10,8 +10,8 @@ import shutil
 from pathlib import Path
 
 def create_cpp_wrapper():
-    """C++ラッパーDLL作成"""
-    print("=== C++ラッパーDLL作成 ===")
+    """C++ wrapper"""
+    print("=== C++ wrapper ===")
     
     # C++ヘッダーファイル
     header_code = '''#pragma once
@@ -23,12 +23,12 @@ def create_cpp_wrapper():
 #endif
 
 extern "C" {
-    // コールバック関数型定義
+    // callback function type definition
     typedef void(*AnalysisCallback)(const char* requestId, int maxBloodPressure, 
                                    int minBloodPressure, const char* measureRowData, 
                                    const char* errors);
 
-    // エクスポート関数
+    // export functions
     BLOODPRESSURE_API bool InitializeDLL(const char* modelDir);
     BLOODPRESSURE_API const char* StartBloodPressureAnalysisRequest(
         const char* requestId, int height, int weight, int sex, 
@@ -42,7 +42,7 @@ extern "C" {
     with open("BloodPressureEstimation.h", "w", encoding="utf-8") as f:
         f.write(header_code)
     
-    # C++実装ファイル
+    # C++ implementation file
     cpp_code = '''#include "BloodPressureEstimation.h"
 #include <Python.h>
 #include <string>
@@ -50,36 +50,36 @@ extern "C" {
 #include <memory>
 #include <iostream>
 
-// グローバル変数
+// global variables
 static bool g_initialized = false;
 static PyObject* g_bp_module = nullptr;
 static PyObject* g_estimator = nullptr;
 static std::map<std::string, std::string> g_status_cache;
 
-// 文字列バッファ（戻り値用）
+// string buffer (return value)
 static std::string g_last_error;
 static std::string g_last_status;
 static std::string g_version_info;
 
-// Pythonエンジン初期化
+// Python engine initialization
 bool InitializePython() {
     if (Py_IsInitialized()) {
         return true;
     }
 
     try {
-        // Pythonインタープリター初期化
+        // Python interpreter initialization
         Py_Initialize();
         if (!Py_IsInitialized()) {
             g_last_error = "Python initialization failed";
             return false;
         }
 
-        // sys.pathにカレントディレクトリ追加
+        // add current directory to sys.path
         PyRun_SimpleString("import sys");
         PyRun_SimpleString("sys.path.append('.')");
         
-        // 血圧推定モジュールインポート
+        // import blood pressure estimation module
         g_bp_module = PyImport_ImportModule("bp_estimation_simple");
         if (!g_bp_module) {
             PyErr_Print();
@@ -87,7 +87,7 @@ bool InitializePython() {
             return false;
         }
 
-        // エスティメーターインスタンス取得
+        // get estimator instance
         PyObject* estimator_class = PyObject_GetAttrString(g_bp_module, "BPEstimator");
         if (!estimator_class) {
             g_last_error = "Failed to get BPEstimator class";
@@ -111,7 +111,7 @@ bool InitializePython() {
     }
 }
 
-// Python関数呼び出しヘルパー
+// Python function call helper
 PyObject* CallPythonMethod(const char* method_name, PyObject* args = nullptr) {
     if (!g_estimator) {
         return nullptr;
@@ -128,7 +128,7 @@ PyObject* CallPythonMethod(const char* method_name, PyObject* args = nullptr) {
     return result;
 }
 
-// エクスポート関数実装
+// export function implementation
 extern "C" {
 
 BLOODPRESSURE_API bool InitializeDLL(const char* modelDir) {
@@ -137,12 +137,12 @@ BLOODPRESSURE_API bool InitializeDLL(const char* modelDir) {
             return true;
         }
 
-        // Pythonエンジン初期化
+        // Python engine initialization
         if (!InitializePython()) {
             return false;
         }
 
-        // Pythonエスティメーター初期化
+        // Python estimator initialization
         PyObject* args = PyTuple_New(1);
         PyTuple_SetItem(args, 0, PyUnicode_FromString(modelDir ? modelDir : "models"));
         
@@ -178,7 +178,7 @@ BLOODPRESSURE_API const char* StartBloodPressureAnalysisRequest(
             return g_last_error.c_str();
         }
 
-        // Python関数呼び出し
+        // Python function call
         PyObject* args = PyTuple_New(5);
         PyTuple_SetItem(args, 0, PyUnicode_FromString(requestId));
         PyTuple_SetItem(args, 1, PyLong_FromLong(height));
@@ -191,7 +191,7 @@ BLOODPRESSURE_API const char* StartBloodPressureAnalysisRequest(
 
         if (result) {
             if (result == Py_None) {
-                g_last_error = ""; // 成功
+                g_last_error = ""; // success
             } else if (PyUnicode_Check(result)) {
                 const char* error_str = PyUnicode_AsUTF8(result);
                 g_last_error = error_str ? error_str : "Unknown error";
@@ -290,7 +290,7 @@ BLOODPRESSURE_API const char* GetVersionInfo() {
 
 } // extern "C"
 
-// DLLエントリポイント
+// DLL entry point
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH:
@@ -318,15 +318,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     with open("BloodPressureEstimation.cpp", "w", encoding="utf-8") as f:
         f.write(cpp_code)
     
-    print("✓ C++ヘッダー・実装ファイル作成完了")
+    print("✓ C++ header and implementation file created")
 
 def create_simple_python_module():
-    """シンプルなPythonモジュール作成"""
-    print("\\n=== シンプルPythonモジュール作成 ===")
+    """simple python module"""
+    print("\\n=== simple python module ===")
     
     python_code = '''"""
-血圧推定用シンプルPythonモジュール
-C++ラッパーから呼び出される
+blood pressure estimation simple python module
+called from C++ wrapper
 """
 
 import os
@@ -335,7 +335,7 @@ import time
 from typing import Dict, Optional
 
 class BPEstimator:
-    """血圧推定クラス"""
+    """blood pressure estimation class"""
     
     def __init__(self):
         self.is_initialized = False
@@ -344,10 +344,10 @@ class BPEstimator:
         self.lock = threading.Lock()
         
     def initialize(self, model_dir: str = "models") -> bool:
-        """初期化"""
+        """initialization"""
         try:
             print(f"Initializing BP estimator with model_dir: {model_dir}")
-            # 実際の初期化処理はここに実装
+            # actual initialization process is here
             self.is_initialized = True
             return True
         except Exception as e:
@@ -356,12 +356,12 @@ class BPEstimator:
     
     def start_analysis(self, request_id: str, height: int, weight: int, 
                       sex: int, movie_path: str) -> Optional[str]:
-        """血圧解析開始"""
+        """blood pressure analysis start"""
         try:
             if not self.is_initialized:
                 return "1001"  # DLL_NOT_INITIALIZED
             
-            # パラメータ検証
+            # parameter validation
             if not request_id or len(request_id) < 10:
                 return "1004"  # INVALID_INPUT_PARAMETERS
                 
@@ -377,12 +377,12 @@ class BPEstimator:
             if not (30 <= weight <= 200):
                 return "1004"  # INVALID_INPUT_PARAMETERS
             
-            # 処理中チェック
+            # processing check
             with self.lock:
                 if request_id in self.processing_requests:
                     return "1005"  # REQUEST_DURING_PROCESSING
                 
-                # 非同期処理開始
+                # asynchronous processing start
                 self.processing_requests[request_id] = "processing"
                 thread = threading.Thread(
                     target=self._process_analysis,
@@ -390,7 +390,7 @@ class BPEstimator:
                 )
                 thread.start()
             
-            return None  # 成功
+            return None  # success
             
         except Exception as e:
             print(f"Analysis start error: {e}")
@@ -398,18 +398,18 @@ class BPEstimator:
     
     def _process_analysis(self, request_id: str, height: int, weight: int,
                          sex: int, movie_path: str):
-        """血圧解析処理"""
+        """blood pressure analysis processing"""
         try:
             print(f"Processing analysis for request: {request_id}")
             
-            # 簡易血圧計算
+            # simple blood pressure calculation
             bmi = weight / ((height / 100) ** 2)
             
-            # BMIベース推定
+            # BMI based estimation
             sbp = max(90, min(180, 120 + int((bmi - 22) * 2)))
             dbp = max(60, min(110, 80 + int((bmi - 22) * 1)))
             
-            # 処理時間シミュレート
+            # processing time simulation
             time.sleep(2)
             
             print(f"Analysis complete: {request_id}, SBP={sbp}, DBP={dbp}")
@@ -421,12 +421,12 @@ class BPEstimator:
                 self.processing_requests[request_id] = "none"
     
     def get_status(self, request_id: str) -> str:
-        """処理状況取得"""
+        """processing status get"""
         with self.lock:
             return self.processing_requests.get(request_id, "none")
     
     def cancel_analysis(self, request_id: str) -> bool:
-        """解析中断"""
+        """analysis cancel"""
         with self.lock:
             if request_id in self.processing_requests:
                 self.processing_requests[request_id] = "none"
@@ -434,35 +434,35 @@ class BPEstimator:
             return False
     
     def get_version(self) -> str:
-        """バージョン情報取得"""
+        """version information get"""
         return f"v{self.version}"
 
-# テスト用
+# test
 if __name__ == "__main__":
     estimator = BPEstimator()
     
     if estimator.initialize():
-        print("✓ 初期化成功")
-        print(f"バージョン: {estimator.get_version()}")
+        print("✓ initialization successful")
+        print(f"version: {estimator.get_version()}")
         
-        # テスト解析
+        # test analysis
         result = estimator.start_analysis("test_123", 170, 70, 1, "test.webm")
         if result:
-            print(f"エラーコード: {result}")
+            print(f"error code: {result}")
         else:
-            print("解析開始成功")
+            print("analysis start successful")
     else:
-        print("✗ 初期化失敗")
+        print("✗ initialization failed")
 '''
 
     with open("bp_estimation_simple.py", "w", encoding="utf-8") as f:
         f.write(python_code)
     
-    print("✓ bp_estimation_simple.py 作成完了")
+    print("✓ bp_estimation_simple.py created")
 
 def create_def_file():
-    """DEFファイル作成"""
-    print("\\n=== DEFファイル作成 ===")
+    """DEF file"""
+    print("\\n=== DEF file ===")
     
     def_code = '''EXPORTS
 InitializeDLL
@@ -474,44 +474,44 @@ GetVersionInfo'''
     with open("BloodPressureEstimation.def", "w", encoding="utf-8") as f:
         f.write(def_code)
     
-    print("✓ BloodPressureEstimation.def 作成完了")
+    print("✓ BloodPressureEstimation.def created")
 
 def create_build_script():
-    """ビルドスクリプト作成"""
-    print("\\n=== ビルドスクリプト作成 ===")
+    """build script"""
+    print("\\n=== build script ===")
     
-    # CMakeファイル
+    # CMake file
     cmake_code = '''cmake_minimum_required(VERSION 3.16)
 project(BloodPressureEstimation)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Python検索
+# Python search
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
-# インクルードディレクトリ
+# include directory
 include_directories(${Python3_INCLUDE_DIRS})
 
-# ソースファイル
+# source file
 set(SOURCES
     BloodPressureEstimation.cpp
 )
 
-# DLL作成
+# DLL creation
 add_library(BloodPressureEstimation SHARED ${SOURCES})
 
-# Python DLLリンク
+# Python DLL link
 target_link_libraries(BloodPressureEstimation ${Python3_LIBRARIES})
 
-# DEFファイル使用
+# DEF file use
 set_target_properties(BloodPressureEstimation PROPERTIES
     LINK_FLAGS "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/BloodPressureEstimation.def"
 )
 
-# プリプロセッサ定義
+# preprocessor definition
 target_compile_definitions(BloodPressureEstimation PRIVATE BLOODPRESSURE_EXPORTS)
 
-# 出力ディレクトリ
+# output directory
 set_target_properties(BloodPressureEstimation PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/dist
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/dist
@@ -522,31 +522,31 @@ set_target_properties(BloodPressureEstimation PROPERTIES
     with open("CMakeLists.txt", "w", encoding="utf-8") as f:
         f.write(cmake_code)
     
-    # バッチファイル
+    # batch file
     batch_code = '''@echo off
 echo === C++ Wrapper DLL Build ===
 
-REM Visual Studio環境設定
+REM Visual Studio environment setting
 call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat"
 
-REM ビルドディレクトリ作成
+REM build directory creation
 if exist build rmdir /s /q build
 mkdir build
 cd build
 
-REM CMake設定
+REM CMake setting
 cmake .. -G "Visual Studio 17 2022" -A x64
 
-REM ビルド実行
+REM build
 cmake --build . --config Release
 
-REM 結果確認
+REM check result
 if exist dist\\BloodPressureEstimation.dll (
-    echo ✓ DLL作成成功
-    echo エクスポート関数確認:
+    echo ✓ DLL created successfully
+    echo export function check:
     dumpbin /exports dist\\BloodPressureEstimation.dll
 ) else (
-    echo ✗ DLL作成失敗
+    echo ✗ DLL creation failed
 )
 
 cd ..
@@ -556,11 +556,11 @@ pause
     with open("build_cpp_dll.bat", "w", encoding="utf-8") as f:
         f.write(batch_code)
     
-    print("✓ CMakeLists.txt と build_cpp_dll.bat 作成完了")
+    print("✓ CMakeLists.txt and build_cpp_dll.bat created")
 
 def create_csharp_test():
-    """C#テストコード作成"""
-    print("\\n=== C#テストコード作成 ===")
+    """C# test code"""
+    print("\\n=== C# test code ===")
     
     csharp_code = '''using System;
 using System.Runtime.InteropServices;
@@ -604,47 +604,47 @@ namespace BloodPressureDllTest
 
         public static void TestCppWrapperDLL()
         {
-            Console.WriteLine("=== C++ Wrapper DLL テスト ===");
+            Console.WriteLine("=== C++ Wrapper DLL test ===");
 
             try
             {
-                // 1. DLL初期化
-                Console.WriteLine("1. DLL初期化");
+                // 1. DLL initialization
+                Console.WriteLine("1. DLL initialization");
                 bool initResult = InitializeDLL("models");
-                Console.WriteLine($"   結果: {initResult}");
+                Console.WriteLine($"    result: {initResult}");
 
                 if (!initResult)
                 {
-                    Console.WriteLine("DLL初期化に失敗しました");
+                    Console.WriteLine("DLL initialization failed");
                     return;
                 }
 
-                // 2. バージョン取得
-                Console.WriteLine("2. バージョン取得");
+                // 2. version get
+                Console.WriteLine("2. version get");
                 string version = GetVersionInfo();
-                Console.WriteLine($"   バージョン: {version}");
+                Console.WriteLine($"    version: {version}");
 
-                // 3. 処理状況取得
-                Console.WriteLine("3. 処理状況取得");
+                // 3. processing status get
+                Console.WriteLine("3. processing status get");
                 string status = GetProcessingStatus("test_request");
-                Console.WriteLine($"   状況: {status}");
+                Console.WriteLine($"    status: {status}");
 
-                // 4. 解析リクエスト（無効パラメータ）
-                Console.WriteLine("4. 解析リクエスト（無効パラメータ）");
+                // 4. analysis request (invalid parameters)
+                Console.WriteLine("4. analysis request (invalid parameters)");
                 AnalysisCallback callback = (reqId, sbp, dbp, csvData, errors) =>
                 {
-                    Console.WriteLine($"   コールバック: {reqId}, SBP={sbp}, DBP={dbp}");
+                    Console.WriteLine($"    callback: {reqId}, SBP={sbp}, DBP={dbp}");
                 };
 
                 string errorCode = StartBloodPressureAnalysisRequest(
                     "invalid_id", 170, 70, 1, "test.webm", callback);
-                Console.WriteLine($"   エラーコード: {errorCode}");
+                Console.WriteLine($"    error code: {errorCode}");
 
-                // 5. 有効なリクエスト
-                Console.WriteLine("5. 有効な解析リクエスト");
+                // 5. valid analysis request
+                Console.WriteLine("5. valid analysis request");
                 string requestId = $"{DateTime.Now:yyyyMMddHHmmssfff}_1234567890_0987654321";
                 
-                // ダミーファイル作成
+                // dummy file creation
                 System.IO.File.WriteAllText("test_video.webm", "dummy");
                 
                 errorCode = StartBloodPressureAnalysisRequest(
@@ -652,45 +652,45 @@ namespace BloodPressureDllTest
                 
                 if (string.IsNullOrEmpty(errorCode))
                 {
-                    Console.WriteLine("   解析開始成功");
+                    Console.WriteLine("    analysis start successful");
                     
-                    // 状況確認
+                    // status check
                     System.Threading.Thread.Sleep(1000);
                     status = GetProcessingStatus(requestId);
-                    Console.WriteLine($"   処理状況: {status}");
+                    Console.WriteLine($"    processing status: {status}");
                     
-                    // 完了待ち
+                    // wait for completion
                     System.Threading.Thread.Sleep(3000);
                     status = GetProcessingStatus(requestId);
-                    Console.WriteLine($"   最終状況: {status}");
+                    Console.WriteLine($"    final status: {status}");
                 }
                 else
                 {
-                    Console.WriteLine($"   エラーコード: {errorCode}");
+                    Console.WriteLine($"    error code: {errorCode}");
                 }
 
-                Console.WriteLine("=== テスト完了 ===");
+                Console.WriteLine("=== test finished ===");
             }
             catch (DllNotFoundException ex)
             {
-                Console.WriteLine($"DLLが見つかりません: {ex.Message}");
-                Console.WriteLine("build\\dist\\BloodPressureEstimation.dll が存在することを確認してください");
+                Console.WriteLine($"DLL not found: {ex.Message}");
+                Console.WriteLine("build\\dist\\BloodPressureEstimation.dll exists");
             }
             catch (EntryPointNotFoundException ex)
             {
-                Console.WriteLine($"エントリポイントが見つかりません: {ex.Message}");
-                Console.WriteLine("DLLのエクスポート関数を確認してください");
+                Console.WriteLine($"entry point not found: {ex.Message}");
+                Console.WriteLine("check DLL export functions");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"エラー: {ex.Message}");
+                Console.WriteLine($"error: {ex.Message}");
             }
         }
 
         public static void Main(string[] args)
         {
             TestCppWrapperDLL();
-            Console.WriteLine("\\nEnterキーで終了...");
+            Console.WriteLine("\\nPress Enter to exit...");
             Console.ReadLine();
         }
     }
@@ -699,46 +699,46 @@ namespace BloodPressureDllTest
     with open("CSharpCppWrapperTest.cs", "w", encoding="utf-8") as f:
         f.write(csharp_code)
     
-    print("✓ CSharpCppWrapperTest.cs 作成完了")
+    print("✓ CSharpCppWrapperTest.cs created")
 
 def main():
-    """メイン処理"""
-    print("=== C++ラッパーDLL作成スクリプト ===")
+    """main process"""
+    print("=== C++ wrapper DLL creation script ===")
     
     try:
-        # 1. C++ラッパー作成
+        # 1. C++ wrapper creation
         create_cpp_wrapper()
         
-        # 2. シンプルPythonモジュール作成
+        # 2. simple python module creation
         create_simple_python_module()
         
-        # 3. DEFファイル作成
+        # 3. DEF file creation
         create_def_file()
         
-        # 4. ビルドスクリプト作成
+        # 4. build script creation
         create_build_script()
         
-        # 5. C#テストコード作成
+        # 5. C# test code creation
         create_csharp_test()
         
-        print("\\n🎉 C++ラッパーDLL作成完了！")
-        print("\\n次の手順:")
-        print("1. build_cpp_dll.bat を実行してDLLビルド")
-        print("2. csc CSharpCppWrapperTest.cs でテストコンパイル")
-        print("3. build\\dist\\BloodPressureEstimation.dll をテスト実行ディレクトリにコピー")
-        print("4. bp_estimation_simple.py も同じディレクトリにコピー")
-        print("5. CSharpCppWrapperTest.exe 実行")
+        print("\\n🎉 C++ wrapper DLL created!")
+        print("\\nnext steps:")
+        print("1. run build_cpp_dll.bat to build DLL")
+        print("2. csc CSharpCppWrapperTest.cs to compile test code")
+        print("3. copy build\\dist\\BloodPressureEstimation.dll to test execution directory")
+        print("4. copy bp_estimation_simple.py to the same directory")
+        print("5. run CSharpCppWrapperTest.exe")
         
-        print("\\n特徴:")
-        print("✓ 確実なDLLエクスポート")
-        print("✓ C#から直接呼び出し可能")
-        print("✓ 内部でPythonエンジン実行")
-        print("✓ エラーハンドリング完備")
+        print("\\nfeatures:")
+        print("✓ reliable DLL export")
+        print("✓ callable from C#")
+        print("✓ Python engine execution inside")
+        print("✓ error handling complete")
         
         return True
         
     except Exception as e:
-        print(f"\\n❌ エラー: {e}")
+        print(f"\\n❌ error: {e}")
         return False
 
 if __name__ == "__main__":
