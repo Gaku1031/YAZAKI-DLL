@@ -58,15 +58,16 @@ jobs:
           try {
             $clVersion = & cl.exe 2>&1 | Out-String
             if ($clVersion -match "Microsoft.*Compiler") {
-              Write-Host "✓ Visual C++ Compiler found and working" -ForegroundColor Green
+              Write-Host "Visual C++ Compiler found and working" -ForegroundColor Green
               Write-Host "Compiler version info:" -ForegroundColor Cyan
               Write-Host $clVersion
             } else {
-              Write-Host "✗ Compiler check failed" -ForegroundColor Red
+              Write-Host "Compiler check failed" -ForegroundColor Red
               exit 1
             }
-          } catch {
-            Write-Host "✗ cl.exe not found in PATH" -ForegroundColor Red
+          }
+          catch {
+            Write-Host "cl.exe not found in PATH" -ForegroundColor Red
             Write-Host "PATH environment:" -ForegroundColor Yellow
             $env:PATH.Split(';') | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*VC*' } | ForEach-Object { Write-Host "  $_" }
             exit 1
@@ -75,10 +76,10 @@ jobs:
           Write-Host "Environment variables:" -ForegroundColor Yellow
           Write-Host "VCINSTALLDIR: $env:VCINSTALLDIR"
           if ($env:INCLUDE) {
-            Write-Host "INCLUDE: $($env:INCLUDE.Split(';')[0])..."
+            Write-Host ("INCLUDE: " + $env:INCLUDE.Split(';')[0] + "...")
           }
           if ($env:LIB) {
-            Write-Host "LIB: $($env:LIB.Split(';')[0])..."
+            Write-Host ("LIB: " + $env:LIB.Split(';')[0] + "...")
           }
         shell: powershell
 
@@ -98,9 +99,9 @@ jobs:
           foreach ($file in $requiredFiles) {
             if (Test-Path $file) {
               $size = (Get-Item $file).Length
-              Write-Host "✓ $file ($size bytes)" -ForegroundColor Green
+              Write-Host "$file ($size bytes)" -ForegroundColor Green
             } else {
-              Write-Host "✗ $file missing" -ForegroundColor Red
+              Write-Host "$file missing" -ForegroundColor Red
               exit 1
             }
           }
@@ -133,7 +134,7 @@ jobs:
           $dllPath = "build\dist\BloodPressureEstimation.dll"
 
           if (Test-Path $dllPath) {
-            Write-Host "✓ DLL created successfully" -ForegroundColor Green
+            Write-Host "DLL created successfully" -ForegroundColor Green
             
             $dllSize = (Get-Item $dllPath).Length
             Write-Host "DLL size: $([math]::Round($dllSize / 1KB, 2)) KB" -ForegroundColor Cyan
@@ -147,10 +148,10 @@ jobs:
               
               foreach ($export in $expectedExports) {
                 if ($exports -match $export) {
-                  Write-Host "  ✓ $export" -ForegroundColor Green
+                  Write-Host "  $export" -ForegroundColor Green
                   $foundCount++
                 } else {
-                  Write-Host "  ✗ $export" -ForegroundColor Red
+                  Write-Host "  $export" -ForegroundColor Red
                 }
               }
               
@@ -163,7 +164,7 @@ jobs:
               Write-Host "Could not verify exports (dumpbin unavailable)" -ForegroundColor Yellow
             }
           } else {
-            Write-Host "✗ DLL build failed - file not found" -ForegroundColor Red
+            Write-Host "DLL build failed - file not found" -ForegroundColor Red
             Write-Host "Build directory contents:" -ForegroundColor Yellow
             if (Test-Path "build") {
               Get-ChildItem "build" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
@@ -185,9 +186,9 @@ jobs:
             dotnet build tests/CSharpTest/BloodPressureTest.csproj --configuration Release --verbosity normal
             
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "✓ C# test project built successfully" -ForegroundColor Green
+              Write-Host "C# test project built successfully" -ForegroundColor Green
             } else {
-              Write-Host "✗ C# test project build failed" -ForegroundColor Red
+              Write-Host "C# test project build failed" -ForegroundColor Red
               exit 1
             }
           } else {
@@ -208,15 +209,15 @@ jobs:
           $dllSource = "build\dist\BloodPressureEstimation.dll"
           if (Test-Path $dllSource) {
             Copy-Item $dllSource "test-output\"
-            Write-Host "✓ Copied main DLL" -ForegroundColor Green
+            Write-Host "Copied main DLL" -ForegroundColor Green
           } else {
-            Write-Host "✗ Main DLL not found: $dllSource" -ForegroundColor Red
+            Write-Host "Main DLL not found: $dllSource" -ForegroundColor Red
             exit 1
           }
 
           if (Test-Path "bp_estimation_simple.py") {
             Copy-Item "bp_estimation_simple.py" "test-output\"
-            Write-Host "✓ Copied Python module" -ForegroundColor Green
+            Write-Host "Copied Python module" -ForegroundColor Green
           }
 
           $pythonDir = python -c "import sys; import os; print(os.path.dirname(sys.executable))"
@@ -228,9 +229,9 @@ jobs:
           $pythonDll = "$pythonDir\$pythonVersion.dll"
           if (Test-Path $pythonDll) {
             Copy-Item $pythonDll "test-output\"
-            Write-Host "✓ Copied Python runtime DLL" -ForegroundColor Green
+            Write-Host "Copied Python runtime DLL" -ForegroundColor Green
           } else {
-            Write-Host "✗ Python DLL not found: $pythonDll" -ForegroundColor Red
+            Write-Host "Python DLL not found: $pythonDll" -ForegroundColor Red
           }
 
           $vcDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
@@ -238,7 +239,7 @@ jobs:
             $dllPath = "$pythonDir\$dll"
             if (Test-Path $dllPath) {
               Copy-Item $dllPath "test-output\"
-              Write-Host "✓ Copied $dll" -ForegroundColor Green
+              Write-Host "Copied $dll" -ForegroundColor Green
             } else {
               Write-Host "Warning: $dll not found in $pythonDir" -ForegroundColor Yellow
             }
@@ -247,23 +248,23 @@ jobs:
           $testExe = "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe"
           if (Test-Path $testExe) {
             Copy-Item "tests\CSharpTest\bin\Release\net6.0\*" "test-output\" -Recurse
-            Write-Host "✓ Copied test executable and dependencies" -ForegroundColor Green
+            Write-Host "Copied test executable and dependencies" -ForegroundColor Green
           } else {
             Write-Host "Test executable not found, skipping test copy" -ForegroundColor Yellow
           }
 
           if (Test-Path "tests\test-data") {
             Copy-Item "tests\test-data" "test-output\" -Recurse
-            Write-Host "✓ Copied test data" -ForegroundColor Green
+            Write-Host "Copied test data" -ForegroundColor Green
           } elseif (Test-Path "sample-data") {
             Copy-Item "sample-data" "test-output\test-data" -Recurse
-            Write-Host "✓ Copied sample data as test data" -ForegroundColor Green
+            Write-Host "Copied sample data as test data" -ForegroundColor Green
           } else {
             Write-Host "No test data found" -ForegroundColor Yellow
           }
 
           New-Item -ItemType Directory -Path "test-output\models" -Force
-          Write-Host "✓ Created models directory" -ForegroundColor Green
+          Write-Host "Created
 
           Write-Host "`nTest directory contents:" -ForegroundColor Cyan
           Get-ChildItem "test-output" | Format-Table Name, Length, LastWriteTime
@@ -285,13 +286,13 @@ jobs:
               $exitCode = $testProcess.ExitCode
               
               if ($exitCode -eq 0) {
-                Write-Host "✓ Integration tests passed" -ForegroundColor Green
+                Write-Host "Integration tests passed" -ForegroundColor Green
               } else {
-                Write-Host "✗ Integration tests failed with exit code: $exitCode" -ForegroundColor Red
+                Write-Host "Integration tests failed with exit code: $exitCode" -ForegroundColor Red
                 exit 1
               }
             } catch {
-              Write-Host "✗ Error running integration tests: $($_.Exception.Message)" -ForegroundColor Red
+              Write-Host "Error running integration tests: $($_.Exception.Message)" -ForegroundColor Red
               exit 1
             }
           } else {
@@ -358,7 +359,7 @@ jobs:
           $readmeContent = $readmeLines -join "`n"
           $readmeContent | Out-File -FilePath "distribution\README.txt" -Encoding UTF8
 
-          Write-Host "✓ Distribution package created" -ForegroundColor Green
+          Write-Host "Distribution package created" -ForegroundColor Green
           Write-Host "Package contents:" -ForegroundColor Cyan
           Get-ChildItem "distribution" | Format-Table Name, Length, LastWriteTime
         shell: powershell
