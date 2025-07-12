@@ -54,24 +54,38 @@ jobs:
         run: |
           Write-Host "=== Compiler Verification ===" -ForegroundColor Green
           Write-Host "Checking cl.exe availability..." -ForegroundColor Yellow
-
+          
           try {
-            $vcvarsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-            $output = cmd /c "`"$vcvarsPath`" && cl.exe" 2>&1
+            # ilammy/msvc-dev-cmd@v1 が既に環境を設定しているので、直接 cl.exe を呼び出す
+            $output = cl.exe 2>&1 | Out-String
+            
             if ($output -match "Microsoft.*Compiler") {
               Write-Host "Visual C++ Compiler found and working" -ForegroundColor Green
               Write-Host "Compiler version info:" -ForegroundColor Cyan
               Write-Host $output
             } else {
-              Write-Host "Compiler check failed" -ForegroundColor Red
+              Write-Host "Compiler check failed. Output:" -ForegroundColor Red
+              Write-Host $output
               exit 1
             }
           }
           catch {
-            Write-Host "cl.exe not found or failed to execute" -ForegroundColor Red
+            Write-Host "cl.exe not found or failed to execute: $($_.Exception.Message)" -ForegroundColor Red
+            
+            # デバッグ情報を出力
+            Write-Host "PATH環境変数の確認:" -ForegroundColor Yellow
+            $env:PATH -split ';' | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*MSVC*' } | ForEach-Object {
+              Write-Host "  $_"
+            }
+            
+            Write-Host "cl.exe の場所を検索:" -ForegroundColor Yellow
+            Get-Command cl.exe -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "  Found at: $($_.Source)"
+            }
+            
             exit 1
           }
-
+          
           Write-Host "Environment variables:" -ForegroundColor Yellow
           Write-Host "VCINSTALLDIR: $env:VCINSTALLDIR"
           if ($env:INCLUDE) {
