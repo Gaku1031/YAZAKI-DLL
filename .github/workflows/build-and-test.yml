@@ -38,115 +38,43 @@ jobs:
           if (Test-Path requirements_balanced_20mb.txt) {
             pip install -r requirements_balanced_20mb.txt
           }
-          pip install opencv-python-headless mediapipe numpy scipy scikit-learn joblib
+          pip install opencv-python-headless mediapipe numpy scipy scikit-learn joblib pyinstaller
         shell: powershell
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Setup Visual Studio environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-          vsversion: "2022"
-      
-      - name: Verify compiler setup
+      - name: Build Balanced 20MB DLL
         run: |
-          Write-Host "=== Compiler Verification ===" -ForegroundColor Green
-          Write-Host "Checking cl.exe availability..." -ForegroundColor Yellow
-          
-          # cl.exe は引数なしで実行するとエラーコード1で終了するが、これは正常な動作
-          # PowerShell の ErrorActionPreference を設定して例外を防ぐ
-          $ErrorActionPreference = "Continue"
-          $output = cl.exe 2>&1 | Out-String
-          
-          if ($output -match "Microsoft.*Compiler") {
-            Write-Host "Visual C++ Compiler found and working" -ForegroundColor Green
-            Write-Host "Compiler version info:" -ForegroundColor Cyan
-            Write-Host $output
-          } else {
-            Write-Host "Compiler check failed. Output:" -ForegroundColor Red
-            Write-Host $output
-            
-            # デバッグ情報を出力
-            Write-Host "PATH環境変数の確認:" -ForegroundColor Yellow
-            $env:PATH -split ';' | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*MSVC*' } | ForEach-Object {
-              Write-Host "  $_"
-            }
-            
-            Write-Host "cl.exe の場所を検索:" -ForegroundColor Yellow
-            Get-Command cl.exe -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "  Found at: $($_.Source)"
-            }
-            
+          Write-Host "Building Balanced 20MB DLL..." -ForegroundColor Green
+
+          # build_balanced_20mb_dll.pyを実行
+          python build_balanced_20mb_dll.py
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "DLL build failed with exit code: $LASTEXITCODE" -ForegroundColor Red
             exit 1
           }
-          
-          Write-Host "Environment variables:" -ForegroundColor Yellow
-          Write-Host "VCINSTALLDIR: $env:VCINSTALLDIR"
-          if ($env:INCLUDE) {
-            Write-Host ("INCLUDE: " + $env:INCLUDE.Split(';')[0] + "...")
-          }
-          if ($env:LIB) {
-            Write-Host ("LIB: " + $env:LIB.Split(';')[0] + "...")
-          }
+
+          Write-Host "DLL build completed successfully" -ForegroundColor Green
         shell: powershell
 
-      - name: Create Python module files
+      - name: Verify DLL creation
         run: |
-          Write-Host "Creating C++ wrapper files..." -ForegroundColor Yellow
-          python create_cpp_wrapper_dll.py
-
-          Write-Host "Verifying created files:" -ForegroundColor Yellow
-          $requiredFiles = @(
-            "BloodPressureEstimation_Fixed.cpp",
-            "BloodPressureEstimation_Fixed.h", 
-            "BloodPressureEstimation.def",
-            "bp_estimation_simple.py"
-          )
-
-          foreach ($file in $requiredFiles) {
-            if (Test-Path $file) {
-              $size = (Get-Item $file).Length
-              Write-Host "$file ($size bytes)" -ForegroundColor Green
-            } else {
-              Write-Host "$file missing" -ForegroundColor Red
-              exit 1
-            }
-          }
-        shell: powershell
-
-      - name: Build C++ DLL
-        run: |
-          Write-Host "Starting DLL build process..." -ForegroundColor Green
-
-          Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
-
-          if (Test-Path ".\scripts\build-dll.ps1") {
-            Write-Host "Running build script..." -ForegroundColor Yellow
-            & ".\scripts\build-dll.ps1"
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "Build script failed with exit code: $LASTEXITCODE" -ForegroundColor Red
-              exit 1
-            }
-          } else {
-            Write-Host "Build script not found: .\scripts\build-dll.ps1" -ForegroundColor Red
-            Write-Host "Available files:" -ForegroundColor Yellow
-            Get-ChildItem -Recurse -Name "*.ps1" | ForEach-Object { Write-Host "  $_" }
-            exit 1
-          }
-        shell: powershell
-
-      - name: Verify DLL exports
-        run: |
-          $dllPath = "build\dist\BloodPressureEstimation.dll"
+          $dllPath = "dist\BloodPressureEstimation.dll"
 
           if (Test-Path $dllPath) {
             Write-Host "DLL created successfully" -ForegroundColor Green
             
             $dllSize = (Get-Item $dllPath).Length
-            Write-Host "DLL size: $([math]::Round($dllSize / 1KB, 2)) KB" -ForegroundColor Cyan
+            $dllSizeMB = [math]::Round($dllSize / 1MB, 2)
+            Write-Host "DLL size: $dllSizeMB MB" -ForegroundColor Cyan
+            
+            # サイズチェック（20MB以下を推奨）
+            if ($dllSizeMB -le 20) {
+              Write-Host "DLL size is within target (20MB or less)" -ForegroundColor Green
+            } elseif ($dllSizeMB -le 25) {
+              Write-Host "DLL size is close to target (25MB or less)" -ForegroundColor Yellow
+            } else {
+              Write-Host "DLL size exceeds target (over 25MB)" -ForegroundColor Yellow
+            }
             
             try {
               Write-Host "Checking DLL exports..." -ForegroundColor Yellow
@@ -168,6 +96,7 @@ jobs:
                 Write-Host "All required exports found" -ForegroundColor Green
               } else {
                 Write-Host "Warning: Some exports missing" -ForegroundColor Yellow
+                exit 1
               }
             } catch {
               Write-Host "Could not verify exports (dumpbin unavailable)" -ForegroundColor Yellow
@@ -175,8 +104,8 @@ jobs:
           } else {
             Write-Host "DLL build failed - file not found" -ForegroundColor Red
             Write-Host "Build directory contents:" -ForegroundColor Yellow
-            if (Test-Path "build") {
-              Get-ChildItem "build" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+            if (Test-Path "dist") {
+              Get-ChildItem "dist" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
             }
             exit 1
           }
@@ -187,36 +116,47 @@ jobs:
         with:
           dotnet-version: "6.0.x"
 
-      - name: Copy DLL to required locations
+      - name: Create C# Test Project
         run: |
-          Write-Host "Copying DLL to required locations..." -ForegroundColor Yellow
-          
-          $sourceDll = "build\dist\BloodPressureEstimation.dll"
-          $targetLocations = @(
-            ".\BloodPressureEstimation.dll",
-            "tests\CSharpTest\BloodPressureEstimation.dll"
-          )
-          
-          if (Test-Path $sourceDll) {
-            foreach ($target in $targetLocations) {
-              $targetDir = Split-Path $target -Parent
-              if ($targetDir -and !(Test-Path $targetDir)) {
-                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-                Write-Host "Created directory: $targetDir" -ForegroundColor Cyan
-              }
-              
-              Copy-Item $sourceDll $target -Force
-              if (Test-Path $target) {
-                Write-Host "Copied DLL to: $target" -ForegroundColor Green
-              } else {
-                Write-Host "Failed to copy DLL to: $target" -ForegroundColor Red
-                exit 1
-              }
-            }
+          Write-Host "Creating C# test project..." -ForegroundColor Yellow
+
+          # テストディレクトリ作成
+          New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
+
+          Write-Host "C# test project directory created" -ForegroundColor Green
+        shell: powershell
+
+      - name: Copy DLL and dependencies for testing
+        run: |
+          Write-Host "Setting up test environment..." -ForegroundColor Yellow
+
+          # DLLをテストディレクトリにコピー
+          $dllSource = "dist\BloodPressureEstimation.dll"
+          if (Test-Path $dllSource) {
+            Copy-Item $dllSource "tests\CSharpTest\"
+            Write-Host "Copied DLL to test directory" -ForegroundColor Green
           } else {
-            Write-Host "Source DLL not found: $sourceDll" -ForegroundColor Red
+            Write-Host "DLL not found: $dllSource" -ForegroundColor Red
             exit 1
           }
+
+          # モデルディレクトリをコピー
+          if (Test-Path "models") {
+            Copy-Item "models" "tests\CSharpTest\" -Recurse -Force
+            Write-Host "Copied models directory" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: models directory not found" -ForegroundColor Yellow
+          }
+
+          # サンプルデータをコピー
+          if (Test-Path "sample-data") {
+            Copy-Item "sample-data" "tests\CSharpTest\" -Recurse -Force
+            Write-Host "Copied sample data" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: sample-data directory not found" -ForegroundColor Yellow
+          }
+
+          Write-Host "Test environment setup completed" -ForegroundColor Green
         shell: powershell
 
       - name: Build C# Test Project
@@ -224,14 +164,6 @@ jobs:
           Write-Host "Building C# test project..." -ForegroundColor Yellow
 
           if (Test-Path "tests/CSharpTest/BloodPressureTest.csproj") {
-            # DLLが存在することを確認
-            if (Test-Path "BloodPressureEstimation.dll") {
-              Write-Host "DLL found in root directory" -ForegroundColor Green
-            } else {
-              Write-Host "DLL not found in root directory" -ForegroundColor Red
-              exit 1
-            }
-            
             dotnet build tests/CSharpTest/BloodPressureTest.csproj --configuration Release --verbosity normal
             
             if ($LASTEXITCODE -eq 0) {
@@ -241,103 +173,27 @@ jobs:
               exit 1
             }
           } else {
-            Write-Host "C# test project not found" -ForegroundColor Yellow
-            Write-Host "Available test files:" -ForegroundColor Cyan
-            if (Test-Path "tests") {
-              Get-ChildItem "tests" -Recurse -Name "*.csproj" | ForEach-Object { Write-Host "  $_" }
-            }
-          }
-        shell: powershell
-
-      - name: Copy DLL and dependencies for testing
-        run: |
-          Write-Host "Setting up test environment..." -ForegroundColor Yellow
-
-          New-Item -ItemType Directory -Path "test-output" -Force
-
-          $dllSource = "build\dist\BloodPressureEstimation.dll"
-          if (Test-Path $dllSource) {
-            Copy-Item $dllSource "test-output\"
-            Write-Host "Copied main DLL" -ForegroundColor Green
-          } else {
-            Write-Host "Main DLL not found: $dllSource" -ForegroundColor Red
+            Write-Host "C# test project not found" -ForegroundColor Red
             exit 1
           }
-
-          if (Test-Path "bp_estimation_simple.py") {
-            Copy-Item "bp_estimation_simple.py" "test-output\"
-            Write-Host "Copied Python module" -ForegroundColor Green
-          }
-
-          $pythonDir = python -c "import sys; import os; print(os.path.dirname(sys.executable))"
-          $pythonVersion = python -c "import sys; print('python' + str(sys.version_info.major) + str(sys.version_info.minor))"
-
-          Write-Host "Python directory: $pythonDir" -ForegroundColor Cyan
-          Write-Host "Python version: $pythonVersion" -ForegroundColor Cyan
-
-          $pythonDll = "$pythonDir\$pythonVersion.dll"
-          if (Test-Path $pythonDll) {
-            Copy-Item $pythonDll "test-output\"
-            Write-Host "Copied Python runtime DLL" -ForegroundColor Green
-          } else {
-            Write-Host "Python DLL not found: $pythonDll" -ForegroundColor Red
-          }
-
-          $vcDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
-          foreach ($dll in $vcDlls) {
-            $dllPath = "$pythonDir\$dll"
-            if (Test-Path $dllPath) {
-              Copy-Item $dllPath "test-output\"
-              Write-Host "Copied $dll" -ForegroundColor Green
-            } else {
-              Write-Host "Warning: $dll not found in $pythonDir" -ForegroundColor Yellow
-            }
-          }
-
-          $testExe = "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe"
-          if (Test-Path $testExe) {
-            Copy-Item "tests\CSharpTest\bin\Release\net6.0\*" "test-output\" -Recurse
-            Write-Host "Copied test executable and dependencies" -ForegroundColor Green
-          } else {
-            Write-Host "Test executable not found, skipping test copy" -ForegroundColor Yellow
-          }
-
-          if (Test-Path "tests\test-data") {
-            Copy-Item "tests\test-data" "test-output\" -Recurse
-            Write-Host "Copied test data" -ForegroundColor Green
-          } elseif (Test-Path "sample-data") {
-            Copy-Item "sample-data" "test-output\test-data" -Recurse
-            Write-Host "Copied sample data as test data" -ForegroundColor Green
-          } else {
-            Write-Host "No test data found" -ForegroundColor Yellow
-          }
-
-          New-Item -ItemType Directory -Path "test-output\models" -Force
-          Write-Host "Created models directory" -ForegroundColor Green
-
-          Write-Host "`nTest directory contents:" -ForegroundColor Cyan
-          Get-ChildItem "test-output" | Format-Table Name, Length, LastWriteTime
         shell: powershell
 
       - name: Run C# Integration Tests
         run: |
-          cd test-output
-          Write-Host "=== Running Blood Pressure DLL Integration Tests ===" -ForegroundColor Green
-          Write-Host "Working directory: $(Get-Location)"
-          Write-Host "Files in directory:"
-          Get-ChildItem | Format-Table Name, Length
+          Write-Host "Running C# integration tests..." -ForegroundColor Yellow
 
-          if (Test-Path "BloodPressureTest.exe") {
-            Write-Host "Running integration tests..." -ForegroundColor Yellow
+          $testExe = "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe"
+          if (Test-Path $testExe) {
+            Write-Host "Test executable found: $testExe" -ForegroundColor Green
             
             try {
-              $testProcess = Start-Process -FilePath ".\BloodPressureTest.exe" -NoNewWindow -Wait -PassThru
+              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru
               $exitCode = $testProcess.ExitCode
               
               if ($exitCode -eq 0) {
-                Write-Host "Integration tests passed" -ForegroundColor Green
+                Write-Host "C# integration tests passed" -ForegroundColor Green
               } else {
-                Write-Host "Integration tests failed with exit code: $exitCode" -ForegroundColor Red
+                Write-Host "C# integration tests failed with exit code: $exitCode" -ForegroundColor Red
                 exit 1
               }
             } catch {
@@ -345,88 +201,42 @@ jobs:
               exit 1
             }
           } else {
-            Write-Host "Test executable not found, skipping integration tests" -ForegroundColor Yellow
-            Write-Host "This is not an error - tests will be run separately if needed" -ForegroundColor Cyan
+            Write-Host "Test executable not found: $testExe" -ForegroundColor Red
+            exit 1
           }
         shell: powershell
 
-      - name: Package DLL with dependencies
+      - name: Package Tested DLL
         run: |
-          Write-Host "Creating distribution package..." -ForegroundColor Yellow
+          Write-Host "Packaging tested DLL..." -ForegroundColor Yellow
 
           New-Item -ItemType Directory -Path "distribution" -Force
 
-          Copy-Item "build\dist\BloodPressureEstimation.dll" "distribution\"
-          Copy-Item "bp_estimation_simple.py" "distribution\"
+          # テスト済みDLLをコピー
+          Copy-Item "dist\BloodPressureEstimation.dll" "distribution\"
+          Write-Host "Copied tested DLL" -ForegroundColor Green
 
-          $pythonDir = python -c "import sys; import os; print(os.path.dirname(sys.executable))"
-          $pythonVersion = python -c "import sys; print('python' + str(sys.version_info.major) + str(sys.version_info.minor))"
-
-          Copy-Item "$pythonDir\$pythonVersion.dll" "distribution\"
-
-          $vcDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
-          foreach ($dll in $vcDlls) {
-            $dllPath = "$pythonDir\$dll"
-            if (Test-Path $dllPath) {
-              Copy-Item $dllPath "distribution\"
-            }
+          # モデルファイルをコピー
+          if (Test-Path "models") {
+            Copy-Item "models" "distribution\" -Recurse -Force
+            Write-Host "Copied models directory" -ForegroundColor Green
           }
 
-          # Create README content using string concatenation instead of HERE-string
-          $readmeLines = @(
-            "# Blood Pressure Estimation DLL",
-            "",
-            "## Build Information",
-            "- Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')",
-            "- Commit: ${{ github.sha }}",
-            "- Python Version: $pythonVersion",
-            "- Configuration: Release",
-            "",
-            "## Files Included",
-            "- BloodPressureEstimation.dll - Main DLL",
-            "- bp_estimation_simple.py - Python module",
-            "- python311.dll - Python runtime",
-            "- vcruntime140*.dll - Visual C++ runtime",
-            "- msvcp140.dll - C++ standard library",
-            "",
-            "## Usage",
-            "1. Place all files in the same directory as your C# application",
-            "2. Reference BloodPressureEstimation.dll in your C# project",
-            "3. Call the exported functions as shown in the test examples",
-            "",
-            "## Exported Functions",
-            "- InitializeDLL",
-            "- StartBloodPressureAnalysisRequest",
-            "- GetProcessingStatus",
-            "- CancelBloodPressureAnalysis",
-            "- GetVersionInfo",
-            "",
-            "## Test Results",
-            "This package was built and basic verification tests passed successfully."
-          )
-
-          $readmeContent = $readmeLines -join "`n"
+          # READMEファイル作成
+          $readmeContent = "Blood Pressure Estimation DLL - Tested Version`n`nBuild Information:`n- Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')`n- Commit: ${{ github.sha }}`n- Python Version: 3.11`n- Configuration: Release`n- Test Status: PASSED`n`nFiles Included:`n- BloodPressureEstimation.dll - Tested and verified DLL`n- models/ - Machine learning models (if required)`n`nUsage:`n1. Place BloodPressureEstimation.dll in your C# application directory`n2. Copy models/ directory if machine learning models are required`n3. Reference the DLL in your C# project`n4. Call the exported functions as shown in the test examples`n`nExported Functions:`n- InitializeDLL`n- StartBloodPressureAnalysisRequest`n- GetProcessingStatus`n- CancelBloodPressureAnalysis`n- GetVersionInfo`n`nTest Results:`nThis DLL has been tested with C# integration tests and passed successfully.`nThe DLL exports all required functions and can be called from C# applications.`n`nRequirements:`n- Windows 64-bit`n- .NET 6.0 or later`n- Visual C++ Redistributable (if not already installed)"
           $readmeContent | Out-File -FilePath "distribution\README.txt" -Encoding UTF8
 
-          Write-Host "Distribution package created" -ForegroundColor Green
+          Write-Host "Distribution package created successfully" -ForegroundColor Green
           Write-Host "Package contents:" -ForegroundColor Cyan
-          Get-ChildItem "distribution" | Format-Table Name, Length, LastWriteTime
+          Get-ChildItem "distribution" -Recurse | Format-Table Name, Length, LastWriteTime
         shell: powershell
 
-      - name: Upload DLL Artifacts
+      - name: Upload Tested DLL Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BloodPressureEstimation-DLL-${{ github.sha }}
+          name: BloodPressureEstimation-Tested-DLL-${{ github.sha }}
           path: distribution/
           retention-days: 30
-
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-${{ github.sha }}
-          path: test-output/
-          retention-days: 7
 
       - name: Upload Build Logs
         uses: actions/upload-artifact@v4
@@ -435,5 +245,6 @@ jobs:
           name: build-logs-${{ github.sha }}
           path: |
             build/
+            dist/
             *.log
           retention-days: 7
