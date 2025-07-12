@@ -601,7 +601,6 @@ if sys.platform.startswith('win'):
     
     def StartBloodPressureAnalysisRequest(request_id_ptr, height, weight, sex, 
                                         movie_path_ptr, callback):
-        """Blood pressure analysis request (C# call compatible)"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             movie_path = ctypes.string_at(movie_path_ptr).decode('utf-8')
@@ -619,7 +618,6 @@ if sys.platform.startswith('win'):
             return str(e).encode('utf-8')
     
     def GetProcessingStatus(request_id_ptr):
-        """Processing status acquisition (C# call compatible)"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             result = get_processing_status(request_id)
@@ -629,7 +627,6 @@ if sys.platform.startswith('win'):
             return b"none"
     
     def CancelBloodPressureAnalysis(request_id_ptr):
-        """Blood pressure analysis interruption (C# call compatible)"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             return cancel_blood_pressure_analysis(request_id)
@@ -638,7 +635,6 @@ if sys.platform.startswith('win'):
             return False
     
     def GetVersionInfo():
-        """Version information acquisition (C# call compatible)"""
         try:
             return get_version_info().encode('utf-8')
         except Exception as e:
@@ -664,7 +660,6 @@ if sys.platform.startswith('win'):
     
     # DLL entry point (required)
     def DllMain(hModule, fdwReason, lpReserved):
-        """DLL entry point"""
         if fdwReason == 1:  # DLL_PROCESS_ATTACH
             print("DLL loaded")
         elif fdwReason == 0:  # DLL_PROCESS_DETACH
@@ -895,7 +890,6 @@ exe = EXE(
 
 
 def create_balanced_requirements():
-    """Balanced requirements file creation"""
     print("\n=== Balanced requirements file creation ===")
 
     requirements = '''# Balanced blood pressure estimation DLL dependencies
@@ -931,7 +925,6 @@ pywin32>=306; sys_platform == "win32"
 
 
 def build_balanced_dll():
-    """Balanced DLL build using Nuitka for code obfuscation"""
     print("\n=== Balanced DLL build started ===")
 
     # Cleanup
@@ -1016,7 +1009,6 @@ def build_balanced_dll():
 
 
 def build_with_nuitka(script_file):
-    """Nuitka build with enhanced error handling"""
     print("Nuitka build running...")
 
     # Enhanced Nuitka command with better error handling
@@ -1087,7 +1079,6 @@ def build_with_nuitka(script_file):
 
 
 def build_with_pyinstaller(script_file):
-    """PyInstaller fallback build with enhanced error handling"""
     print("Trying PyInstaller build...")
 
     cmd = [
@@ -1144,7 +1135,6 @@ def build_with_pyinstaller(script_file):
 
 
 def create_nuitka_spec():
-    """Create Nuitka spec file for better control"""
     print("Creating Nuitka spec file...")
 
     spec_content = '''# -*- coding: utf-8 -*-
@@ -1221,7 +1211,6 @@ for option in compilation_options:
 
 
 def create_requirements_nuitka():
-    """Create requirements file for Nuitka build"""
     print("Creating Nuitka requirements file...")
 
     requirements = '''# Nuitka requirements for Blood Pressure Estimation DLL
@@ -1242,7 +1231,6 @@ joblib>=1.3.0
 
 
 def create_balanced_test_script():
-    """Balanced DLL test script creation"""
     print("\n=== Balanced DLL test script creation ===")
 
     test_code = '''"""
@@ -1256,7 +1244,6 @@ import time
 from pathlib import Path
 
 def test_balanced_dll():
-    """Balanced DLL function test"""
     print("=== Balanced DLL function test started ===")
     
     # DLLパス
@@ -1351,7 +1338,6 @@ def test_balanced_dll():
         return False
 
 def test_accuracy_features():
-    """Accuracy maintenance feature test"""
     print("\n=== Accuracy maintenance feature test ===")
     
     try:
@@ -1414,7 +1400,6 @@ if __name__ == "__main__":
 
 
 def main():
-    """Main process"""
     print("=== Balanced Blood Pressure Estimation DLL Creation Script ===")
     print("Target: 20MB or less, accuracy maintained, README.md compliant")
     print("Strategy: Nuitka compilation for code obfuscation")
