@@ -12,7 +12,6 @@ from pathlib import Path
 
 
 def create_balanced_bp_dll():
-    """Balanced blood pressure estimation DLL creation"""
     print("=== Balanced blood pressure estimation DLL creation ===")
 
     balanced_code = '''"""
@@ -88,7 +87,6 @@ class ErrorInfo:
         self.is_retriable = is_retriable
 
 class BalancedBPEstimator:
-    """Balanced blood pressure estimation class"""
     
     def __init__(self):
         self.is_initialized = False
@@ -100,7 +98,6 @@ class BalancedBPEstimator:
         self.face_mesh = None
         
     def initialize(self, model_dir: str = "models") -> bool:
-        """Balanced initialization"""
         try:
             if not all([HAS_OPENCV, HAS_NUMPY]):
                 print("Error: OpenCV or NumPy is missing")
@@ -121,7 +118,6 @@ class BalancedBPEstimator:
             return False
     
     def _init_optimized_facemesh(self):
-        """High-precision FaceMesh initialization"""
         try:
             if HAS_MEDIAPIPE:
                 self.mp_face_mesh = mp.solutions.face_mesh
@@ -141,7 +137,6 @@ class BalancedBPEstimator:
             self.face_mesh = None
     
     def _load_balanced_models(self, model_dir: str):
-        """Balanced model loading"""
         try:
             # Lightweight sklearn usage (if possible)
             if HAS_SKLEARN and HAS_JOBLIB:
@@ -169,7 +164,6 @@ class BalancedBPEstimator:
             self.models['dbp'] = self._create_enhanced_formula_model('dbp')
     
     def _create_enhanced_formula_model(self, bp_type: str):
-        """High-precision formula base model"""
         class EnhancedBPModel:
             def __init__(self, bp_type):
                 self.bp_type = bp_type
@@ -229,7 +223,6 @@ class BalancedBPEstimator:
         return EnhancedBPModel(bp_type)
     
     def _validate_request_id(self, request_id: str) -> bool:
-        """README.md compliant request ID validation"""
         if not request_id:
             return False
         
@@ -241,7 +234,6 @@ class BalancedBPEstimator:
                                             weight: int, sex: int, 
                                             measurement_movie_path: str,
                                             callback: Optional[Callable] = None) -> Optional[str]:
-        """README.md compliant blood pressure analysis request"""
         
         if not self.is_initialized:
             return ErrorCode.DLL_NOT_INITIALIZED
@@ -281,7 +273,6 @@ class BalancedBPEstimator:
     def _process_balanced_analysis(self, request_id: str, height: int, weight: int,
                                  sex: int, measurement_movie_path: str,
                                  callback: Optional[Callable]):
-        """Balanced blood pressure analysis processing"""
         try:
             # Balanced video processing (20 seconds, 15fps)
             rppg_data, peak_times = self._balanced_video_processing(measurement_movie_path)
@@ -308,7 +299,6 @@ class BalancedBPEstimator:
                 self.request_status[request_id] = ProcessingStatus.NONE
     
     def _balanced_video_processing(self, video_path: str) -> Tuple[List[float], List[float]]:
-        """Balanced video processing (20 seconds, 15fps)"""
         if not HAS_OPENCV or not self.face_mesh:
             return [], []
         
@@ -392,7 +382,6 @@ class BalancedBPEstimator:
         return rppg_data, peak_times
     
     def _enhanced_peak_detection(self, rppg_data: List[float], effective_fps: float) -> List[float]:
-        """High-precision peak detection"""
         if not rppg_data:
             return []
         
@@ -435,7 +424,6 @@ class BalancedBPEstimator:
         return peak_times
     
     def _estimate_bp_balanced(self, peak_times: List[float], height: int, weight: int, sex: int) -> Tuple[int, int]:
-        """Balanced blood pressure estimation"""
         if len(peak_times) < 3:
             return 120, 80
         
@@ -490,7 +478,6 @@ class BalancedBPEstimator:
     
     def _generate_spec_compliant_csv(self, rppg_data: List[float], peak_times: List[float], 
                                    request_id: str) -> str:
-        """README.md compliant CSV generation (about 20KB)"""
         csv_lines = [
             "# Blood Pressure Estimation PPG Data",
             f"# Request ID: {request_id}",
@@ -524,12 +511,10 @@ class BalancedBPEstimator:
         return "\\n".join(csv_lines)
     
     def get_processing_status(self, request_id: str) -> str:
-        """README.md compliant processing status acquisition"""
         with self.lock:
             return self.request_status.get(request_id, ProcessingStatus.NONE)
     
     def cancel_blood_pressure_analysis(self, request_id: str) -> bool:
-        """README.md compliant blood pressure analysis interruption"""
         with self.lock:
             if request_id in self.processing_requests:
                 self.request_status[request_id] = ProcessingStatus.NONE
@@ -537,7 +522,6 @@ class BalancedBPEstimator:
             return False
     
     def get_version_info(self) -> str:
-        """README.md compliant version information acquisition"""
         return f"v{self.version}"
 
 # Global instance
@@ -545,30 +529,24 @@ estimator = BalancedBPEstimator()
 
 # README.md compliant export function
 def initialize_dll(model_dir: str = "models") -> bool:
-    """DLL initialization"""
     return estimator.initialize(model_dir)
 
 def start_blood_pressure_analysis_request(request_id: str, height: int, weight: int, 
                                         sex: int, measurement_movie_path: str,
                                         callback: Optional[Callable] = None) -> Optional[str]:
-    """Blood pressure analysis request (README.md compliant)"""
     return estimator.start_blood_pressure_analysis_request(
         request_id, height, weight, sex, measurement_movie_path, callback)
 
 def get_processing_status(request_id: str) -> str:
-    """Processing status acquisition (README.md compliant)"""
     return estimator.get_processing_status(request_id)
 
 def cancel_blood_pressure_analysis(request_id: str) -> bool:
-    """Blood pressure analysis interruption (README.md compliant)"""
     return estimator.cancel_blood_pressure_analysis(request_id)
 
 def get_version_info() -> str:
-    """Version information acquisition (README.md compliant)"""
     return estimator.get_version_info()
 
 def generate_request_id(customer_code: str, driver_code: str) -> str:
-    """Request
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
     return f"{timestamp}_{customer_code}_{driver_code}"
 
@@ -705,7 +683,6 @@ if __name__ == "__main__":
 
 
 def create_balanced_spec():
-    """Balanced PyInstaller spec file creation"""
     print("\n=== Balanced PyInstaller spec file creation ===")
 
     spec_content = '''# -*- mode: python ; coding: utf-8 -*-
