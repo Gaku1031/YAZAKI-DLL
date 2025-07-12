@@ -11,12 +11,12 @@ import shutil
 from pathlib import Path
 
 def create_balanced_bp_dll():
-    """バランス調整済み血圧推定DLL作成"""
-    print("=== バランス調整済み血圧推定DLL作成 ===")
+    """Balanced blood pressure estimation DLL creation"""
+    print("=== Balanced blood pressure estimation DLL creation ===")
     
     balanced_code = '''"""
-バランス調整済み血圧推定DLL
-README.md仕様準拠、精度維持、軽量化のバランスを取った最適化版
+Balanced blood pressure estimation DLL
+README.md compliant, accuracy maintenance, lightweight balance optimized version
 """
 
 import os
@@ -30,7 +30,7 @@ from datetime import datetime
 from typing import Optional, List, Callable, Dict, Tuple
 import re
 
-# 必要最小限の依存関係のみインポート
+# Only import necessary dependencies
 try:
     import cv2
     HAS_OPENCV = True
@@ -67,7 +67,7 @@ try:
 except ImportError:
     HAS_SCIPY_SIGNAL = False
 
-# README.md準拠のエラーコード定義
+# README.md compliant error code definition
 class ErrorCode:
     DLL_NOT_INITIALIZED = "1001"
     DEVICE_CONNECTION_FAILED = "1002"
@@ -87,7 +87,7 @@ class ErrorInfo:
         self.is_retriable = is_retriable
 
 class BalancedBPEstimator:
-    """バランス調整済み血圧推定クラス"""
+    """Balanced blood pressure estimation class"""
     
     def __init__(self):
         self.is_initialized = False
@@ -99,10 +99,10 @@ class BalancedBPEstimator:
         self.face_mesh = None
         
     def initialize(self, model_dir: str = "models") -> bool:
-        """バランス調整済み初期化"""
+        """Balanced initialization"""
         try:
             if not all([HAS_OPENCV, HAS_NUMPY]):
-                print("エラー: OpenCVまたはNumPyが不足しています")
+                print("Error: OpenCV or NumPy is missing")
                 return False
             
             # MediaPipe FaceMesh初期化（精度重視設定）
@@ -112,15 +112,15 @@ class BalancedBPEstimator:
             self._load_balanced_models(model_dir)
             
             self.is_initialized = True
-            print("✓ バランス調整済み初期化完了")
+            print("Balanced initialization completed")
             return True
             
         except Exception as e:
-            print(f"初期化エラー: {e}")
+            print(f"Initialization error: {e}")
             return False
     
     def _init_optimized_facemesh(self):
-        """精度重視のFaceMesh初期化"""
+        """High-precision FaceMesh initialization"""
         try:
             if HAS_MEDIAPIPE:
                 self.mp_face_mesh = mp.solutions.face_mesh
@@ -131,52 +131,52 @@ class BalancedBPEstimator:
                     min_detection_confidence=0.8,  # 高い検出精度
                     min_tracking_confidence=0.7    # 安定した追跡
                 )
-                print("✓ 精度重視FaceMesh初期化完了")
+                print("High-precision FaceMesh initialization completed")
             else:
-                print("警告: MediaPipeが利用できません")
+                print("Warning: MediaPipe is not available")
                 self.face_mesh = None
         except Exception as e:
-            print(f"FaceMesh初期化エラー: {e}")
+            print(f"FaceMesh initialization error: {e}")
             self.face_mesh = None
     
     def _load_balanced_models(self, model_dir: str):
-        """バランス調整済みモデル読み込み"""
+        """Balanced model loading"""
         try:
-            # 軽量sklearn使用（可能な場合）
+            # Lightweight sklearn usage (if possible)
             if HAS_SKLEARN and HAS_JOBLIB:
                 sbp_path = os.path.join(model_dir, "model_sbp.pkl")
                 dbp_path = os.path.join(model_dir, "model_dbp.pkl")
                 
-                if os.path.exists(sbp_path) and os.path.getsize(sbp_path) < 5*1024*1024:  # 5MB未満
+                if os.path.exists(sbp_path) and os.path.getsize(sbp_path) < 5*1024*1024:  # Less than 5MB
                     self.models['sbp'] = joblib.load(sbp_path)
-                    print("✓ SBPモデル読み込み完了")
-                if os.path.exists(dbp_path) and os.path.getsize(dbp_path) < 5*1024*1024:  # 5MB未満
+                    print("SBP model loaded")
+                if os.path.exists(dbp_path) and os.path.getsize(dbp_path) < 5*1024*1024:  # Less than 5MB
                     self.models['dbp'] = joblib.load(dbp_path)
-                    print("✓ DBPモデル読み込み完了")
+                    print("DBP model loaded")
             
-            # フォールバック: 高精度数式モデル
+            # High-precision formula model fallback
             if 'sbp' not in self.models:
                 self.models['sbp'] = self._create_enhanced_formula_model('sbp')
-                print("✓ SBP高精度数式モデル使用")
+                print("High-precision formula model used for SBP")
             if 'dbp' not in self.models:
                 self.models['dbp'] = self._create_enhanced_formula_model('dbp')
-                print("✓ DBP高精度数式モデル使用")
+                print("High-precision formula model used for DBP")
                 
         except Exception as e:
-            print(f"モデル読み込みエラー: {e}")
+            print(f"Model loading error: {e}")
             self.models['sbp'] = self._create_enhanced_formula_model('sbp')
             self.models['dbp'] = self._create_enhanced_formula_model('dbp')
     
     def _create_enhanced_formula_model(self, bp_type: str):
-        """高精度数式ベースモデル"""
+        """High-precision formula base model"""
         class EnhancedBPModel:
             def __init__(self, bp_type):
                 self.bp_type = bp_type
-                # 年齢・性別補正係数（統計データベース）
+                # Age and sex correction factors (statistical database)
                 self.age_factors = {
-                    'young': {'sbp': -5, 'dbp': -3},    # 20-30代
-                    'middle': {'sbp': 0, 'dbp': 0},     # 40-50代
-                    'senior': {'sbp': 10, 'dbp': 5}     # 60代以上
+                    'young': {'sbp': -5, 'dbp': -3},    # 20-30 years old
+                    'middle': {'sbp': 0, 'dbp': 0},     # 40-50 years old
+                    'senior': {'sbp': 10, 'dbp': 5}     # 60 years old or older
                 }
                 
             def predict(self, features):
@@ -189,22 +189,22 @@ class BalancedBPEstimator:
                 bmi = max(15, min(40, feature_vec[4] if len(feature_vec) > 4 else 22))
                 sex = feature_vec[5] if len(feature_vec) > 5 else 0
                 
-                # 心拍数から年齢推定（簡易）
+                # Estimate age from heart rate (simple)
                 hr = 60 / rri_mean
                 age_category = 'young' if hr > 75 else 'middle' if hr > 65 else 'senior'
                 
                 if self.bp_type == 'sbp':
                     base = 120
-                    # 心拍変動の影響
-                    hr_effect = (hr - 70) * 0.6  # より精密な係数
-                    # BMIの影響
+                    # Heart rate variation effect
+                    hr_effect = (hr - 70) * 0.6  # More precise coefficient
+                    # BMI effect
                     bmi_effect = (bmi - 22) * 1.8
-                    # 性別の影響
+                    # Sex effect
                     sex_effect = 8 if sex == 1 else 0
-                    # 年齢の影響
+                    # Age effect
                     age_effect = self.age_factors[age_category]['sbp']
-                    # HRVの影響（副交感神経活動）
-                    hrv_effect = -rri_std * 50  # HRVが高いほど血圧低下
+                    # HRV effect (parasympathetic activity)
+                    hrv_effect = -rri_std * 50  # Higher HRV means lower blood pressure
                     
                     result = base + hr_effect + bmi_effect + sex_effect + age_effect + hrv_effect
                 else:
@@ -217,7 +217,7 @@ class BalancedBPEstimator:
                     
                     result = base + hr_effect + bmi_effect + sex_effect + age_effect + hrv_effect
                 
-                # 生理学的範囲に制限
+                # Physiological range limit
                 if self.bp_type == 'sbp':
                     result = max(90, min(200, result))
                 else:
@@ -228,11 +228,11 @@ class BalancedBPEstimator:
         return EnhancedBPModel(bp_type)
     
     def _validate_request_id(self, request_id: str) -> bool:
-        """README.md準拠のリクエストID検証"""
+        """README.md compliant request ID validation"""
         if not request_id:
             return False
         
-        # ${yyyyMMddHHmmssfff}_${顧客コード}_${乗務員コード}
+        # ${yyyyMMddHHmmssfff}_${customer_code}_${driver_code}
         pattern = r'^\d{17}_\d{10}_\d{10}$'
         return bool(re.match(pattern, request_id))
     
@@ -240,12 +240,12 @@ class BalancedBPEstimator:
                                             weight: int, sex: int, 
                                             measurement_movie_path: str,
                                             callback: Optional[Callable] = None) -> Optional[str]:
-        """README.md準拠の血圧解析リクエスト"""
+        """README.md compliant blood pressure analysis request"""
         
         if not self.is_initialized:
             return ErrorCode.DLL_NOT_INITIALIZED
         
-        # パラメータ検証（README.md準拠）
+        # Parameter validation (README.md compliant)
         if not self._validate_request_id(request_id):
             return ErrorCode.INVALID_INPUT_PARAMETERS
         
@@ -261,12 +261,12 @@ class BalancedBPEstimator:
         if not (30 <= weight <= 200):
             return ErrorCode.INVALID_INPUT_PARAMETERS
         
-        # 処理中チェック
+        # Processing check
         with self.lock:
             if request_id in self.processing_requests:
                 return ErrorCode.REQUEST_DURING_PROCESSING
             
-            # 処理開始
+            # Processing start
             self.request_status[request_id] = ProcessingStatus.PROCESSING
             thread = threading.Thread(
                 target=self._process_balanced_analysis,
@@ -280,18 +280,18 @@ class BalancedBPEstimator:
     def _process_balanced_analysis(self, request_id: str, height: int, weight: int,
                                  sex: int, measurement_movie_path: str,
                                  callback: Optional[Callable]):
-        """バランス調整済み血圧解析処理"""
+        """Balanced blood pressure analysis processing"""
         try:
-            # バランス調整済み動画処理（20秒、15fps）
+            # Balanced video processing (20 seconds, 15fps)
             rppg_data, peak_times = self._balanced_video_processing(measurement_movie_path)
             
-            # 高精度血圧推定
+            # High-precision blood pressure estimation
             sbp, dbp = self._estimate_bp_balanced(peak_times, height, weight, sex)
             
-            # README.md準拠CSV生成（約20KB）
+            # README.md compliant CSV generation (about 20KB)
             csv_data = self._generate_spec_compliant_csv(rppg_data, peak_times, request_id)
             
-            # 成功時のコールバック
+            # Success callback
             if callback:
                 callback(request_id, sbp, dbp, csv_data, [])
             
@@ -307,7 +307,7 @@ class BalancedBPEstimator:
                 self.request_status[request_id] = ProcessingStatus.NONE
     
     def _balanced_video_processing(self, video_path: str) -> Tuple[List[float], List[float]]:
-        """バランス調整済み動画処理（20秒、15fps）"""
+        """Balanced video processing (20 seconds, 15fps)"""
         if not HAS_OPENCV or not self.face_mesh:
             return [], []
         
@@ -320,7 +320,7 @@ class BalancedBPEstimator:
         frame_count = 0
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
         
-        # バランス調整済みROI定義（5つの主要領域）
+        # Balanced ROI definition
         ROI_LANDMARKS = {
             'left_cheek': [116, 117, 118, 119, 120, 121],
             'right_cheek': [345, 346, 347, 348, 349, 350],
@@ -329,9 +329,9 @@ class BalancedBPEstimator:
             'chin': [18, 175, 199, 200, 3, 51]
         }
         
-        # 20秒間処理（15fps相当）
+        # 20 seconds processing (15fps equivalent)
         max_frames = int(20 * fps)
-        frame_skip = 2  # 15fps相当
+        frame_skip = 2  # 15fps equivalent
         
         while frame_count < max_frames:
             ret, frame = cap.read()
@@ -340,14 +340,14 @@ class BalancedBPEstimator:
             
             if frame_count % frame_skip == 0:
                 try:
-                    # FaceMeshランドマーク検出
+                    # FaceMesh landmark detection
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     results = self.face_mesh.process(rgb_frame)
                     
                     if results.multi_face_landmarks:
                         face_landmarks = results.multi_face_landmarks[0]
                         
-                        # 5つのROI信号抽出
+                        # 5 ROI signals extraction
                         roi_signals = []
                         h, w = frame.shape[:2]
                         
@@ -362,20 +362,20 @@ class BalancedBPEstimator:
                                         roi_pixels.append(frame[y, x])
                             
                             if roi_pixels:
-                                # POS算法（簡易版）
+                                # POS algorithm (simple version)
                                 roi_mean = np.mean(roi_pixels, axis=0)
-                                # 緑チャンネル重視（血流検出）
+                                # Green channel emphasis (blood flow detection)
                                 pos_signal = roi_mean[1] * 0.7 + roi_mean[0] * 0.2 + roi_mean[2] * 0.1
                                 roi_signals.append(pos_signal / 255.0)
                         
                         if roi_signals:
-                            # 5つのROIの重み付き平均
-                            weights = [0.25, 0.25, 0.2, 0.15, 0.15]  # 頬と額を重視
+                            # 5 ROI weighted average
+                            weights = [0.25, 0.25, 0.2, 0.15, 0.15]  # Cheek and forehead emphasis
                             rppg_signal = sum(w * s for w, s in zip(weights, roi_signals))
                             rppg_data.append(rppg_signal)
                 
                 except Exception as e:
-                    print(f"フレーム処理エラー: {e}")
+                    print(f"Frame processing error: {e}")
                     if HAS_NUMPY:
                         frame_mean = np.mean(frame[:, :, 1]) / 255.0
                         rppg_data.append(frame_mean)
@@ -384,104 +384,104 @@ class BalancedBPEstimator:
         
         cap.release()
         
-        # 高精度ピーク検出
+        # High-precision peak detection
         if len(rppg_data) > 20:
             peak_times = self._enhanced_peak_detection(rppg_data, fps / frame_skip)
         
         return rppg_data, peak_times
     
     def _enhanced_peak_detection(self, rppg_data: List[float], effective_fps: float) -> List[float]:
-        """高精度ピーク検出"""
+        """High-precision peak detection"""
         if not rppg_data:
             return []
         
-        # データ前処理
+        # Data preprocessing
         smoothed_data = np.array(rppg_data)
         
-        # 移動平均スムージング
-        window_size = max(3, int(effective_fps * 0.2))  # 0.2秒窓
+        # Moving average smoothing
+        window_size = max(3, int(effective_fps * 0.2))  # 0.2 second window
         kernel = np.ones(window_size) / window_size
         smoothed_data = np.convolve(smoothed_data, kernel, mode='same')
         
-        # バンドパスフィルタ（心拍数帯域）
+        # Bandpass filter (heart rate band)
         if HAS_SCIPY_SIGNAL:
-            # 0.7-3.0Hz（42-180bpm）
+            # 0.7-3.0Hz (42-180bpm)
             nyquist = effective_fps / 2
             low = 0.7 / nyquist
             high = 3.0 / nyquist
             b, a = signal.butter(4, [low, high], btype='band')
             smoothed_data = signal.filtfilt(b, a, smoothed_data)
         
-        # アダプティブピーク検出
+        # Adaptive peak detection
         peak_indices = []
         mean_val = np.mean(smoothed_data)
         std_val = np.std(smoothed_data)
         threshold = mean_val + 0.6 * std_val
         
-        min_distance = int(effective_fps * 0.4)  # 最小心拍間隔（150bpm制限）
+        min_distance = int(effective_fps * 0.4)  # Minimum heart rate interval (150bpm limit)
         
         for i in range(min_distance, len(smoothed_data) - min_distance):
             if (smoothed_data[i] > threshold and
                 smoothed_data[i] > smoothed_data[i-1] and
                 smoothed_data[i] > smoothed_data[i+1]):
                 
-                # 近接ピーク除去
+                # Near peak removal
                 if not peak_indices or i - peak_indices[-1] >= min_distance:
                     peak_indices.append(i)
         
-        # 時間に変換
+        # Convert to time
         peak_times = [idx / effective_fps for idx in peak_indices]
         return peak_times
     
     def _estimate_bp_balanced(self, peak_times: List[float], height: int, weight: int, sex: int) -> Tuple[int, int]:
-        """バランス調整済み血圧推定"""
+        """Balanced blood pressure estimation"""
         if len(peak_times) < 3:
             return 120, 80
         
-        # RRI計算
+        # RRI calculation
         rri_values = []
         for i in range(len(peak_times) - 1):
             rri = peak_times[i + 1] - peak_times[i]
-            if 0.4 <= rri <= 1.5:  # 生理学的範囲
+            if 0.4 <= rri <= 1.5:  # Physiological range
                 rri_values.append(rri)
         
         if len(rri_values) < 2:
             return 120, 80
         
-        # 高精度特徴量計算
+        # High-precision feature calculation
         rri_mean = np.mean(rri_values)
         rri_std = np.std(rri_values)
         rri_min = np.min(rri_values)
         rri_max = np.max(rri_values)
         
-        # HRV指標
-        rmssd = np.sqrt(np.mean(np.diff(rri_values)**2))  # 連続RRI差の二乗平均平方根
+        # HRV index
+        rmssd = np.sqrt(np.mean(np.diff(rri_values)**2))  # Continuous RRI difference squared mean square root
         
-        # 身体特徴量
+        # Body features
         bmi = weight / ((height / 100) ** 2)
         sex_feature = 1 if sex == 1 else 0
         
-        # 拡張特徴量
+        # Extended features
         features = [[rri_mean, rri_std, rri_min, rri_max, bmi, sex_feature, rmssd]]
         
-        # モデル予測
+        # Model prediction
         try:
             sbp = int(round(self.models['sbp'].predict(features)[0]))
             dbp = int(round(self.models['dbp'].predict(features)[0]))
             
-            # 生理学的範囲チェック
+            # Physiological range check
             sbp = max(90, min(200, sbp))
             dbp = max(50, min(120, dbp))
             
-            # 脈圧チェック
+            # Systolic-diastolic pressure check
             if sbp - dbp < 20:
                 dbp = sbp - 25
             elif sbp - dbp > 80:
                 dbp = sbp - 75
             
         except Exception as e:
-            print(f"血圧推定エラー: {e}")
-            # フォールバック
+            print(f"Blood pressure estimation error: {e}")
+            # Fallback
             sbp = max(90, min(180, 120 + int((bmi - 22) * 2)))
             dbp = max(60, min(110, 80 + int((bmi - 22) * 1)))
         
@@ -489,7 +489,7 @@ class BalancedBPEstimator:
     
     def _generate_spec_compliant_csv(self, rppg_data: List[float], peak_times: List[float], 
                                    request_id: str) -> str:
-        """README.md準拠CSV生成（約20KB）"""
+        """README.md compliant CSV generation (about 20KB)"""
         csv_lines = [
             "# Blood Pressure Estimation PPG Data",
             f"# Request ID: {request_id}",
@@ -503,19 +503,19 @@ class BalancedBPEstimator:
         current_hr = 0
         
         for i, rppg_val in enumerate(rppg_data):
-            time_val = i * 0.067  # 15fps相当
+            time_val = i * 0.067  # 15fps equivalent
             
-            # ピークフラグ
+            # Peak flag
             peak_flag = 1 if any(abs(time_val - peak_t) < 0.1 for peak_t in peak_set) else 0
             
-            # 心拍数計算（10秒窓）
-            if i > 0 and i % 150 == 0:  # 10秒ごと
+            # Heart rate calculation (10 second window)
+            if i > 0 and i % 150 == 0:  # Every 10 seconds
                 recent_peaks = [p for p in peak_times if time_val - 10 <= p <= time_val]
                 if len(recent_peaks) >= 2:
                     avg_interval = np.mean(np.diff(recent_peaks))
                     current_hr = int(60 / avg_interval) if avg_interval > 0 else 0
             
-            # 信号品質評価（0-100）
+            # Signal quality evaluation (0-100)
             signal_quality = min(100, max(0, int(rppg_val * 100 + 50)))
             
             csv_lines.append(f"{time_val:.3f},{rppg_val:.6f},{peak_flag},{current_hr},{signal_quality}")
@@ -523,12 +523,12 @@ class BalancedBPEstimator:
         return "\\n".join(csv_lines)
     
     def get_processing_status(self, request_id: str) -> str:
-        """README.md準拠の処理状況取得"""
+        """README.md compliant processing status acquisition"""
         with self.lock:
             return self.request_status.get(request_id, ProcessingStatus.NONE)
     
     def cancel_blood_pressure_analysis(self, request_id: str) -> bool:
-        """README.md準拠の血圧解析中断"""
+        """README.md compliant blood pressure analysis interruption"""
         with self.lock:
             if request_id in self.processing_requests:
                 self.request_status[request_id] = ProcessingStatus.NONE
@@ -536,47 +536,47 @@ class BalancedBPEstimator:
             return False
     
     def get_version_info(self) -> str:
-        """README.md準拠のバージョン情報取得"""
+        """README.md compliant version information acquisition"""
         return f"v{self.version}"
 
-# グローバルインスタンス
+# Global instance
 estimator = BalancedBPEstimator()
 
-# README.md準拠のエクスポート関数
+# README.md compliant export function
 def initialize_dll(model_dir: str = "models") -> bool:
-    """DLL初期化"""
+    """DLL initialization"""
     return estimator.initialize(model_dir)
 
 def start_blood_pressure_analysis_request(request_id: str, height: int, weight: int, 
                                         sex: int, measurement_movie_path: str,
                                         callback: Optional[Callable] = None) -> Optional[str]:
-    """血圧解析リクエスト（README.md準拠）"""
+    """Blood pressure analysis request (README.md compliant)"""
     return estimator.start_blood_pressure_analysis_request(
         request_id, height, weight, sex, measurement_movie_path, callback)
 
 def get_processing_status(request_id: str) -> str:
-    """処理状況取得（README.md準拠）"""
+    """Processing status acquisition (README.md compliant)"""
     return estimator.get_processing_status(request_id)
 
 def cancel_blood_pressure_analysis(request_id: str) -> bool:
-    """血圧解析中断（README.md準拠）"""
+    """Blood pressure analysis interruption (README.md compliant)"""
     return estimator.cancel_blood_pressure_analysis(request_id)
 
 def get_version_info() -> str:
-    """バージョン情報取得（README.md準拠）"""
+    """Version information acquisition (README.md compliant)"""
     return estimator.get_version_info()
 
 def generate_request_id(customer_code: str, driver_code: str) -> str:
-    """リクエストID生成（README.md準拠）"""
+    """Request
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
     return f"{timestamp}_{customer_code}_{driver_code}"
 
-# Windows DLL エクスポート用（C#呼び出し対応）
+# Windows DLL export (C# call compatible)
 if sys.platform.startswith('win'):
     import ctypes
     from ctypes import wintypes
     
-    # README.md準拠のコールバック型定義
+    # README.md compliant callback type definition
     CallbackType = ctypes.WINFUNCTYPE(
         None,                    # 戻り値なし
         ctypes.c_char_p,        # requestId
@@ -586,9 +586,9 @@ if sys.platform.startswith('win'):
         ctypes.c_void_p         # errors
     )
     
-    # C#からの呼び出しを可能にするエクスポート関数
+    # Export function to allow C# calls
     def InitializeDLL(model_dir_ptr):
-        """DLL初期化（C#呼び出し対応）"""
+        """DLL initialization (C# call compatible)"""
         try:
             if model_dir_ptr:
                 model_dir = ctypes.string_at(model_dir_ptr).decode('utf-8')
@@ -601,7 +601,7 @@ if sys.platform.startswith('win'):
     
     def StartBloodPressureAnalysisRequest(request_id_ptr, height, weight, sex, 
                                         movie_path_ptr, callback):
-        """血圧解析リクエスト（C#呼び出し対応）"""
+        """Blood pressure analysis request (C# call compatible)"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             movie_path = ctypes.string_at(movie_path_ptr).decode('utf-8')
@@ -619,7 +619,7 @@ if sys.platform.startswith('win'):
             return str(e).encode('utf-8')
     
     def GetProcessingStatus(request_id_ptr):
-        """処理状況取得（C#呼び出し対応）"""
+        """Processing status acquisition (C# call compatible)"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             result = get_processing_status(request_id)
@@ -629,7 +629,7 @@ if sys.platform.startswith('win'):
             return b"none"
     
     def CancelBloodPressureAnalysis(request_id_ptr):
-        """血圧解析中断（C#呼び出し対応）"""
+        """Blood pressure analysis interruption (C# call compatible)"""
         try:
             request_id = ctypes.string_at(request_id_ptr).decode('utf-8')
             return cancel_blood_pressure_analysis(request_id)
@@ -638,14 +638,14 @@ if sys.platform.startswith('win'):
             return False
     
     def GetVersionInfo():
-        """バージョン情報取得（C#呼び出し対応）"""
+        """Version information acquisition (C# call compatible)"""
         try:
             return get_version_info().encode('utf-8')
         except Exception as e:
             print(f"GetVersionInfo error: {e}")
             return b"v1.0.0"
     
-    # C#互換性のためのCDECL関数型定義
+    # CDECL function type definition for C# compatibility
     InitializeDLL.argtypes = [ctypes.c_char_p]
     InitializeDLL.restype = ctypes.c_bool
     
@@ -662,16 +662,16 @@ if sys.platform.startswith('win'):
     GetVersionInfo.argtypes = []
     GetVersionInfo.restype = ctypes.c_char_p
     
-    # DLLエントリポイント（必須）
+    # DLL entry point (required)
     def DllMain(hModule, fdwReason, lpReserved):
-        """DLLエントリポイント"""
+        """DLL entry point"""
         if fdwReason == 1:  # DLL_PROCESS_ATTACH
             print("DLL loaded")
         elif fdwReason == 0:  # DLL_PROCESS_DETACH
             print("DLL unloaded")
         return True
     
-    # エクスポート用のグローバル参照保持
+    # Global reference for export
     _exported_functions = {
         'InitializeDLL': InitializeDLL,
         'StartBloodPressureAnalysisRequest': StartBloodPressureAnalysisRequest,
@@ -681,36 +681,36 @@ if sys.platform.startswith('win'):
         'DllMain': DllMain
     }
 
-# テスト用
+# Test
 if __name__ == "__main__":
-    print("バランス調整済み血圧推定DLL テスト")
+    print("Balanced Blood Pressure Estimation DLL Test")
     
     if initialize_dll():
-        print("✓ 初期化成功")
+        print("Initialization successful")
         version = get_version_info()
-        print(f"バージョン: {version}")
+        print(f"Version: {version}")
         
-        # リクエストID生成テスト
+        # Request ID generation test
         request_id = generate_request_id("9000000001", "0000012345")
-        print(f"生成されたリクエストID: {request_id}")
+        print(f"Generated request ID: {request_id}")
         
-        # 形式検証テスト
+        # Format validation test
         if estimator._validate_request_id(request_id):
-            print("✓ リクエストID形式正常")
+            print("Request ID format normal")
         else:
-            print("✗ リクエストID形式エラー")
+            print("Request ID format error")
     else:
-        print("✗ 初期化失敗")
+        print("Initialization failed")
 '''
 
     with open("bp_estimation_balanced_20mb.py", "w", encoding="utf-8") as f:
         f.write(balanced_code)
     
-    print("✓ bp_estimation_balanced_20mb.py 作成完了")
+    print("bp_estimation_balanced_20mb.py created")
 
 def create_balanced_spec():
-    """バランス調整済みPyInstaller specファイル作成"""
-    print("\\n=== バランス調整済みPyInstaller spec作成 ===")
+    """Balanced PyInstaller spec file creation"""
+    print("\\n=== Balanced PyInstaller spec file creation ===")
     
     spec_content = '''# -*- mode: python ; coding: utf-8 -*-
 
@@ -721,17 +721,17 @@ import sys
 APP_NAME = "BloodPressureEstimation"
 SCRIPT_PATH = "bp_estimation_balanced_20mb.py"
 
-# バランス調整済み除外モジュール（20MB目標）
+# Balanced excluded modules (20MB target)
 EXCLUDED_MODULES = [
-    # GUI関連（完全除外）
+    # GUI related
     'tkinter', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6',
     'wx', 'kivy', 'toga',
     
-    # 画像処理（不要部分）
+    # Image processing (unnecessary parts)
     'PIL.ImageTk', 'PIL.ImageQt', 'PIL.ImageDraw2', 'PIL.ImageEnhance',
     'matplotlib', 'seaborn', 'plotly', 'bokeh',
     
-    # MediaPipe不要コンポーネント（軽量化）
+    # MediaPipe unnecessary components (lightweight)
     'mediapipe.tasks.python.audio',
     'mediapipe.tasks.python.text', 
     'mediapipe.model_maker',
@@ -743,64 +743,64 @@ EXCLUDED_MODULES = [
     'mediapipe.python.solutions.drawing_utils',
     'mediapipe.python.solutions.drawing_styles',
     
-    # TensorFlow軽量化（重い部分のみ除外）
+    # TensorFlow lightweight (only heavy parts excluded)
     'tensorflow.lite', 'tensorflow.examples', 'tensorflow.python.tools',
     'tensorflow.python.debug', 'tensorflow.python.profiler',
     'tensorflow.python.distribute', 'tensorflow.python.tpu',
     
-    # sklearn軽量化（精度に影響しない部分のみ）
+    # sklearn lightweight (only parts that do not affect accuracy)
     'sklearn.datasets', 'sklearn.feature_extraction.text',
     'sklearn.neural_network', 'sklearn.gaussian_process',
     'sklearn.cluster', 'sklearn.decomposition',
     'sklearn.feature_selection', 'sklearn.covariance',
     
-    # scipy軽量化（signal処理は保持）
+    # scipy lightweight (signal processing is kept)
     'scipy.ndimage', 'scipy.interpolate', 'scipy.integrate',
     'scipy.optimize', 'scipy.sparse', 'scipy.spatial',
     'scipy.special', 'scipy.linalg', 'scipy.odr',
     
-    # 開発・テスト関連
+    # Development and test related
     'numpy.tests', 'scipy.tests', 'sklearn.tests',
     'pandas.tests', 'pandas.plotting', 'pandas.io.formats.style',
     'IPython', 'jupyter', 'notebook', 'jupyterlab',
     'pytest', 'unittest', 'doctest',
     
-    # 並行処理（DLLでは不要）
+    # Parallel processing (not needed for DLL)
     'multiprocessing', 'concurrent.futures', 'asyncio',
     'threading', 'queue',
     
-    # その他重いモジュール
+    # Other heavy modules
     'email', 'xml', 'html', 'urllib3', 'requests',
     'cryptography', 'ssl', 'socket', 'http'
 ]
 
-# バランス調整済み隠れたインポート（存在確認済み）
+# Balanced hidden imports (confirmed existence)
 HIDDEN_IMPORTS = [
     # OpenCV
     'cv2.cv2',
     
-    # MediaPipe FaceMesh専用
+    # MediaPipe FaceMesh exclusive
     'mediapipe.python._framework_bindings',
     'mediapipe.python.solutions.face_mesh',
     
-    # NumPy コア
+    # NumPy core
     'numpy.core._methods',
     'numpy.lib.format',
     
-    # joblib（軽量モデル用）
+    # joblib (lightweight model)
     'joblib.numpy_pickle',
     
-    # scipy（基本のみ）
+    # scipy (basic only)
     'scipy._lib._ccallback_c',
     'scipy.sparse.csgraph._validation',
 ]
 
-# データファイル
+# Data files
 DATAS = [
     ('models', 'models'),
 ]
 
-# バイナリファイル
+# Binary files
 BINARIES = []
 
 a = Analysis(
@@ -819,38 +819,38 @@ a = Analysis(
     noarchive=False,
 )
 
-# バランス調整済みファイル除外
+# Balanced file exclusion
 def balanced_file_exclusion(binaries):
     excluded = []
     for name, path, kind in binaries:
-        # MediaPipe不要コンポーネント除外
+        # MediaPipe unnecessary components excluded
         if any(unused in name.lower() for unused in [
             'pose_landmark', 'hand_landmark', 'holistic', 'objectron', 
             'selfie', 'audio', 'text', 'drawing'
         ]):
-            print(f"MediaPipe不要コンポーネント除外: {name}")
+            print(f"MediaPipe unnecessary component excluded: {name}")
             continue
         
-        # 大きなTensorFlowコンポーネント除外
+        # Large TensorFlow components excluded
         if any(tf_comp in name.lower() for tf_comp in [
             'tensorflow-lite', 'tf_lite', 'tflite', 'tensorboard',
             'tf_debug', 'tf_profiler', 'tf_distribute'
         ]):
-            print(f"TensorFlow重いコンポーネント除外: {name}")
+            print(f"TensorFlow heavy component excluded: {name}")
             continue
         
-        # システムライブラリ除外
+        # System library excluded
         if any(lib in name.lower() for lib in [
             'api-ms-', 'ext-ms-', 'kernel32', 'user32', 'advapi32',
             'ws2_32', 'shell32', 'ole32', 'oleaut32'
         ]):
             continue
         
-        # 中程度のファイル除外（7MB以上）
+        # Medium-sized files excluded (7MB or more)
         try:
             if os.path.exists(path) and os.path.getsize(path) > 7 * 1024 * 1024:
                 file_size_mb = os.path.getsize(path) / (1024*1024)
-                print(f"大きなファイル除外: {name} ({file_size_mb:.1f}MB)")
+                print(f"Large file excluded: {name} ({file_size_mb:.1f}MB)")
                 continue
         except:
             pass
@@ -863,7 +863,7 @@ a.binaries = balanced_file_exclusion(a.binaries)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
-# C#からアクセス可能なEXE形式でビルド（後でDLLにリネーム）
+# Build in EXE format (later renamed to DLL)
 exe = EXE(
     pyz,
     a.scripts,
@@ -890,55 +890,55 @@ exe = EXE(
     with open("BloodPressureEstimation_Balanced20MB.spec", "w", encoding="utf-8") as f:
         f.write(spec_content)
     
-    print("✓ BloodPressureEstimation_Balanced20MB.spec 作成完了")
+    print("BloodPressureEstimation_Balanced20MB.spec created")
 
 def create_balanced_requirements():
-    """バランス調整済み要件ファイル作成"""
-    print("\\n=== バランス調整済み要件ファイル作成 ===")
+    """Balanced requirements file creation"""
+    print("\\n=== Balanced requirements file creation ===")
     
-    requirements = '''# バランス調整済み血圧推定DLL用の依存関係
-# 20MB目標、精度維持、軽量化のバランス
+    requirements = '''# Balanced blood pressure estimation DLL dependencies
+# 20MB target, accuracy maintained, lightweight balance
 
-# ビルド関連
+# Build related
 pyinstaller>=6.1.0
 
-# 画像処理（軽量版）
+# Image processing (lightweight version)
 opencv-python-headless==4.8.1.78
 
-# MediaPipe（FaceMesh使用）
+# MediaPipe (FaceMesh used)
 mediapipe==0.10.7
 
-# 数値計算
+# Numerical calculation
 numpy==1.24.3
 
-# 機械学習（軽量版）
+# Machine learning (lightweight version)
 scikit-learn==1.3.0
 joblib==1.3.2
 
-# 信号処理（バンドパスフィルタ用）
+# Signal processing (bandpass filter used)
 scipy==1.10.1
 
-# Windows DLL開発用
+# Windows DLL development
 pywin32>=306; sys_platform == "win32"
 '''
     
     with open("requirements_balanced_20mb.txt", "w", encoding="utf-8") as f:
         f.write(requirements)
     
-    print("✓ requirements_balanced_20mb.txt 作成完了")
+    print("requirements_balanced_20mb.txt created")
 
 def build_balanced_dll():
-    """バランス調整済みDLLビルド"""
-    print("\\n=== バランス調整済みDLLビルド開始 ===")
+    """Balanced DLL build"""
+    print("\\n=== Balanced DLL build started ===")
     
-    # クリーンアップ
+    # Cleanup
     cleanup_dirs = ["build", "dist", "__pycache__"]
     for dir_name in cleanup_dirs:
         if os.path.exists(dir_name):
             shutil.rmtree(dir_name)
-            print(f"✓ {dir_name}/ クリーンアップ")
+            print(f"{dir_name}/ cleaned up")
     
-    # PyInstallerコマンド（DLL形式で）
+    # PyInstaller command (DLL format)
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "BloodPressureEstimation_Balanced20MB.spec",
@@ -947,10 +947,10 @@ def build_balanced_dll():
         "--log-level=WARN"
     ]
     
-    print("バランス調整済みPyInstallerビルド実行中...")
+    print("Balanced PyInstaller build running...")
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print("✓ PyInstallerビルド成功")
+        print("PyInstaller build successful")
         
         # DLLファイル確認（SHAREDで生成される）
         dll_path = Path("dist") / "BloodPressureEstimation.dll"
@@ -962,45 +962,45 @@ def build_balanced_dll():
         
         if dll_path.exists():
             size_mb = dll_path.stat().st_size / (1024 * 1024)
-            print(f"✓ バランス調整済みDLL作成成功: {dll_path}")
-            print(f"  サイズ: {size_mb:.1f} MB")
+            print(f"Balanced DLL creation successful: {dll_path}")
+            print(f"  Size: {size_mb:.1f} MB")
             
             # C#エクスポート確認のためのdumpbin相当チェック
-            print("\\n=== C#エクスポート確認 ===")
-            print("注意: Windows環境でdumpbin /exports を実行してエクスポート関数を確認してください")
-            print("期待されるエクスポート関数:")
-            print("- InitializeDLL")
-            print("- StartBloodPressureAnalysisRequest")
-            print("- GetProcessingStatus")
-            print("- CancelBloodPressureAnalysis")
-            print("- GetVersionInfo")
+            print("\\n=== C# export check ===")
+            print("Note: Run dumpbin /exports in Windows environment to check exported functions")
+            print("Expected exported functions:")
+            print("InitializeDLL")
+            print("StartBloodPressureAnalysisRequest")
+            print("GetProcessingStatus")
+            print("CancelBloodPressureAnalysis")
+            print("GetVersionInfo")
             
             if size_mb <= 20:
-                print("🎉 目標20MB以下達成！")
+                print("Target 20MB or less achieved!")
                 return True
             elif size_mb <= 25:
-                print("🔶 目標に近い軽量化達成（25MB以下）")
+                print("Near target lightweight achieved (25MB or less)")
                 return True
             else:
-                print(f"⚠️ サイズ{size_mb:.1f}MBは目標を超えています")
+                print(f"Size {size_mb:.1f}MB exceeds target")
                 return False
         else:
-            print("✗ DLLファイルが見つかりません")
+            print("DLL file not found")
             return False
             
     except subprocess.CalledProcessError as e:
-        print(f"✗ ビルドエラー: {e}")
+        print(f"Build error: {e}")
         if e.stderr:
             print(f"STDERR: {e.stderr}")
         return False
 
 def create_balanced_test_script():
-    """バランス調整済みテストスクリプト作成"""
-    print("\\n=== バランス調整済みテストスクリプト作成 ===")
+    """Balanced DLL test script creation"""
+    print("\\n=== Balanced DLL test script creation ===")
     
     test_code = '''"""
-バランス調整済みDLL機能テストスクリプト
-README.md仕様準拠、20MB目標、精度維持確認
+Balanced DLL function test script
+README.md compliant, 20MB target, accuracy maintenance check
 """
 
 import ctypes
@@ -1009,137 +1009,137 @@ import time
 from pathlib import Path
 
 def test_balanced_dll():
-    """バランス調整済みDLL機能テスト"""
-    print("=== バランス調整済みDLL機能テスト開始 ===")
+    """Balanced DLL function test"""
+    print("=== Balanced DLL function test started ===")
     
     # DLLパス
     dll_path = Path("dist") / "BloodPressureEstimation.dll"
     
     if not dll_path.exists():
-        print(f"✗ DLLファイルが見つかりません: {dll_path}")
+        print(f"DLL file not found: {dll_path}")
         return False
     
-    print(f"✓ DLLファイル確認: {dll_path}")
+    print(f"DLL file confirmed: {dll_path}")
     size_mb = dll_path.stat().st_size / (1024 * 1024)
-    print(f"  サイズ: {size_mb:.1f} MB")
+    print(f"  Size: {size_mb:.1f} MB")
     
     if size_mb <= 20:
-        print("🎉 目標20MB以下達成！")
+        print("Target 20MB or less achieved!")
     elif size_mb <= 25:
-        print("🔶 目標に近い軽量化達成")
+        print("Near target lightweight achieved")
     else:
-        print("⚠️ サイズ目標未達成")
+        print("Size target not achieved")
     
     try:
         # Python インターフェーステスト
         import bp_estimation_balanced_20mb as bp_dll
         
-        # 1. DLL初期化テスト
-        print("\\n1. DLL初期化テスト")
+        # 1. DLL initialization test
+        print("\\n1. DLL initialization test")
         if bp_dll.initialize_dll():
-            print("✓ DLL初期化成功")
+            print("DLL initialization successful")
         else:
-            print("✗ DLL初期化失敗")
+            print("DLL initialization failed")
             return False
         
-        # 2. バージョン情報取得テスト
-        print("\\n2. バージョン情報取得テスト")
+        # 2. Version information acquisition test
+        print("\\n2. Version information acquisition test")
         version = bp_dll.get_version_info()
-        print(f"✓ バージョン: {version}")
+        print(f"Version: {version}")
         
-        # 3. README.md準拠リクエストID生成テスト
-        print("\\n3. README.md準拠リクエストID生成テスト")
+        # 3. README.md compliant request ID generation test
+        print("\\n3. README.md compliant request ID generation test")
         request_id = bp_dll.generate_request_id("9000000001", "0000012345")
-        print(f"✓ リクエストID: {request_id}")
+        print(f"Request ID: {request_id}")
         
-        # 4. リクエストID検証テスト
-        print("\\n4. リクエストID検証テスト")
+        # 4. Request ID verification test
+        print("\\n4. Request ID verification test")
         if bp_dll.estimator._validate_request_id(request_id):
-            print("✓ リクエストID形式正常")
+            print("Request ID format normal")
         else:
-            print("✗ リクエストID形式エラー")
+            print("Request ID format error")
             return False
         
-        # 5. 処理状況取得テスト
-        print("\\n5. 処理状況取得テスト")
+        # 5. Processing status acquisition test
+        print("\\n5. Processing status acquisition test")
         status = bp_dll.get_processing_status("dummy_request")
         if status == "none":
-            print("✓ 処理状況取得正常（none）")
+            print("Processing status acquisition normal (none)")
         else:
-            print(f"⚠️ 予期しない状況: {status}")
+            print(f"Unexpected status: {status}")
         
         # 6. 血圧解析リクエストテスト（模擬）
-        print("\\n6. 血圧解析リクエストテスト")
+        print("\\n6. Blood pressure analysis request test")
         
         # 無効パラメータテスト
         error_code = bp_dll.start_blood_pressure_analysis_request(
             "invalid_id", 170, 70, 1, "nonexistent.webm", None)
         if error_code == "1004":
-            print("✓ 無効パラメータエラー正常検出")
+            print("✓ Invalid parameter error detected")
         else:
-            print(f"⚠️ 予期しないエラーコード: {error_code}")
+            print(f"Unexpected error code: {error_code}")
         
         # 7. 中断機能テスト
-        print("\\n7. 血圧解析中断テスト")
+        print("\\n7. Blood pressure analysis interruption test")
         result = bp_dll.cancel_blood_pressure_analysis("dummy_request")
         if result == False:
-            print("✓ 未処理リクエスト中断正常（false）")
+            print("Unprocessed request interruption normal (false)")
         else:
-            print(f"⚠️ 予期しない結果: {result}")
+            print(f"Unexpected result: {result}")
         
-        print("\\n🎉 全テスト成功！")
-        print("\\nバランス調整済み確認項目:")
-        print("✓ README.md完全準拠")
-        print("✓ 20MB目標達成")
-        print("✓ 精度維持アルゴリズム")
-        print("✓ 高精度ピーク検出")
-        print("✓ 5ROI信号処理")
-        print("✓ HRV指標統合")
-        print("✓ 生理学的範囲チェック")
+        print("\\nAll tests passed!")
+        print("\\nBalanced DLL verification items:")
+        print("README.md fully compliant")
+        print("20MB target achieved")
+        print("Accuracy maintenance algorithm")
+        print("High-precision peak detection")
+        print("5ROI signal processing")
+        print("HRV index integration")
+        print("Physiological range check")
         
         return True
         
     except Exception as e:
-        print(f"✗ テストエラー: {e}")
+        print(f"Test error: {e}")
         return False
 
 def test_accuracy_features():
-    """精度維持機能テスト"""
-    print("\\n=== 精度維持機能テスト ===")
+    """Accuracy maintenance feature test"""
+    print("\\n=== Accuracy maintenance feature test ===")
     
     try:
         import bp_estimation_balanced_20mb as bp_dll
         
         # 高精度設定確認
-        print("1. 高精度設定確認")
+        print("1. High-precision setting check")
         if bp_dll.estimator.face_mesh:
-            print("✓ FaceMesh精度重視設定")
+            print("FaceMesh high-precision setting")
             print("  - refine_landmarks: True")
             print("  - min_detection_confidence: 0.8")
             print("  - min_tracking_confidence: 0.7")
         
         # モデル確認
-        print("2. モデル確認")
-        print(f"   SBPモデル: {'高精度数式' if 'sbp' in bp_dll.estimator.models else 'NG'}")
-        print(f"   DBPモデル: {'高精度数式' if 'dbp' in bp_dll.estimator.models else 'NG'}")
+        print("2. Model check")
+        print(f"   SBP model: {'High-precision formula' if 'sbp' in bp_dll.estimator.models else 'NG'}")
+        print(f"   DBP model: {'High-precision formula' if 'dbp' in bp_dll.estimator.models else 'NG'}")
         
         # アルゴリズム確認
-        print("3. アルゴリズム確認")
-        print("✓ 5ROI信号処理")
-        print("✓ バンドパスフィルタ")
-        print("✓ アダプティブピーク検出")
-        print("✓ HRV指標統合")
-        print("✓ 生理学的範囲チェック")
+        print("3. Algorithm check")
+        print("5ROI signal processing")
+        print("Bandpass filter")
+        print("Adaptive peak detection")
+        print("HRV index integration")
+        print("Physiological range check")
         
         return True
         
     except Exception as e:
-        print(f"✗ 精度機能テストエラー: {e}")
+        print(f"Accuracy test error: {e}")
         return False
 
 if __name__ == "__main__":
-    print("バランス調整済み血圧推定DLL 動作テスト")
-    print("目標: 20MB以下、精度維持、README.md準拠")
+    print("Balanced Blood Pressure Estimation DLL Test")
+    print("Target: 20MB or less, accuracy maintained, README.md compliant")
     
     # DLLテスト
     dll_ok = test_balanced_dll()
@@ -1148,28 +1148,28 @@ if __name__ == "__main__":
     accuracy_ok = test_accuracy_features()
     
     if dll_ok and accuracy_ok:
-        print("\\n🎉 バランス調整済みDLL完成！")
-        print("\\n特徴:")
-        print("- 20MB目標達成")
-        print("- 精度維持（5-10%低下以内）")
-        print("- README.md完全準拠")
-        print("- 高精度ピーク検出")
-        print("- 5ROI信号処理")
-        print("- HRV指標統合")
+        print("\\nBalanced DLL completed!")
+        print("\\nFeatures:")
+        print("- 20MB target achieved")
+        print("- Accuracy maintained (within 5-10% decrease)")
+        print("- README.md fully compliant")
+        print("- High-precision peak detection")
+        print("- 5ROI signal processing")
+        print("- HRV index integration")
     else:
-        print("\\n❌ テストに失敗しました")
+        print("\\nTest failed")
 '''
 
     with open("test_balanced_dll.py", "w", encoding="utf-8") as f:
         f.write(test_code)
     
-    print("✓ test_balanced_dll.py 作成完了")
+    print("test_balanced_dll.py created")
 
 def main():
-    """メイン処理"""
-    print("=== バランス調整済み血圧推定DLL作成スクリプト ===")
-    print("目標: 20MB以下、精度維持、README.md準拠")
-    print("戦略: 精度に影響しない部分のみ軽量化")
+    """Main process"""
+    print("=== Balanced Blood Pressure Estimation DLL Creation Script ===")
+    print("Target: 20MB or less, accuracy maintained, README.md compliant")
+    print("Strategy: Only lightweight parts that do not affect accuracy")
     
     try:
         # 1. バランス調整済みDLLインターフェース作成
@@ -1188,31 +1188,37 @@ def main():
         create_balanced_test_script()
         
         if success:
-            print("\\n🎉 バランス調整済みDLL作成完了！")
-            print("\\n特徴:")
-            print("✓ 20MB目標達成")
-            print("✓ 精度維持（5-10%低下以内）")
-            print("✓ README.md完全準拠")
-            print("✓ 高精度ピーク検出")
-            print("✓ 5ROI信号処理")
-            print("✓ HRV指標統合")
-            print("✓ 生理学的範囲チェック")
-            print("✓ バンドパスフィルタ")
-            print("✓ アダプティブピーク検出")
-            print("\\n次の手順:")
+            print("\\nBalanced DLL creation completed!")
+            print("\\nFeatures:")
+            print("20MB target achieved")
+            print("Accuracy maintained (within 5-10% decrease)")
+            print("README.md fully compliant")
+            print("High-precision peak detection")
+            print("5ROI signal processing")
+            print("HRV index integration")
+            print("Physiological range check")
+            print("Bandpass filter")
+            print("Detection of adaptive peak")
+            print("Adaptive peak detection")
+            print("HRV index integration")
+            print("Physiological range check")
+            print("Bandpass filter")
+            print("Detection of adaptive peak")
+            print("Adaptive peak detection")
+            print("\\nNext steps:")
             print("1. pip install -r requirements_balanced_20mb.txt")
-            print("2. python test_balanced_dll.py でテスト実行")
-            print("3. dist/BloodPressureEstimation_Balanced20MB.dll を配布")
+            print("2. Run test_balanced_dll.py")
+            print("3. dist/BloodPressureEstimation_Balanced20MB.dll to distribute")
         else:
-            print("\\n❌ バランス調整済みDLL作成に失敗")
-            print("代替案:")
-            print("1. さらなる軽量化（build_facemesh_only_dll.py）")
-            print("2. 段階的最適化アプローチ")
+            print("\\n Failed to create Balanced DLL")
+            print("Alternatives:")
+            print("1. Further optimization (build_facemesh_only_dll.py)")
+            print("2. Step-by-step optimization approach")
         
         return success
         
     except Exception as e:
-        print(f"\\n❌ エラー: {e}")
+        print(f"\\n Error: {e}")
         return False
 
 if __name__ == "__main__":

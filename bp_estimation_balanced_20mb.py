@@ -86,7 +86,7 @@ class BalancedBPEstimator:
         """バランス調整済み初期化"""
         try:
             if not all([HAS_OPENCV, HAS_NUMPY]):
-                print("エラー: OpenCVまたはNumPyが不足しています")
+                print("Error: OpenCV or NumPy is missing")
                 return False
             
             # MediaPipe FaceMesh初期化（精度重視設定）
@@ -96,63 +96,63 @@ class BalancedBPEstimator:
             self._load_balanced_models(model_dir)
             
             self.is_initialized = True
-            print("✓ バランス調整済み初期化完了")
+            print("Balanced initialization completed")
             return True
             
         except Exception as e:
-            print(f"初期化エラー: {e}")
+            print(f"Initialization error: {e}")
             return False
     
     def _init_optimized_facemesh(self):
-        """精度重視のFaceMesh初期化"""
+        """High-precision FaceMesh initialization"""
         try:
             if HAS_MEDIAPIPE:
                 self.mp_face_mesh = mp.solutions.face_mesh
                 self.face_mesh = self.mp_face_mesh.FaceMesh(
                     static_image_mode=False,
                     max_num_faces=1,
-                    refine_landmarks=True,  # 精度重視で有効
-                    min_detection_confidence=0.8,  # 高い検出精度
-                    min_tracking_confidence=0.7    # 安定した追跡
+                    refine_landmarks=True,  # High-precision enabled
+                    min_detection_confidence=0.8,  # High detection accuracy
+                    min_tracking_confidence=0.7    # Stable tracking
                 )
-                print("✓ 精度重視FaceMesh初期化完了")
+                print("High-precision FaceMesh initialization completed")
             else:
-                print("警告: MediaPipeが利用できません")
+                print("Warning: MediaPipe is not available")
                 self.face_mesh = None
         except Exception as e:
-            print(f"FaceMesh初期化エラー: {e}")
+            print(f"FaceMesh initialization error: {e}")
             self.face_mesh = None
     
     def _load_balanced_models(self, model_dir: str):
-        """バランス調整済みモデル読み込み"""
+        """Balanced model loading"""
         try:
-            # 軽量sklearn使用（可能な場合）
+            # Lightweight sklearn usage (if possible)
             if HAS_SKLEARN and HAS_JOBLIB:
                 sbp_path = os.path.join(model_dir, "model_sbp.pkl")
                 dbp_path = os.path.join(model_dir, "model_dbp.pkl")
                 
-                if os.path.exists(sbp_path) and os.path.getsize(sbp_path) < 5*1024*1024:  # 5MB未満
+                if os.path.exists(sbp_path) and os.path.getsize(sbp_path) < 5*1024*1024:  # Less than 5MB
                     self.models['sbp'] = joblib.load(sbp_path)
-                    print("✓ SBPモデル読み込み完了")
-                if os.path.exists(dbp_path) and os.path.getsize(dbp_path) < 5*1024*1024:  # 5MB未満
+                    print("SBP model loading completed")
+                if os.path.exists(dbp_path) and os.path.getsize(dbp_path) < 5*1024*1024:  # Less than 5MB
                     self.models['dbp'] = joblib.load(dbp_path)
-                    print("✓ DBPモデル読み込み完了")
+                    print("DBP model loading completed")
             
-            # フォールバック: 高精度数式モデル
+            # Fallback: High-precision formula model
             if 'sbp' not in self.models:
                 self.models['sbp'] = self._create_enhanced_formula_model('sbp')
-                print("✓ SBP高精度数式モデル使用")
+                print("High-precision formula model used for SBP")
             if 'dbp' not in self.models:
                 self.models['dbp'] = self._create_enhanced_formula_model('dbp')
-                print("✓ DBP高精度数式モデル使用")
+                print("High-precision formula model used for DBP")
                 
         except Exception as e:
-            print(f"モデル読み込みエラー: {e}")
+            print(f"Model loading error: {e}")
             self.models['sbp'] = self._create_enhanced_formula_model('sbp')
             self.models['dbp'] = self._create_enhanced_formula_model('dbp')
     
     def _create_enhanced_formula_model(self, bp_type: str):
-        """高精度数式ベースモデル"""
+        """High-precision formula-based model"""
         class EnhancedBPModel:
             def __init__(self, bp_type):
                 self.bp_type = bp_type
@@ -359,7 +359,7 @@ class BalancedBPEstimator:
                             rppg_data.append(rppg_signal)
                 
                 except Exception as e:
-                    print(f"フレーム処理エラー: {e}")
+                    print(f"Frame processing error: {e}")
                     if HAS_NUMPY:
                         frame_mean = np.mean(frame[:, :, 1]) / 255.0
                         rppg_data.append(frame_mean)
@@ -368,52 +368,52 @@ class BalancedBPEstimator:
         
         cap.release()
         
-        # 高精度ピーク検出
+        # High-precision peak detection
         if len(rppg_data) > 20:
             peak_times = self._enhanced_peak_detection(rppg_data, fps / frame_skip)
         
         return rppg_data, peak_times
     
     def _enhanced_peak_detection(self, rppg_data: List[float], effective_fps: float) -> List[float]:
-        """高精度ピーク検出"""
+        """High-precision peak detection"""
         if not rppg_data:
             return []
         
-        # データ前処理
+        # Data preprocessing
         smoothed_data = np.array(rppg_data)
         
-        # 移動平均スムージング
-        window_size = max(3, int(effective_fps * 0.2))  # 0.2秒窓
+        # Moving average smoothing
+        window_size = max(3, int(effective_fps * 0.2))  # 0.2 second window
         kernel = np.ones(window_size) / window_size
         smoothed_data = np.convolve(smoothed_data, kernel, mode='same')
         
-        # バンドパスフィルタ（心拍数帯域）
+        # Bandpass filter (heart rate band)
         if HAS_SCIPY_SIGNAL:
-            # 0.7-3.0Hz（42-180bpm）
+            # 0.7-3.0Hz (42-180bpm)
             nyquist = effective_fps / 2
             low = 0.7 / nyquist
             high = 3.0 / nyquist
             b, a = signal.butter(4, [low, high], btype='band')
             smoothed_data = signal.filtfilt(b, a, smoothed_data)
         
-        # アダプティブピーク検出
+        # Adaptive peak detection
         peak_indices = []
         mean_val = np.mean(smoothed_data)
         std_val = np.std(smoothed_data)
         threshold = mean_val + 0.6 * std_val
         
-        min_distance = int(effective_fps * 0.4)  # 最小心拍間隔（150bpm制限）
+        min_distance = int(effective_fps * 0.4)  # Minimum heart rate interval (150bpm limit)
         
         for i in range(min_distance, len(smoothed_data) - min_distance):
             if (smoothed_data[i] > threshold and
                 smoothed_data[i] > smoothed_data[i-1] and
                 smoothed_data[i] > smoothed_data[i+1]):
                 
-                # 近接ピーク除去
+                # Near peak removal
                 if not peak_indices or i - peak_indices[-1] >= min_distance:
                     peak_indices.append(i)
         
-        # 時間に変換
+        # Convert
         peak_times = [idx / effective_fps for idx in peak_indices]
         return peak_times
     
@@ -464,8 +464,8 @@ class BalancedBPEstimator:
                 dbp = sbp - 75
             
         except Exception as e:
-            print(f"血圧推定エラー: {e}")
-            # フォールバック
+            print(f"Blood pressure estimation error: {e}")
+            # Fallback
             sbp = max(90, min(180, 120 + int((bmi - 22) * 2)))
             dbp = max(60, min(110, 80 + int((bmi - 22) * 1)))
         
@@ -473,7 +473,7 @@ class BalancedBPEstimator:
     
     def _generate_spec_compliant_csv(self, rppg_data: List[float], peak_times: List[float], 
                                    request_id: str) -> str:
-        """README.md準拠CSV生成（約20KB）"""
+        """README.md compliant CSV generation (about 20KB)"""
         csv_lines = [
             "# Blood Pressure Estimation PPG Data",
             f"# Request ID: {request_id}",
@@ -624,21 +624,21 @@ if sys.platform.startswith('win'):
 
 # テスト用
 if __name__ == "__main__":
-    print("バランス調整済み血圧推定DLL テスト")
+    print("Balanced blood pressure estimation DLL test")
     
     if initialize_dll():
-        print("✓ 初期化成功")
+        print("Initialization successful")
         version = get_version_info()
-        print(f"バージョン: {version}")
+        print(f"Version: {version}")
         
         # リクエストID生成テスト
         request_id = generate_request_id("9000000001", "0000012345")
-        print(f"生成されたリクエストID: {request_id}")
+        print(f"Generated request ID: {request_id}")
         
         # 形式検証テスト
         if estimator._validate_request_id(request_id):
-            print("✓ リクエストID形式正常")
+            print("Request ID format normal")
         else:
-            print("✗ リクエストID形式エラー")
+            print("Request ID format error")
     else:
-        print("✗ 初期化失敗")
+        print("Initialization failed")
