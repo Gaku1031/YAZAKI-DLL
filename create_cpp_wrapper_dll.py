@@ -318,7 +318,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     with open("BloodPressureEstimation.cpp", "w", encoding="utf-8") as f:
         f.write(cpp_code)
     
-    print("✓ C++ header and implementation file created")
+    print("C++ header and implementation file created")
 
 def create_simple_python_module():
     """simple python module"""
@@ -442,7 +442,7 @@ if __name__ == "__main__":
     estimator = BPEstimator()
     
     if estimator.initialize():
-        print("✓ initialization successful")
+        print("initialization successful")
         print(f"version: {estimator.get_version()}")
         
         # test analysis
@@ -452,13 +452,13 @@ if __name__ == "__main__":
         else:
             print("analysis start successful")
     else:
-        print("✗ initialization failed")
+        print("initialization failed")
 '''
 
     with open("bp_estimation_simple.py", "w", encoding="utf-8") as f:
         f.write(python_code)
     
-    print("✓ bp_estimation_simple.py created")
+    print("bp_estimation_simple.py created")
 
 def create_def_file():
     """DEF file"""
@@ -474,7 +474,7 @@ GetVersionInfo'''
     with open("BloodPressureEstimation.def", "w", encoding="utf-8") as f:
         f.write(def_code)
     
-    print("✓ BloodPressureEstimation.def created")
+    print("BloodPressureEstimation.def created")
 
 def create_build_script():
     """build script"""
@@ -542,7 +542,7 @@ cmake --build . --config Release
 
 REM check result
 if exist dist\\BloodPressureEstimation.dll (
-    echo ✓ DLL created successfully
+    echo DLL created successfully
     echo export function check:
     dumpbin /exports dist\\BloodPressureEstimation.dll
 ) else (
@@ -556,7 +556,7 @@ pause
     with open("build_cpp_dll.bat", "w", encoding="utf-8") as f:
         f.write(batch_code)
     
-    print("✓ CMakeLists.txt and build_cpp_dll.bat created")
+    print("CMakeLists.txt and build_cpp_dll.bat created")
 
 def create_csharp_test():
     """C# test code"""
@@ -699,7 +699,7 @@ namespace BloodPressureDllTest
     with open("CSharpCppWrapperTest.cs", "w", encoding="utf-8") as f:
         f.write(csharp_code)
     
-    print("✓ CSharpCppWrapperTest.cs created")
+    print("CSharpCppWrapperTest.cs created")
 
 def main():
     """main process"""
@@ -721,7 +721,7 @@ def main():
         # 5. C# test code creation
         create_csharp_test()
         
-        print("\\n🎉 C++ wrapper DLL created!")
+        print("\\n C++ wrapper DLL created!")
         print("\\nnext steps:")
         print("1. run build_cpp_dll.bat to build DLL")
         print("2. csc CSharpCppWrapperTest.cs to compile test code")
@@ -730,15 +730,15 @@ def main():
         print("5. run CSharpCppWrapperTest.exe")
         
         print("\\nfeatures:")
-        print("✓ reliable DLL export")
-        print("✓ callable from C#")
-        print("✓ Python engine execution inside")
-        print("✓ error handling complete")
+        print("reliable DLL export")
+        print("callable from C#")
+        print("Python engine execution inside")
+        print("error handling complete")
         
         return True
         
     except Exception as e:
-        print(f"\\n❌ error: {e}")
+        print(f"\\n error: {e}")
         return False
 
 if __name__ == "__main__":
