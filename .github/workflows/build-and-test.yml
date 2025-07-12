@@ -190,14 +190,14 @@ jobs:
       shell: powershell
       
     - name: Upload DLL Artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: BloodPressureEstimation-DLL-${{ github.sha }}
         path: distribution/
         retention-days: 30
         
     - name: Upload Test Results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ github.sha }}
@@ -205,7 +205,7 @@ jobs:
         retention-days: 7
         
     - name: Upload Build Logs
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: build-logs-${{ github.sha }}
