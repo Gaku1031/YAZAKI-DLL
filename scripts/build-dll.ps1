@@ -11,6 +11,9 @@ Write-Host "Configuration: $Configuration"
 Write-Host "Output Directory: $OutputDir"
 Write-Host "Working Directory: $(Get-Location)"
 
+# Set ErrorActionPreference to handle cl.exe behavior properly
+$ErrorActionPreference = "Continue"
+
 # Check prerequisites
 Write-Host "`n1. Checking prerequisites..." -ForegroundColor Yellow
 
@@ -28,91 +31,55 @@ Write-Host "`n2. Checking Visual Studio environment..." -ForegroundColor Yellow
 
 # In GitHub Actions, the msvc-dev-cmd action should have already set up the environment
 # Let's verify the required environment variables are set
-$requiredEnvVars = @('VCINSTALLDIR', 'VS_ROOT', 'INCLUDE', 'LIB', 'PATH')
+$requiredEnvVars = @('VCINSTALLDIR', 'INCLUDE', 'LIB', 'PATH')
 $missingVars = @()
 
 foreach ($varName in $requiredEnvVars) {
     $varValue = [Environment]::GetEnvironmentVariable($varName)
     if ([string]::IsNullOrEmpty($varValue)) {
         $missingVars += $varName
+        Write-Host "$varName is NOT set" -ForegroundColor Red
     } else {
         Write-Host "$varName is set" -ForegroundColor Green
     }
 }
 
-# Check if cl.exe is available in PATH
-try {
-    $clVersion = & cl.exe 2>&1 | Out-String
-    if ($clVersion -match "Microsoft.*Compiler") {
-        Write-Host "Visual C++ Compiler found and working" -ForegroundColor Green
-    } else {
-        throw "Compiler check failed"
-    }
-} catch {
-    Write-Host "Visual C++ Compiler not available in PATH" -ForegroundColor Red
-    
-    # Try to manually locate and set up the compiler
-    Write-Host "Attempting to locate Visual Studio tools..." -ForegroundColor Yellow
-    
-    # Common paths for Visual Studio 2022 in GitHub Actions
-    $vsPaths = @(
-        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC",
-        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC",
-        "${env:VCINSTALLDIR}Tools\MSVC"
-    )
-    
-    $compilerFound = $false
-    foreach ($basePath in $vsPaths) {
-        if (Test-Path $basePath) {
-            Write-Host "Checking VS path: $basePath" -ForegroundColor Cyan
-            $versions = Get-ChildItem -Path $basePath -Directory | Sort-Object Name -Descending
-            
-            foreach ($version in $versions) {
-                $clPath = Join-Path $version.FullName "bin\Hostx64\x64\cl.exe"
-                if (Test-Path $clPath) {
-                    $toolsDir = $version.FullName
-                    $binDir = Join-Path $toolsDir "bin\Hostx64\x64"
-                    
-                    # Add compiler to PATH
-                    $env:PATH = "$binDir;$env:PATH"
-                    
-                    # Set required environment variables
-                    $env:INCLUDE = "$(Join-Path $toolsDir 'include');$(Join-Path $toolsDir 'ATLMFC\include');$env:INCLUDE"
-                    $env:LIB = "$(Join-Path $toolsDir 'lib\x64');$(Join-Path $toolsDir 'ATLMFC\lib\x64');$env:LIB"
-                    
-                    Write-Host "Found and configured compiler at: $clPath" -ForegroundColor Green
-                    $compilerFound = $true
-                    break
-                }
-            }
-            if ($compilerFound) { break }
-        }
-    }
-    
-    if (-not $compilerFound) {
-        Write-Host "Could not locate Visual Studio compiler" -ForegroundColor Red
-        Write-Host "Environment debugging information:" -ForegroundColor Yellow
-        Write-Host "VCINSTALLDIR: $env:VCINSTALLDIR"
-        Write-Host "VS_ROOT: $env:VS_ROOT"
-        Write-Host "PATH contains cl.exe: $($env:PATH -like '*cl.exe*')"
-        
-        # List available Visual Studio installations
-        Write-Host "`nSearching for Visual Studio installations..." -ForegroundColor Yellow
-        Get-ChildItem -Path "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse -Name "cl.exe" -ErrorAction SilentlyContinue | Select-Object -First 10 | ForEach-Object {
-            Write-Host "Found: $_" -ForegroundColor Cyan
-        }
-        exit 1
-    }
-}
+# Check if cl.exe is available in PATH - using the same method as the workflow
+Write-Host "`n3. Verifying C++ compiler..." -ForegroundColor Yellow
 
-# Verify compiler is working
-try {
-    $testCompile = & cl.exe 2>&1 | Out-String
-    if ($testCompile -match "Microsoft.*Compiler") {
-        Write-Host "Compiler verification successful" -ForegroundColor Green
+# cl.exe は引数なしで実行するとエラーコード1で終了するが、これは正常な動作
+$clOutput = cl.exe 2>&1 | Out-String
+
+if ($clOutput -match "Microsoft.*Compiler") {
+    Write-Host "Visual C++ Compiler found and working" -ForegroundColor Green
+    Write-Host "Compiler version info:" -ForegroundColor Cyan
+    # Extract and display version info
+    $versionLine = ($clOutput -split "`n" | Where-Object { $_ -match "Microsoft.*Compiler" })[0]
+    Write-Host "  $versionLine" -ForegroundColor White
+} else {
+    Write-Host "Visual C++ Compiler not available in PATH" -ForegroundColor Red
+    Write-Host "Compiler output: $clOutput" -ForegroundColor Red
+    
+    # デバッグ情報を出力
+    Write-Host "PATH環境変数の確認:" -ForegroundColor Yellow
+    $env:PATH -split ';' | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*MSVC*' } | ForEach-Object {
+        Write-Host "  $_"
     }
-} catch {
-    Write-Host "Compiler verification failed" -ForegroundColor Red
+    
+    Write-Host "cl.exe の場所を検索:" -ForegroundColor Yellow
+    Get-Command cl.exe -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-Host "  Found at: $($_.Source)"
+    }
+    
+    Write-Host "Environment variables:" -ForegroundColor Yellow
+    Write-Host "VCINSTALLDIR: $env:VCINSTALLDIR"
+    if ($env:INCLUDE) {
+        Write-Host ("INCLUDE: " + $env:INCLUDE.Split(';')[0] + "...")
+    }
+    if ($env:LIB) {
+        Write-Host ("LIB: " + $env:LIB.Split(';')[0] + "...")
+    }
+    
     exit 1
 }
 
@@ -124,10 +91,11 @@ $requiredFiles = @(
     "bp_estimation_simple.py"
 )
 
-Write-Host "`n3. Checking source files..." -ForegroundColor Yellow
+Write-Host "`n4. Checking source files..." -ForegroundColor Yellow
 foreach ($file in $requiredFiles) {
     if (Test-Path $file) {
-        Write-Host "$file - Found" -ForegroundColor Green
+        $size = (Get-Item $file).Length
+        Write-Host "$file - Found ($size bytes)" -ForegroundColor Green
     } else {
         Write-Host "$file - NOT FOUND" -ForegroundColor Red
         Write-Host "Run 'python create_cpp_wrapper_dll.py' first" -ForegroundColor Red
@@ -136,7 +104,7 @@ foreach ($file in $requiredFiles) {
 }
 
 # Get Python configuration
-Write-Host "`n4. Getting Python configuration..." -ForegroundColor Yellow
+Write-Host "`n5. Getting Python configuration..." -ForegroundColor Yellow
 try {
     $pythonInclude = python -c "import sysconfig; print(sysconfig.get_path('include'))"
     $pythonPrefix = python -c "import sys; print(sys.base_prefix)"
@@ -161,6 +129,11 @@ try {
     $pythonLibFile = "$pythonLibs\$pythonVersion.lib"
     if (-not (Test-Path $pythonLibFile)) {
         Write-Host "Python library file not found: $pythonLibFile" -ForegroundColor Red
+        # List available .lib files for debugging
+        Write-Host "Available .lib files in $pythonLibs:" -ForegroundColor Yellow
+        Get-ChildItem -Path $pythonLibs -Filter "*.lib" | ForEach-Object { 
+            Write-Host "  $($_.Name)" -ForegroundColor Cyan 
+        }
         exit 1
     }
     
@@ -171,7 +144,7 @@ try {
 }
 
 # Create output directory
-Write-Host "`n5. Creating output directory..." -ForegroundColor Yellow
+Write-Host "`n6. Creating output directory..." -ForegroundColor Yellow
 if (Test-Path $OutputDir) {
     Remove-Item $OutputDir -Recurse -Force
     Write-Host "Cleaned existing output directory" -ForegroundColor Green
@@ -180,37 +153,54 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 Write-Host "Created output directory: $OutputDir" -ForegroundColor Green
 
 # Compile the DLL
-Write-Host "`n6. Compiling C++ DLL..." -ForegroundColor Yellow
+Write-Host "`n7. Compiling C++ DLL..." -ForegroundColor Yellow
 
 $compileArgs = @(
+    '/nologo',                                  # Suppress startup banner
     '/EHsc',                                    # Exception handling
     '/MD',                                      # Multi-threaded DLL runtime
+    '/O2',                                      # Optimization
     "/I`"$pythonInclude`"",                    # Python include directory
     '/DBLOODPRESSURE_EXPORTS',                 # Export macro
     '/LD',                                      # Create DLL
     'BloodPressureEstimation_Fixed.cpp',       # Source file
     '/link',                                    # Linker options start
+    '/nologo',                                  # Suppress linker banner
     "/DEF:BloodPressureEstimation.def",        # Export definition file
     "/LIBPATH:`"$pythonLibs`"",                # Python library path
     "$pythonVersion.lib",                       # Python library
     "/OUT:$OutputDir\BloodPressureEstimation.dll"  # Output file
 )
 
-Write-Host "Compile command: cl.exe $($compileArgs -join ' ')" -ForegroundColor Cyan
-Write-Host "Current directory: $(Get-Location)" -ForegroundColor Cyan
-Write-Host "Environment PATH includes: $($env:PATH.Split(';') | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*VC*' } | Select-Object -First 3)" -ForegroundColor Cyan
+Write-Host "Compile command:" -ForegroundColor Cyan
+Write-Host "cl.exe $($compileArgs -join ' ')" -ForegroundColor White
+Write-Host "`nCurrent directory: $(Get-Location)" -ForegroundColor Cyan
+
+# Show relevant PATH entries for debugging
+$relevantPaths = $env:PATH.Split(';') | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*VC*' -or $_ -like '*MSVC*' }
+if ($relevantPaths) {
+    Write-Host "Relevant PATH entries:" -ForegroundColor Cyan
+    $relevantPaths | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" -ForegroundColor White }
+}
 
 try {
+    # Run the compilation
     $compileResult = & cl.exe $compileArgs 2>&1
     $compileOutput = $compileResult | Out-String
     
-    Write-Host "Compiler output:" -ForegroundColor Yellow
+    Write-Host "`nCompiler output:" -ForegroundColor Yellow
     Write-Host $compileOutput
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Compilation successful" -ForegroundColor Green
     } else {
         Write-Host "Compilation failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+        
+        # Additional debugging information
+        Write-Host "`nDebugging information:" -ForegroundColor Yellow
+        Write-Host "Files in current directory:" -ForegroundColor Cyan
+        Get-ChildItem -Name | ForEach-Object { Write-Host "  $_" }
+        
         exit 1
     }
 } catch {
@@ -219,7 +209,7 @@ try {
 }
 
 # Verify DLL was created
-Write-Host "`n7. Verifying DLL..." -ForegroundColor Yellow
+Write-Host "`n8. Verifying DLL..." -ForegroundColor Yellow
 $dllPath = "$OutputDir\BloodPressureEstimation.dll"
 
 if (Test-Path $dllPath) {
@@ -228,9 +218,16 @@ if (Test-Path $dllPath) {
     Write-Host "DLL created: $dllPath" -ForegroundColor Green
     Write-Host "  Size: $dllSizeMB MB" -ForegroundColor Cyan
     
+    # List all files in output directory
+    Write-Host "`nFiles in output directory:" -ForegroundColor Cyan
+    Get-ChildItem $OutputDir | ForEach-Object { 
+        $sizeMB = [math]::Round($_.Length / 1MB, 2)
+        Write-Host "  $($_.Name) - $sizeMB MB" -ForegroundColor White
+    }
+    
     # Check exports using dumpbin if available
     try {
-        Write-Host "`n8. Checking DLL exports..." -ForegroundColor Yellow
+        Write-Host "`n9. Checking DLL exports..." -ForegroundColor Yellow
         $exports = & dumpbin /exports $dllPath 2>&1 | Out-String
         
         $expectedExports = @(
@@ -268,6 +265,11 @@ if (Test-Path $dllPath) {
     if (Test-Path $OutputDir) {
         Get-ChildItem $OutputDir | ForEach-Object { Write-Host "  $($_.Name)" }
     }
+    
+    # Show current directory contents for debugging
+    Write-Host "Files in current directory:" -ForegroundColor Yellow
+    Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" }
+    
     exit 1
 }
 
