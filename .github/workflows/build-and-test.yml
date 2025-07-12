@@ -313,7 +313,7 @@ jobs:
           }
 
           New-Item -ItemType Directory -Path "test-output\models" -Force
-          Write-Host "Created
+          Write-Host "Created models directory" -ForegroundColor Green
 
           Write-Host "`nTest directory contents:" -ForegroundColor Cyan
           Get-ChildItem "test-output" | Format-Table Name, Length, LastWriteTime
