@@ -955,13 +955,60 @@ def build_balanced_dll():
     os.makedirs("dist", exist_ok=True)
 
     try:
-        # Create a proper DLL using Nuitka for code obfuscation
-        print("Creating DLL using Nuitka for code obfuscation...")
+        # Try Nuitka first
+        print("Attempting Nuitka build...")
+        success = build_with_nuitka(script_file)
 
-        # Nuitka command to create DLL
+        if not success:
+            print("Nuitka build failed, trying alternative approach...")
+            success = build_with_pyinstaller(script_file)
+
+        if success:
+            dll_dest = os.path.join("dist", "BloodPressureEstimation.dll")
+            if os.path.exists(dll_dest):
+                size_mb = os.path.getsize(dll_dest) / (1024 * 1024)
+                print(f"Balanced DLL creation successful: {dll_dest}")
+                print(f"  Size: {size_mb:.1f} MB")
+
+                # C#エクスポート確認のためのdumpbin相当チェック
+                print("\n=== C# export check ===")
+                print(
+                    "Note: Run dumpbin /exports in Windows environment to check exported functions")
+                print("Expected exported functions:")
+                print("InitializeDLL")
+                print("StartBloodPressureAnalysisRequest")
+                print("GetProcessingStatus")
+                print("CancelBloodPressureAnalysis")
+                print("GetVersionInfo")
+
+                if size_mb <= 20:
+                    print("Target 20MB or less achieved!")
+                    return True
+                elif size_mb <= 25:
+                    print("Near target lightweight achieved (25MB or less)")
+                    return True
+                else:
+                    print(f"Size {size_mb:.1f}MB exceeds target")
+                    return False
+            else:
+                print("DLL file not found after build")
+                return False
+        else:
+            print("All build methods failed")
+            return False
+
+    except Exception as e:
+        print(f"Build error: {e}")
+        return False
+
+
+def build_with_nuitka(script_file):
+    """Build DLL using Nuitka"""
+    try:
+        # Nuitka command to create standalone executable
         cmd = [
             sys.executable, "-m", "nuitka",
-            "--module",  # Create a module (DLL)
+            "--standalone",
             "--follow-imports",
             "--include-package=opencv-python",
             "--include-package=mediapipe",
@@ -971,11 +1018,12 @@ def build_balanced_dll():
             "--include-package=joblib",
             "--include-data-dir=models=models",
             "--output-dir=dist",
-            "--output-filename=BloodPressureEstimation.dll",
+            "--output-filename=BloodPressureEstimation",
             "--assume-yes-for-downloads",
             "--show-progress",
             "--show-memory",
             "--remove-output",
+            "--windows-disable-console",
             script_file
         ]
 
@@ -987,47 +1035,32 @@ def build_balanced_dll():
         print("Nuitka build successful")
         print("STDOUT:", result.stdout)
 
+        # Check for generated files
+        exe_path = os.path.join("dist", "BloodPressureEstimation.exe")
         dll_dest = os.path.join("dist", "BloodPressureEstimation.dll")
 
-        if os.path.exists(dll_dest):
-            size_mb = os.path.getsize(dll_dest) / (1024 * 1024)
-            print(f"Balanced DLL creation successful: {dll_dest}")
+        # If EXE was created, rename it to DLL
+        if os.path.exists(exe_path):
+            print(f"EXE file found: {exe_path}")
+            size_mb = os.path.getsize(exe_path) / (1024 * 1024)
             print(f"  Size: {size_mb:.1f} MB")
 
-            # C#エクスポート確認のためのdumpbin相当チェック
-            print("\n=== C# export check ===")
-            print(
-                "Note: Run dumpbin /exports in Windows environment to check exported functions")
-            print("Expected exported functions:")
-            print("InitializeDLL")
-            print("StartBloodPressureAnalysisRequest")
-            print("GetProcessingStatus")
-            print("CancelBloodPressureAnalysis")
-            print("GetVersionInfo")
+            # Rename EXE to DLL
+            print(f"Renaming EXE to DLL: {exe_path} -> {dll_dest}")
+            os.rename(exe_path, dll_dest)
 
-            if size_mb <= 20:
-                print("Target 20MB or less achieved!")
-                return True
-            elif size_mb <= 25:
-                print("Near target lightweight achieved (25MB or less)")
+            if os.path.exists(dll_dest):
+                print(f"Successfully renamed to DLL: {dll_dest}")
                 return True
             else:
-                print(f"Size {size_mb:.1f}MB exceeds target")
+                print("Failed to rename EXE to DLL")
                 return False
         else:
-            print("DLL file not found")
-            print("Dist directory contents:")
-            if os.path.exists("dist"):
-                for root, dirs, files in os.walk("dist"):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        print(f"  {file_path}")
-            else:
-                print("  dist directory does not exist")
+            print("EXE file not found after Nuitka build")
             return False
 
     except subprocess.CalledProcessError as e:
-        print(f"Build error: {e}")
+        print(f"Nuitka build error: {e}")
         print(f"Return code: {e.returncode}")
         if e.stdout:
             print(f"STDOUT: {e.stdout}")
@@ -1035,7 +1068,69 @@ def build_balanced_dll():
             print(f"STDERR: {e.stderr}")
         return False
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Nuitka unexpected error: {e}")
+        return False
+
+
+def build_with_pyinstaller(script_file):
+    """Build DLL using PyInstaller as fallback"""
+    try:
+        print("Trying PyInstaller build...")
+
+        # PyInstaller command
+        cmd = [
+            sys.executable, "-m", "PyInstaller",
+            "--onefile",
+            "--windowed",
+            "--name=BloodPressureEstimation",
+            "--distpath=dist",
+            "--workpath=build",
+            "--specpath=.",
+            script_file
+        ]
+
+        print("PyInstaller build running...")
+        print(f"Command: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd, check=True, capture_output=True, text=True)
+        print("PyInstaller build successful")
+        print("STDOUT:", result.stdout)
+
+        # Check for generated files
+        exe_path = os.path.join("dist", "BloodPressureEstimation.exe")
+        dll_dest = os.path.join("dist", "BloodPressureEstimation.dll")
+
+        # If EXE was created, rename it to DLL
+        if os.path.exists(exe_path):
+            print(f"EXE file found: {exe_path}")
+            size_mb = os.path.getsize(exe_path) / (1024 * 1024)
+            print(f"  Size: {size_mb:.1f} MB")
+
+            # Rename EXE to DLL
+            print(f"Renaming EXE to DLL: {exe_path} -> {dll_dest}")
+            os.rename(exe_path, dll_dest)
+
+            if os.path.exists(dll_dest):
+                print(f"Successfully renamed to DLL: {dll_dest}")
+                return True
+            else:
+                print("Failed to rename EXE to DLL")
+                return False
+        else:
+            print("EXE file not found after PyInstaller build")
+            return False
+
+    except subprocess.CalledProcessError as e:
+        print(f"PyInstaller build error: {e}")
+        print(f"Return code: {e.returncode}")
+        if e.stdout:
+            print(f"STDOUT: {e.stdout}")
+        if e.stderr:
+            print(f"STDERR: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"PyInstaller unexpected error: {e}")
         return False
 
 

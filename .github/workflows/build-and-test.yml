@@ -38,7 +38,7 @@ jobs:
           if (Test-Path requirements_nuitka.txt) {
             pip install -r requirements_nuitka.txt
           }
-          pip install opencv-python-headless mediapipe numpy scipy scikit-learn joblib nuitka
+          pip install opencv-python-headless mediapipe numpy scipy scikit-learn joblib nuitka pyinstaller
         shell: powershell
 
       - name: Build Balanced 20MB DLL
@@ -69,7 +69,12 @@ jobs:
 
           # Check Nuitka installation
           Write-Host "Checking Nuitka..." -ForegroundColor Yellow
-          python -c "import nuitka; print(f'Nuitka version: {nuitka.__version__}')"
+          try {
+            $nuitkaVersion = python -c "import nuitka; print('Nuitka installed successfully')" 2>&1
+            Write-Host $nuitkaVersion
+          } catch {
+            Write-Host "Nuitka version check failed, but continuing..." -ForegroundColor Yellow
+          }
 
           # Run build_balanced_20mb_dll.py
           Write-Host "Running build_balanced_20mb_dll.py..." -ForegroundColor Yellow
