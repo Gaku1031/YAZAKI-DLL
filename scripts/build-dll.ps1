@@ -109,7 +109,10 @@ try {
     $pythonInclude = python -c "import sysconfig; print(sysconfig.get_path('include'))"
     $pythonPrefix = python -c "import sys; print(sys.base_prefix)"
     $pythonLibs = "$pythonPrefix\libs"
-    $pythonVersion = python -c 'import sys; print("python" + str(sys.version_info.major) + str(sys.version_info.minor))'
+    $pythonVersionRaw = python -c "import sys; print(f'python{sys.version_info.major}{sys.version_info.minor}')"
+    
+    # Remove any trailing whitespace/newlines
+    $pythonVersion = $pythonVersionRaw.Trim()
     
     Write-Host "Python Include: $pythonInclude" -ForegroundColor Cyan
     Write-Host "Python Libs: $pythonLibs" -ForegroundColor Cyan
@@ -131,15 +134,39 @@ try {
         Write-Host "Python library file not found: $pythonLibFile" -ForegroundColor Red
         # List available .lib files for debugging
         Write-Host "Available .lib files in ${pythonLibs}:" -ForegroundColor Yellow
-        Get-ChildItem -Path $pythonLibs -Filter "*.lib" | ForEach-Object { 
-            Write-Host "  $($_.Name)" -ForegroundColor Cyan 
+        $availableLibs = Get-ChildItem -Path $pythonLibs -Filter "*.lib" | ForEach-Object { 
+            Write-Host "  $($_.Name)" -ForegroundColor Cyan
+            $_.Name
         }
-        exit 1
+        
+        # Try to find the correct Python library file
+        $correctLib = $null
+        if ($availableLibs -contains "python311.lib") {
+            $correctLib = "python311"
+            Write-Host "Using python311.lib" -ForegroundColor Green
+        } elseif ($availableLibs -contains "python3.lib") {
+            $correctLib = "python3"
+            Write-Host "Using python3.lib" -ForegroundColor Green
+        } else {
+            Write-Host "No suitable Python library found" -ForegroundColor Red
+            exit 1
+        }
+        
+        # Update pythonVersion to use the correct library
+        $pythonVersion = $correctLib
+        $pythonLibFile = "$pythonLibs\$pythonVersion.lib"
+        
+        if (-not (Test-Path $pythonLibFile)) {
+            Write-Host "Selected Python library file still not found: $pythonLibFile" -ForegroundColor Red
+            exit 1
+        }
     }
     
-    Write-Host "Python configuration verified" -ForegroundColor Green
+    Write-Host "Python configuration verified successfully" -ForegroundColor Green
+    Write-Host "Final Python Lib Name: $pythonVersion" -ForegroundColor Cyan
 } catch {
     Write-Host "Failed to get Python configuration: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Python executable path: $(Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)" -ForegroundColor Yellow
     exit 1
 }
 
