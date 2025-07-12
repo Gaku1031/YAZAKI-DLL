@@ -951,6 +951,20 @@ def build_balanced_dll():
 
     print(f"Script file found: {script_file}")
 
+    # Syntax check
+    try:
+        print("Checking Python syntax...")
+        result = subprocess.run([sys.executable, "-m", "py_compile", script_file],
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Syntax error in {script_file}:")
+            print(result.stderr)
+            return False
+        print("Syntax check passed")
+    except Exception as e:
+        print(f"Syntax check failed: {e}")
+        return False
+
     # Create dist directory
     os.makedirs("dist", exist_ok=True)
 
@@ -1003,134 +1017,130 @@ def build_balanced_dll():
 
 
 def build_with_nuitka(script_file):
-    """Build DLL using Nuitka"""
+    """Nuitka build with enhanced error handling"""
+    print("Nuitka build running...")
+
+    # Enhanced Nuitka command with better error handling
+    cmd = [
+        sys.executable, "-m", "nuitka",
+        "--standalone",
+        "--follow-imports",
+        "--include-package=opencv-python",
+        "--include-package=mediapipe",
+        "--include-package=numpy",
+        "--include-package=scipy",
+        "--include-package=sklearn",
+        "--include-package=joblib",
+        "--include-data-dir=models=models",
+        "--output-dir=dist",
+        "--output-filename=BloodPressureEstimation",
+        "--assume-yes-for-downloads",
+        "--show-progress",
+        "--show-memory",
+        "--remove-output",
+        "--windows-console-mode=disable",  # Updated from --windows-disable-console
+        "--enable-plugin=anti-bloat",  # Reduce size
+        "--no-pyi-file",  # Don't generate .pyi file
+        script_file
+    ]
+
+    print(f"Command: {' '.join(cmd)}")
+
     try:
-        # Nuitka command to create standalone executable
-        cmd = [
-            sys.executable, "-m", "nuitka",
-            "--standalone",
-            "--follow-imports",
-            "--include-package=opencv-python",
-            "--include-package=mediapipe",
-            "--include-package=numpy",
-            "--include-package=scipy",
-            "--include-package=sklearn",
-            "--include-package=joblib",
-            "--include-data-dir=models=models",
-            "--output-dir=dist",
-            "--output-filename=BloodPressureEstimation",
-            "--assume-yes-for-downloads",
-            "--show-progress",
-            "--show-memory",
-            "--remove-output",
-            "--windows-disable-console",
-            script_file
-        ]
-
-        print("Nuitka build running...")
-        print(f"Command: {' '.join(cmd)}")
-
+        # Run with timeout and detailed output
         result = subprocess.run(
-            cmd, check=True, capture_output=True, text=True)
-        print("Nuitka build successful")
-        print("STDOUT:", result.stdout)
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=1800  # 30 minutes timeout
+        )
 
-        # Check for generated files
-        exe_path = os.path.join("dist", "BloodPressureEstimation.exe")
-        dll_dest = os.path.join("dist", "BloodPressureEstimation.dll")
+        if result.returncode == 0:
+            print("Nuitka build successful")
 
-        # If EXE was created, rename it to DLL
-        if os.path.exists(exe_path):
-            print(f"EXE file found: {exe_path}")
-            size_mb = os.path.getsize(exe_path) / (1024 * 1024)
-            print(f"  Size: {size_mb:.1f} MB")
+            # Rename .exe to .dll
+            exe_path = os.path.join("dist", "BloodPressureEstimation.exe")
+            dll_path = os.path.join("dist", "BloodPressureEstimation.dll")
 
-            # Rename EXE to DLL
-            print(f"Renaming EXE to DLL: {exe_path} -> {dll_dest}")
-            os.rename(exe_path, dll_dest)
-
-            if os.path.exists(dll_dest):
-                print(f"Successfully renamed to DLL: {dll_dest}")
+            if os.path.exists(exe_path):
+                shutil.move(exe_path, dll_path)
+                print(f"Renamed {exe_path} to {dll_path}")
                 return True
             else:
-                print("Failed to rename EXE to DLL")
+                print(f"Expected EXE file not found: {exe_path}")
                 return False
         else:
-            print("EXE file not found after Nuitka build")
+            print(
+                f"Nuitka build error: Command '{cmd}' returned non-zero exit status {result.returncode}.")
+            print(f"Return code: {result.returncode}")
+            print(f"STDERR: {result.stderr}")
+            print(f"STDOUT: {result.stdout}")
             return False
 
-    except subprocess.CalledProcessError as e:
-        print(f"Nuitka build error: {e}")
-        print(f"Return code: {e.returncode}")
-        if e.stdout:
-            print(f"STDOUT: {e.stdout}")
-        if e.stderr:
-            print(f"STDERR: {e.stderr}")
+    except subprocess.TimeoutExpired:
+        print("Nuitka build timed out after 30 minutes")
         return False
     except Exception as e:
-        print(f"Nuitka unexpected error: {e}")
+        print(f"Nuitka build exception: {e}")
         return False
 
 
 def build_with_pyinstaller(script_file):
-    """Build DLL using PyInstaller as fallback"""
+    """PyInstaller fallback build with enhanced error handling"""
+    print("Trying PyInstaller build...")
+
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--onefile",
+        "--windowed",
+        "--name=BloodPressureEstimation",
+        "--distpath=dist",
+        "--workpath=build",
+        "--specpath=.",
+        script_file
+    ]
+
+    print(f"Command: {' '.join(cmd)}")
+
     try:
-        print("Trying PyInstaller build...")
-
-        # PyInstaller command
-        cmd = [
-            sys.executable, "-m", "PyInstaller",
-            "--onefile",
-            "--windowed",
-            "--name=BloodPressureEstimation",
-            "--distpath=dist",
-            "--workpath=build",
-            "--specpath=.",
-            script_file
-        ]
-
-        print("PyInstaller build running...")
-        print(f"Command: {' '.join(cmd)}")
-
         result = subprocess.run(
-            cmd, check=True, capture_output=True, text=True)
-        print("PyInstaller build successful")
-        print("STDOUT:", result.stdout)
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=1800  # 30 minutes timeout
+        )
 
-        # Check for generated files
-        exe_path = os.path.join("dist", "BloodPressureEstimation.exe")
-        dll_dest = os.path.join("dist", "BloodPressureEstimation.dll")
+        if result.returncode == 0:
+            print("PyInstaller build successful")
 
-        # If EXE was created, rename it to DLL
-        if os.path.exists(exe_path):
-            print(f"EXE file found: {exe_path}")
-            size_mb = os.path.getsize(exe_path) / (1024 * 1024)
-            print(f"  Size: {size_mb:.1f} MB")
+            # Rename .exe to .dll
+            exe_path = os.path.join("dist", "BloodPressureEstimation.exe")
+            dll_path = os.path.join("dist", "BloodPressureEstimation.dll")
 
-            # Rename EXE to DLL
-            print(f"Renaming EXE to DLL: {exe_path} -> {dll_dest}")
-            os.rename(exe_path, dll_dest)
-
-            if os.path.exists(dll_dest):
-                print(f"Successfully renamed to DLL: {dll_dest}")
+            if os.path.exists(exe_path):
+                shutil.move(exe_path, dll_path)
+                print(f"Renamed {exe_path} to {dll_path}")
                 return True
             else:
-                print("Failed to rename EXE to DLL")
+                print(f"Expected EXE file not found: {exe_path}")
                 return False
         else:
-            print("EXE file not found after PyInstaller build")
+            print(
+                f"PyInstaller build error: Command '{cmd}' returned non-zero exit status {result.returncode}.")
+            print(f"Return code: {result.returncode}")
+            print(f"STDERR: {result.stderr}")
+            print(f"STDOUT: {result.stdout}")
             return False
 
-    except subprocess.CalledProcessError as e:
-        print(f"PyInstaller build error: {e}")
-        print(f"Return code: {e.returncode}")
-        if e.stdout:
-            print(f"STDOUT: {e.stdout}")
-        if e.stderr:
-            print(f"STDERR: {e.stderr}")
+    except subprocess.TimeoutExpired:
+        print("PyInstaller build timed out after 30 minutes")
         return False
     except Exception as e:
-        print(f"PyInstaller unexpected error: {e}")
+        print(f"PyInstaller build exception: {e}")
         return False
 
 
@@ -1205,7 +1215,6 @@ for option in compilation_options:
     print(f"  {option}")
 '''
 
-    # Write spec file
     with open("nuitka_spec.py", "w", encoding="utf-8") as f:
         f.write(spec_content)
 
