@@ -83,15 +83,6 @@ jobs:
             Write-Host "Warning: models directory not found" -ForegroundColor Yellow
           }
 
-          # Check Nuitka installation
-          Write-Host "Checking Nuitka..." -ForegroundColor Yellow
-          try {
-            $nuitkaVersion = python -c "import nuitka; print('Nuitka installed successfully')" 2>&1
-            Write-Host $nuitkaVersion
-          } catch {
-            Write-Host "Nuitka version check failed, but continuing..." -ForegroundColor Yellow
-          }
-
           # Clean up any existing build artifacts
           Write-Host "Cleaning up build artifacts..." -ForegroundColor Yellow
           if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
@@ -99,16 +90,193 @@ jobs:
           if (Test-Path "__pycache__") { Remove-Item "__pycache__" -Recurse -Force }
           Write-Host "Build artifacts cleaned up" -ForegroundColor Green
 
-          # Run build_balanced_20mb_dll.py
-          Write-Host "Running build_balanced_20mb_dll.py..." -ForegroundColor Yellow
-          python build_balanced_20mb_dll.py
-
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "DLL build failed with exit code: $LASTEXITCODE" -ForegroundColor Red
-            exit 1
+          # Try optimized Nuitka build first (more aggressive size reduction)
+          Write-Host "Attempting optimized Nuitka build..." -ForegroundColor Yellow
+          try {
+            $nuitkaCmd = @(
+              "python", "-m", "nuitka",
+              "--module",  # Use module mode instead of standalone
+              "--follow-imports",
+              "--include-package=opencv-python",
+              "--include-package=mediapipe.python.solutions.face_mesh",  # Only face_mesh
+              "--include-package=numpy",
+              "--include-package=scipy.signal",  # Only signal processing
+              "--include-package=sklearn.ensemble",  # Only ensemble models
+              "--include-package=joblib",
+              "--include-data-dir=models=models",
+              "--output-dir=dist",
+              "--output-filename=BloodPressureEstimation",
+              "--assume-yes-for-downloads",
+              "--show-progress",
+              "--show-memory",
+              "--remove-output",
+              "--windows-console-mode=disable",
+              "--enable-plugin=anti-bloat",
+              "--no-pyi-file",
+              "--nofollow-import-to=tkinter",
+              "--nofollow-import-to=matplotlib",
+              "--nofollow-import-to=PIL",
+              "--nofollow-import-to=PyQt5",
+              "--nofollow-import-to=PyQt6",
+              "--nofollow-import-to=mediapipe.tasks",
+              "--nofollow-import-to=mediapipe.python.solutions.pose",
+              "--nofollow-import-to=mediapipe.python.solutions.hands",
+              "--nofollow-import-to=mediapipe.python.solutions.holistic",
+              "--nofollow-import-to=mediapipe.python.solutions.objectron",
+              "--nofollow-import-to=mediapipe.python.solutions.selfie_segmentation",
+              "--nofollow-import-to=tensorflow",
+              "--nofollow-import-to=torch",
+              "--nofollow-import-to=sklearn.datasets",
+              "--nofollow-import-to=sklearn.feature_extraction",
+              "--nofollow-import-to=scipy.ndimage",
+              "--nofollow-import-to=scipy.interpolate",
+              "--nofollow-import-to=scipy.integrate",
+              "--nofollow-import-to=scipy.optimize",
+              "--nofollow-import-to=scipy.sparse",
+              "--nofollow-import-to=scipy.spatial",
+              "--nofollow-import-to=scipy.special",
+              "--nofollow-import-to=scipy.linalg",
+              "--nofollow-import-to=pandas.plotting",
+              "--nofollow-import-to=IPython",
+              "--nofollow-import-to=jupyter",
+              "--nofollow-import-to=notebook",
+              "--nofollow-import-to=pytest",
+              "--nofollow-import-to=unittest",
+              "--nofollow-import-to=multiprocessing",
+              "--nofollow-import-to=concurrent.futures",
+              "--nofollow-import-to=asyncio",
+              "bp_estimation_balanced_20mb.py"
+            )
+            
+            Write-Host "Nuitka command: $($nuitkaCmd -join ' ')" -ForegroundColor Cyan
+            $nuitkaResult = & $nuitkaCmd[0] $nuitkaCmd[1..($nuitkaCmd.Length-1)] 2>&1
+            
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Nuitka build successful" -ForegroundColor Green
+              
+              # Rename .exe to .dll
+              $exePath = "dist\BloodPressureEstimation.exe"
+              $dllPath = "dist\BloodPressureEstimation.dll"
+              
+              if (Test-Path $exePath) {
+                Move-Item $exePath $dllPath
+                Write-Host "Renamed $exePath to $dllPath" -ForegroundColor Green
+                
+                $dllSize = (Get-Item $dllPath).Length
+                $dllSizeMB = [math]::Round($dllSize / 1MB, 2)
+                Write-Host "DLL size after Nuitka: $dllSizeMB MB" -ForegroundColor Cyan
+                
+                if ($dllSizeMB -le 25) {
+                  Write-Host "Nuitka build achieved target size!" -ForegroundColor Green
+                } else {
+                  Write-Host "Nuitka build size still too large, trying PyInstaller..." -ForegroundColor Yellow
+                  throw "Size too large"
+                }
+              } else {
+                Write-Host "Expected EXE file not found after Nuitka build" -ForegroundColor Red
+                throw "EXE not found"
+              }
+            } else {
+              Write-Host "Nuitka build failed, trying PyInstaller..." -ForegroundColor Yellow
+              throw "Nuitka failed"
+            }
+          } catch {
+            Write-Host "Nuitka build failed or size too large, trying PyInstaller..." -ForegroundColor Yellow
+            
+            # Try PyInstaller with aggressive size reduction
+            Write-Host "Attempting PyInstaller build with size optimization..." -ForegroundColor Yellow
+            
+            # Create optimized spec file using simple approach
+            Write-Host "Creating optimized PyInstaller spec file..." -ForegroundColor Yellow
+            
+            # Use simple PyInstaller command with aggressive exclusions
+            $pyinstallerCmd = @(
+              "python", "-m", "PyInstaller",
+              "--onefile",
+              "--windowed",
+              "--name=BloodPressureEstimation",
+              "--distpath=dist",
+              "--workpath=build",
+              "--clean",
+              "--noconfirm",
+              "--exclude-module=tkinter",
+              "--exclude-module=matplotlib",
+              "--exclude-module=PIL",
+              "--exclude-module=PyQt5",
+              "--exclude-module=PyQt6",
+              "--exclude-module=mediapipe.tasks",
+              "--exclude-module=mediapipe.python.solutions.pose",
+              "--exclude-module=mediapipe.python.solutions.hands",
+              "--exclude-module=mediapipe.python.solutions.holistic",
+              "--exclude-module=mediapipe.python.solutions.objectron",
+              "--exclude-module=mediapipe.python.solutions.selfie_segmentation",
+              "--exclude-module=tensorflow",
+              "--exclude-module=torch",
+              "--exclude-module=sklearn.datasets",
+              "--exclude-module=sklearn.feature_extraction",
+              "--exclude-module=scipy.ndimage",
+              "--exclude-module=scipy.interpolate",
+              "--exclude-module=scipy.integrate",
+              "--exclude-module=scipy.optimize",
+              "--exclude-module=scipy.sparse",
+              "--exclude-module=scipy.spatial",
+              "--exclude-module=scipy.special",
+              "--exclude-module=scipy.linalg",
+              "--exclude-module=pandas.plotting",
+              "--exclude-module=IPython",
+              "--exclude-module=jupyter",
+              "--exclude-module=notebook",
+              "--exclude-module=pytest",
+              "--exclude-module=unittest",
+              "--exclude-module=multiprocessing",
+              "--exclude-module=concurrent.futures",
+              "--exclude-module=asyncio",
+              "--add-data=models;models",
+              "--hidden-import=cv2.cv2",
+              "--hidden-import=mediapipe.python._framework_bindings",
+              "--hidden-import=mediapipe.python.solutions.face_mesh",
+              "--hidden-import=numpy.core._methods",
+              "--hidden-import=numpy.lib.format",
+              "--hidden-import=joblib.numpy_pickle",
+              "--hidden-import=scipy._lib._ccallback_c",
+              "--hidden-import=scipy.sparse.csgraph._validation",
+              "bp_estimation_balanced_20mb.py"
+            )
+            
+            Write-Host "PyInstaller command: $($pyinstallerCmd -join ' ')" -ForegroundColor Cyan
+            $pyinstallerResult = & $pyinstallerCmd[0] $pyinstallerCmd[1..($pyinstallerCmd.Length-1)] 2>&1
+            
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "PyInstaller build successful" -ForegroundColor Green
+              
+              # Rename .exe to .dll
+              $exePath = "dist\BloodPressureEstimation.exe"
+              $dllPath = "dist\BloodPressureEstimation.dll"
+              
+              if (Test-Path $exePath) {
+                Move-Item $exePath $dllPath
+                Write-Host "Renamed $exePath to $dllPath" -ForegroundColor Green
+                
+                $dllSize = (Get-Item $dllPath).Length
+                $dllSizeMB = [math]::Round($dllSize / 1MB, 2)
+                Write-Host "DLL size after PyInstaller: $dllSizeMB MB" -ForegroundColor Cyan
+                
+                if ($dllSizeMB -le 25) {
+                  Write-Host "PyInstaller build achieved target size!" -ForegroundColor Green
+                } else {
+                  Write-Host "Warning: DLL size still exceeds target ($dllSizeMB MB)" -ForegroundColor Yellow
+                  Write-Host "This may be due to MediaPipe dependencies" -ForegroundColor Yellow
+                }
+              } else {
+                Write-Host "Expected EXE file not found after PyInstaller build" -ForegroundColor Red
+                exit 1
+              }
+            } else {
+              Write-Host "PyInstaller build failed:" -ForegroundColor Red
+              Write-Host $pyinstallerResult
+              exit 1
+            }
           }
-
-          Write-Host "DLL build completed successfully" -ForegroundColor Green
 
           # Check files after build
           Write-Host "Files after build:" -ForegroundColor Yellow
