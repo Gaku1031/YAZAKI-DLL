@@ -187,11 +187,51 @@ jobs:
         with:
           dotnet-version: "6.0.x"
 
+      - name: Copy DLL to required locations
+        run: |
+          Write-Host "Copying DLL to required locations..." -ForegroundColor Yellow
+          
+          $sourceDll = "build\dist\BloodPressureEstimation.dll"
+          $targetLocations = @(
+            ".\BloodPressureEstimation.dll",
+            "tests\CSharpTest\BloodPressureEstimation.dll"
+          )
+          
+          if (Test-Path $sourceDll) {
+            foreach ($target in $targetLocations) {
+              $targetDir = Split-Path $target -Parent
+              if ($targetDir -and !(Test-Path $targetDir)) {
+                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+                Write-Host "Created directory: $targetDir" -ForegroundColor Cyan
+              }
+              
+              Copy-Item $sourceDll $target -Force
+              if (Test-Path $target) {
+                Write-Host "Copied DLL to: $target" -ForegroundColor Green
+              } else {
+                Write-Host "Failed to copy DLL to: $target" -ForegroundColor Red
+                exit 1
+              }
+            }
+          } else {
+            Write-Host "Source DLL not found: $sourceDll" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+
       - name: Build C# Test Project
         run: |
           Write-Host "Building C# test project..." -ForegroundColor Yellow
 
           if (Test-Path "tests/CSharpTest/BloodPressureTest.csproj") {
+            # DLLが存在することを確認
+            if (Test-Path "BloodPressureEstimation.dll") {
+              Write-Host "DLL found in root directory" -ForegroundColor Green
+            } else {
+              Write-Host "DLL not found in root directory" -ForegroundColor Red
+              exit 1
+            }
+            
             dotnet build tests/CSharpTest/BloodPressureTest.csproj --configuration Release --verbosity normal
             
             if ($LASTEXITCODE -eq 0) {
