@@ -130,7 +130,7 @@ try {
     if (-not (Test-Path $pythonLibFile)) {
         Write-Host "Python library file not found: $pythonLibFile" -ForegroundColor Red
         # List available .lib files for debugging
-        Write-Host "Available .lib files in $pythonLibs:" -ForegroundColor Yellow
+        Write-Host "Available .lib files in ${pythonLibs}:" -ForegroundColor Yellow
         Get-ChildItem -Path $pythonLibs -Filter "*.lib" | ForEach-Object { 
             Write-Host "  $($_.Name)" -ForegroundColor Cyan 
         }
