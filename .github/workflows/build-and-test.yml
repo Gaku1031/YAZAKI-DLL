@@ -56,20 +56,19 @@ jobs:
           Write-Host "Checking cl.exe availability..." -ForegroundColor Yellow
 
           try {
-            $clVersion = & cl.exe 2>&1 | Out-String
-            if ($clVersion -match "Microsoft.*Compiler") {
+            $vcvarsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+            $output = cmd /c "`"$vcvarsPath`" && cl.exe" 2>&1
+            if ($output -match "Microsoft.*Compiler") {
               Write-Host "Visual C++ Compiler found and working" -ForegroundColor Green
               Write-Host "Compiler version info:" -ForegroundColor Cyan
-              Write-Host $clVersion
+              Write-Host $output
             } else {
               Write-Host "Compiler check failed" -ForegroundColor Red
               exit 1
             }
           }
           catch {
-            Write-Host "cl.exe not found in PATH" -ForegroundColor Red
-            Write-Host "PATH environment:" -ForegroundColor Yellow
-            $env:PATH.Split(';') | Where-Object { $_ -like '*Visual Studio*' -or $_ -like '*VC*' } | ForEach-Object { Write-Host "  $_" }
+            Write-Host "cl.exe not found or failed to execute" -ForegroundColor Red
             exit 1
           }
 
