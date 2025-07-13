@@ -5,16 +5,14 @@ on:
     branches: [main, develop]
     paths:
       - "bp_estimation_cython.pyx"
-      - "dll_wrapper_cython.pyx"
-      - "setup_cython.py"
+      - "setup_cython_dll.py"
       - "build_cython_dll.py"
       - "requirements_cython.txt"
   pull_request:
     branches: [main, develop]
     paths:
       - "bp_estimation_cython.pyx"
-      - "dll_wrapper_cython.pyx"
-      - "setup_cython.py"
+      - "setup_cython_dll.py"
       - "build_cython_dll.py"
       - "requirements_cython.txt"
   workflow_dispatch:
@@ -366,7 +364,7 @@ jobs:
           New-Item -ItemType Directory -Path "dist_cython" -Force | Out-Null
 
           # Copy built extensions
-          $extensions = @("bp_estimation_cython*.pyd", "dll_wrapper_cython*.pyd")
+          $extensions = @("BloodPressureEstimation*.dll")
           foreach ($pattern in $extensions) {
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
