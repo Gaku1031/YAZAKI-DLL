@@ -17,6 +17,26 @@ on:
       - "setup_cython.py"
       - "build_cython_dll.py"
       - "requirements_cython.txt"
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build type"
+        required: true
+        default: "cython"
+        type: choice
+        options:
+          - cython
+          - full
+      force_rebuild:
+        description: "Force rebuild all dependencies"
+        required: false
+        default: false
+        type: boolean
+      debug_mode:
+        description: "Enable debug mode"
+        required: false
+        default: false
+        type: boolean
 
 env:
   SOLUTION_FILE_PATH: .
@@ -72,6 +92,9 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           Write-Host "Installing Cython dependencies..." -ForegroundColor Cyan
+          Write-Host "Build type: ${{ github.event.inputs.build_type }}" -ForegroundColor Cyan
+          Write-Host "Force rebuild: ${{ github.event.inputs.force_rebuild }}" -ForegroundColor Cyan
+          Write-Host "Debug mode: ${{ github.event.inputs.debug_mode }}" -ForegroundColor Cyan
 
           # Upgrade pip first
           python -m pip install --upgrade pip
@@ -82,7 +105,12 @@ jobs:
 
           # Install Cython and build tools
           Write-Host "Installing Cython..." -ForegroundColor Yellow
-          pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall
+          if ("${{ github.event.inputs.force_rebuild }}" -eq "true") {
+            Write-Host "Force rebuilding all packages..." -ForegroundColor Yellow
+            pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall --no-cache-dir
+          } else {
+            pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall
+          }
 
           # Install NumPy 1.24.3 (compatible with other packages)
           Write-Host "Installing NumPy 1.24.3..." -ForegroundColor Yellow
@@ -173,6 +201,10 @@ jobs:
       - name: Build Cython DLL with Obfuscation
         run: |
           Write-Host "Building Cython DLL with code obfuscation..." -ForegroundColor Green
+          Write-Host "Manual trigger parameters:" -ForegroundColor Cyan
+          Write-Host "  Build type: ${{ github.event.inputs.build_type }}" -ForegroundColor Cyan
+          Write-Host "  Force rebuild: ${{ github.event.inputs.force_rebuild }}" -ForegroundColor Cyan
+          Write-Host "  Debug mode: ${{ github.event.inputs.debug_mode }}" -ForegroundColor Cyan
 
           # Add debug information
           Write-Host "Current directory: $(Get-Location)" -ForegroundColor Yellow
@@ -219,7 +251,12 @@ jobs:
 
           # Build Cython extension with obfuscation
           Write-Host "Building Cython extension with obfuscation..." -ForegroundColor Yellow
-          python setup_cython.py build_ext --inplace
+          if ("${{ github.event.inputs.debug_mode }}" -eq "true") {
+            Write-Host "Debug mode enabled - building with debug information..." -ForegroundColor Yellow
+            python setup_cython.py build_ext --inplace --debug
+          } else {
+            python setup_cython.py build_ext --inplace
+          }
 
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Cython build failed" -ForegroundColor Red
@@ -516,14 +553,14 @@ jobs:
       - name: Upload Cython DLL Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BloodPressureEstimation-Cython-DLL-${{ github.sha }}
+          name: BloodPressureEstimation-Cython-DLL-${{ github.sha }}${{ github.event_name == 'workflow_dispatch' && '-MANUAL' || '' }}
           path: dist_cython/
           retention-days: 30
 
       - name: Upload Obfuscation Report
         uses: actions/upload-artifact@v4
         with:
-          name: obfuscation-analysis-report-${{ github.sha }}
+          name: obfuscation-analysis-report-${{ github.sha }}${{ github.event_name == 'workflow_dispatch' && '-MANUAL' || '' }}
           path: obfuscation_report.md
           retention-days: 30
 
@@ -531,7 +568,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: cython-build-logs-${{ github.sha }}
+          name: cython-build-logs-${{ github.sha }}${{ github.event_name == 'workflow_dispatch' && '-MANUAL' || '' }}
           path: |
             build/
             dist_cython/
