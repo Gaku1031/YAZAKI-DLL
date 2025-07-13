@@ -418,20 +418,49 @@ jobs:
           Write-Host "Setting up test environment..." -ForegroundColor Yellow
 
           # Copy Windows DLL (including .pyd files which are Windows DLLs)
+          Write-Host "Checking for built files..." -ForegroundColor Yellow
+          Get-ChildItem -Filter "BloodPressureEstimation*" | ForEach-Object { Write-Host "Found: $($_.Name)" -ForegroundColor Cyan }
+
           $dllFiles = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
+          $copiedFiles = @()
+
           foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
-            foreach ($file in $files) {
-              # If it's a .pyd file, rename it to .dll for C# compatibility
-              if ($file.Extension -eq ".pyd") {
-                $dllName = $file.BaseName + ".dll"
-                Copy-Item $file "tests\CSharpTest\$dllName"
-                Write-Host "[OK] Copied and renamed $($file.Name) to $dllName" -ForegroundColor Green
-              } else {
-                Copy-Item $file "tests\CSharpTest\"
-                Write-Host "[OK] Copied $($file.Name) to test directory" -ForegroundColor Green
+            if ($files) {
+              foreach ($file in $files) {
+                Write-Host "Processing file: $($file.Name)" -ForegroundColor Yellow
+                # If it's a .pyd file, rename it to .dll for C# compatibility
+                if ($file.Extension -eq ".pyd") {
+                  $dllName = $file.BaseName + ".dll"
+                  Copy-Item $file "tests\CSharpTest\$dllName"
+                  $copiedFiles += $dllName
+                  Write-Host "[OK] Copied and renamed $($file.Name) to $dllName" -ForegroundColor Green
+                } else {
+                  Copy-Item $file "tests\CSharpTest\"
+                  $copiedFiles += $file.Name
+                  Write-Host "[OK] Copied $($file.Name) to test directory" -ForegroundColor Green
+                }
               }
+            } else {
+              Write-Host "[WARNING] No files found matching pattern: $pattern" -ForegroundColor Yellow
             }
+          }
+
+          Write-Host "Files in tests\CSharpTest\:" -ForegroundColor Yellow
+          Get-ChildItem "tests\CSharpTest\" -Filter "BloodPressureEstimation*" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
+
+          # Update C# project file to reference the actual DLL file
+          $actualDllFile = Get-ChildItem "tests\CSharpTest\" -Filter "BloodPressureEstimation*.dll" | Select-Object -First 1
+          if ($actualDllFile) {
+            Write-Host "Found DLL file: $($actualDllFile.Name)" -ForegroundColor Green
+            # Update the .csproj file to reference the actual file
+            $csprojContent = Get-Content "tests\CSharpTest\BloodPressureTest.csproj" -Raw
+            $csprojContent = $csprojContent -replace 'BloodPressureEstimation\.dll', $actualDllFile.Name
+            Set-Content "tests\CSharpTest\BloodPressureTest.csproj" $csprojContent -Encoding UTF8
+            Write-Host "Updated .csproj to reference: $($actualDllFile.Name)" -ForegroundColor Green
+          } else {
+            Write-Host "[ERROR] No DLL file found in tests\CSharpTest\" -ForegroundColor Red
+            exit 1
           }
 
           # Copy models (prioritize compressed models)
