@@ -27,19 +27,22 @@ jobs:
       - name: Verify Python Environment
         run: |
           $ErrorActionPreference = "Continue"
-          
+
           Write-Host "Python Environment Information:" -ForegroundColor Cyan
           python --version
           python -c "import sys; print('Python path:', sys.executable)"
           python -c "import sys; print('Python paths:', sys.path[:3])"
-          
+
           Write-Host "Cleaning up any conflicting packages..." -ForegroundColor Yellow
-          
-          # Simple cleanup - ignore any errors
-          pip uninstall numpy opencv-python opencv-python-headless -y --quiet 2>$null
-          
+
+          # Comprehensive cleanup - ignore any errors
+          pip uninstall numpy opencv-python opencv-python-headless scipy scikit-learn joblib -y --quiet 2>$null
+
+          # Clear pip cache to avoid conflicts
+          pip cache purge
+
           Write-Host "Python environment prepared" -ForegroundColor Green
-          
+
           # Reset error action preference
           $ErrorActionPreference = "Stop"
         shell: powershell
@@ -55,66 +58,73 @@ jobs:
       - name: Install Python dependencies (minimal)
         run: |
           $ErrorActionPreference = "Stop"
-          
+
           Write-Host "Installing Python dependencies..." -ForegroundColor Cyan
-          
+
           # Upgrade pip first
           python -m pip install --upgrade pip
-      
+
           # Install Nuitka (no dependency issues)
           Write-Host "Installing Nuitka..." -ForegroundColor Yellow
           pip install nuitka --force-reinstall
-      
-          # Install NumPy 1.24.3 and pin it with no-deps
+
+          # Install NumPy 1.24.3 (compatible with OpenCV 4.8.1.78)
           Write-Host "Installing NumPy 1.24.3..." -ForegroundColor Yellow
-          pip install numpy==1.24.3 --force-reinstall --no-deps
-      
+          pip install numpy==1.24.3 --force-reinstall
+
           # Install OpenCV compatible with NumPy 1.24.3
           Write-Host "Installing OpenCV..." -ForegroundColor Yellow  
           pip install opencv-python-headless==4.8.1.78 --force-reinstall
-      
-          # Install other dependencies
+
+          # Install other dependencies with compatible versions
           Write-Host "Installing scikit-learn..." -ForegroundColor Yellow
           pip install scikit-learn==1.3.0 --force-reinstall
-      
+
           Write-Host "Installing joblib..." -ForegroundColor Yellow
           pip install joblib==1.3.2 --force-reinstall
-      
+
+          # Install scipy compatible with NumPy 1.24.3
+          Write-Host "Installing scipy..." -ForegroundColor Yellow
+          pip install scipy==1.11.4 --force-reinstall
+
           # Skip MediaPipe
           Write-Host "Skipping MediaPipe to avoid conflicts" -ForegroundColor Yellow
-      
+
           # Install from requirements_minimal.txt only if it exists (but skip numpy to avoid override)
           if (Test-Path requirements_minimal.txt) {
             Write-Host "Installing from requirements_minimal.txt (excluding NumPy)..." -ForegroundColor Yellow
             pip install -r requirements_minimal.txt --no-deps
           }
-      
+
           Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
-      
+
           # Check installed packages
           pip list
-      
+
           # Run pip check to confirm no broken dependencies
           Write-Host "Running pip check..." -ForegroundColor Yellow
           pip check
-      
+
           # Test critical imports
           Write-Host "Testing NumPy..." -ForegroundColor Gray
           python -c "import numpy; print('NumPy version:', numpy.__version__)"
-      
+
           Write-Host "Testing NumPy core..." -ForegroundColor Gray  
           python -c "import numpy.core; print('NumPy core modules available')"
-      
+
           Write-Host "Testing OpenCV..." -ForegroundColor Gray
           python -c "import cv2; print('OpenCV version:', cv2.__version__)"
-      
+
+          Write-Host "Testing scikit-learn..." -ForegroundColor Gray
+          python -c "import sklearn; print('scikit-learn version:', sklearn.__version__)"
+
           Write-Host "Package installation and verification completed" -ForegroundColor Green
         shell: powershell
 
       - name: Prepare Models Directory
         run: |
           Write-Host "Preparing models directory..." -ForegroundColor Yellow
-          
+
           # Check if models_compressed exists, if not use models or create empty
           if (Test-Path "models_compressed") {
             Write-Host "Found models_compressed directory" -ForegroundColor Green
@@ -133,12 +143,12 @@ jobs:
 
           # Additional environment setup for NumPy/OpenCV compatibility
           Write-Host "Setting up NumPy/OpenCV compatibility environment..." -ForegroundColor Yellow
-          
+
           # Set environment variables to help with NumPy compatibility
           $env:OPENBLAS_NUM_THREADS = "1"
           $env:NUMPY_EXPERIMENTAL_ARRAY_FUNCTION = "0"
           $env:OMP_NUM_THREADS = "1"
-          
+
           Write-Host "Environment variables set for compatibility" -ForegroundColor Green
         shell: powershell
 
@@ -317,10 +327,10 @@ jobs:
 
           # Run optimized build with fallback strategy
           Write-Host "Running optimized build with fallback strategy..." -ForegroundColor Yellow
-          
+
           # Try optimized build first
           python build_optimized_dll.py
-          
+
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Optimized build failed, trying fallback build without problematic optimizations..." -ForegroundColor Yellow
             
