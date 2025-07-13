@@ -269,8 +269,8 @@ jobs:
 
           Write-Host "Cython extension built successfully" -ForegroundColor Green
 
-          # Check for built DLL
-          $dllFiles = @("BloodPressureEstimation*.dll")
+          # Check for built DLL (including .pyd files which are Windows DLLs)
+          $dllFiles = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
           foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             if ($files) {
@@ -299,8 +299,8 @@ jobs:
         run: |
           Write-Host "Verifying Cython DLL..." -ForegroundColor Yellow
 
-          # Check for built DLL
-          $dllFiles = @("BloodPressureEstimation*.dll")
+          # Check for built DLL (including .pyd files which are Windows DLLs)
+          $dllFiles = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
           $totalSize = 0
           $dllCount = 0
 
@@ -363,8 +363,8 @@ jobs:
           # Create dist_cython directory
           New-Item -ItemType Directory -Path "dist_cython" -Force | Out-Null
 
-          # Copy built extensions
-          $extensions = @("BloodPressureEstimation*.dll")
+          # Copy built extensions (including .pyd files which are Windows DLLs)
+          $extensions = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
           foreach ($pattern in $extensions) {
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
@@ -409,8 +409,8 @@ jobs:
         run: |
           Write-Host "Setting up test environment..." -ForegroundColor Yellow
 
-          # Copy Windows DLL
-          $dllFiles = @("BloodPressureEstimation*.dll")
+          # Copy Windows DLL (including .pyd files which are Windows DLLs)
+          $dllFiles = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
           foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
