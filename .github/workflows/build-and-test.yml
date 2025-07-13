@@ -35,34 +35,41 @@ jobs:
       - name: Install Python dependencies (minimal)
         run: |
           python -m pip install --upgrade pip
+          
           # Install Nuitka first
           pip install nuitka
           
-          # Install compatible versions to avoid conflicts
-          pip install numpy==1.24.3
-          pip install opencv-python-headless==4.9.0.80
+          # Install compatible versions to avoid NumPy/OpenCV conflicts
+          # Use older, more stable versions
+          pip install numpy==1.21.6
+          pip install opencv-python-headless==4.6.0.66
           
-          # Install other dependencies with specific versions
-          pip install scikit-learn==1.3.0
-          pip install joblib==1.3.2
+          # Install other dependencies with compatible versions
+          pip install scikit-learn==1.1.3
+          pip install joblib==1.2.0
           
-          # Install mediapipe with caution (known to cause issues)
-          # Use --no-deps to avoid dependency conflicts
-          try {
-            pip install mediapipe==0.10.3 --no-deps
-            Write-Host "MediaPipe installed successfully" -ForegroundColor Green
-          } catch {
-            Write-Host "MediaPipe installation failed, continuing without it" -ForegroundColor Yellow
-          }
+          # Skip problematic packages entirely for initial build
+          Write-Host "Skipping MediaPipe to avoid conflicts" -ForegroundColor Yellow
           
           # Install minimal requirements if available
           if (Test-Path requirements_minimal.txt) {
+            Write-Host "Installing from requirements_minimal.txt..." -ForegroundColor Yellow
             pip install -r requirements_minimal.txt
           }
           
-          # Verify critical packages
-          python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
-          python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
+          # Verify critical packages work together
+          Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
+          python -c "import numpy; print(f'NumPy version: {numpy.__version__}'); print(f'NumPy array API available: {hasattr(numpy.core, \"multiarray\")}')"
+          
+          try {
+            python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
+            Write-Host "OpenCV imported successfully" -ForegroundColor Green
+          } catch {
+            Write-Host "OpenCV import failed, trying alternative approach..." -ForegroundColor Yellow
+            pip uninstall opencv-python-headless -y
+            pip install opencv-python==4.5.5.64
+            python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
+          }
         shell: powershell
 
       - name: Prepare Models Directory
@@ -84,6 +91,16 @@ jobs:
             "# Placeholder file" | Out-File -FilePath "models_compressed\placeholder.txt" -Encoding UTF8
             Write-Host "Created empty models_compressed directory with placeholder" -ForegroundColor Green
           }
+
+          # Additional environment setup for NumPy/OpenCV compatibility
+          Write-Host "Setting up NumPy/OpenCV compatibility environment..." -ForegroundColor Yellow
+          
+          # Set environment variables to help with NumPy compatibility
+          $env:OPENBLAS_NUM_THREADS = "1"
+          $env:NUMPY_EXPERIMENTAL_ARRAY_FUNCTION = "0"
+          $env:OMP_NUM_THREADS = "1"
+          
+          Write-Host "Environment variables set for compatibility" -ForegroundColor Green
         shell: powershell
 
       - name: Build Optimized 20MB DLL
@@ -150,7 +167,23 @@ jobs:
             "    models_dir_exists = os.path.exists('models_compressed')",
             "    print(f'Models directory exists: {models_dir_exists}')",
             "    ",
-            "    # Base Nuitka command with conservative optimization",
+            "    # Test imports before building",
+            "    print('Testing critical imports...')",
+            "    try:",
+            "        import numpy",
+            "        print(f'NumPy {numpy.__version__} imported successfully')",
+            "    except Exception as e:",
+            "        print(f'NumPy import failed: {e}')",
+            "        return False",
+            "    ",
+            "    try:",
+            "        import cv2",
+            "        print(f'OpenCV {cv2.__version__} imported successfully')",
+            "    except Exception as e:",
+            "        print(f'OpenCV import failed: {e}')",
+            "        print('Continuing without OpenCV...')",
+            "    ",
+            "    # Very conservative Nuitka command",
             "    nuitka_cmd = [",
             "        sys.executable, '-m', 'nuitka',",
             "        '--standalone',",
@@ -159,38 +192,23 @@ jobs:
             "        '--output-dir=dist',",
             "        '--remove-output',",
             "        '--assume-yes-for-downloads',",
-            "        # Conservative optimization flags",
-            "        '--lto=no',  # Disable LTO to avoid linking issues",
             "        '--no-progress-bar',",
             "        '--show-scons',",
-            "        # Exclude problematic modules more selectively",
+            "        # Only essential exclusions",
             "        '--nofollow-import-to=tkinter',",
             "        '--nofollow-import-to=matplotlib',",
-            "        '--nofollow-import-to=PIL',",
             "        '--nofollow-import-to=torch',",
             "        '--nofollow-import-to=tensorflow',",
             "        '--nofollow-import-to=pandas',",
             "        '--nofollow-import-to=plotly',",
-            "        '--nofollow-import-to=seaborn',",
-            "        '--nofollow-import-to=IPython',",
-            "        '--nofollow-import-to=jupyter',",
-            "        '--nofollow-import-to=notebook',",
-            "        '--nofollow-import-to=sphinx',",
-            "        '--nofollow-import-to=pytest',",
-            "        '--nofollow-import-to=setuptools',",
-            "        '--nofollow-import-to=wheel',",
-            "        '--nofollow-import-to=pip',",
-            "        # Add specific workarounds for NumPy/OpenCV",
-            "        '--enable-plugin=numpy',",
+            "        # Force include NumPy core modules",
+            "        '--include-module=numpy',",
+            "        '--include-module=numpy.core',",
+            "        '--include-module=numpy.core.multiarray',",
             "        '--include-module=numpy.core._multiarray_umath',",
-            "        '--include-module=numpy.random._common',",
-            "        '--include-module=numpy.random.bit_generator',",
-            "        '--include-module=numpy.random._bounded_integers',",
-            "        '--include-module=numpy.random.mtrand',",
-            "        '--include-module=numpy.random._pickle',",
-            "        '--include-module=numpy.random._generator',",
-            "        # Conservative Python optimization",
-            "        '--python-flag=-O',",
+            "        '--include-module=numpy.lib',",
+            "        '--include-module=numpy.linalg',",
+            "        # No aggressive optimizations",
             "    ]",
             "    ",
             "    # Add model directory only if it exists",
@@ -203,7 +221,7 @@ jobs:
             "    # Add the Python file to compile",
             "    nuitka_cmd.append('bp_estimation_optimized.py')",
             "    ",
-            "    print('Running Nuitka with conservative optimizations...')",
+            "    print('Running Nuitka with conservative settings...')",
             "    print(' '.join(nuitka_cmd))",
             "    ",
             "    try:",
@@ -245,7 +263,9 @@ jobs:
               "import os",
               "",
               "def build_fallback_dll():",
-              "    # Minimal Nuitka command for compatibility",
+              "    print('Building with minimal Nuitka configuration...')",
+              "    ",
+              "    # Absolute minimal Nuitka command",
               "    nuitka_cmd = [",
               "        sys.executable, '-m', 'nuitka',",
               "        '--standalone',",
@@ -255,15 +275,14 @@ jobs:
               "        '--remove-output',",
               "        '--assume-yes-for-downloads',",
               "        '--no-progress-bar',",
-              "        # Minimal exclusions",
+              "        # Only exclude absolutely problematic modules",
               "        '--nofollow-import-to=tkinter',",
-              "        '--nofollow-import-to=matplotlib',",
               "        '--nofollow-import-to=torch',",
               "        '--nofollow-import-to=tensorflow',",
               "        'bp_estimation_optimized.py'",
               "    ]",
               "    ",
-              "    print('Running fallback Nuitka build...')",
+              "    print('Running minimal Nuitka build...')",
               "    print(' '.join(nuitka_cmd))",
               "    ",
               "    try:",
@@ -273,13 +292,38 @@ jobs:
               "            print('STDERR:', result.stderr)",
               "        ",
               "        if result.returncode == 0:",
-              "            print('Fallback build successful!')",
+              "            print('Minimal build successful!')",
               "            return True",
               "        else:",
-              "            print(f'Fallback build failed with return code {result.returncode}')",
-              "            return False",
+              "            print(f'Minimal build failed with return code {result.returncode}')",
+              "            # Try even more basic approach",
+              "            return build_ultra_minimal()",
               "    except Exception as e:",
-              "        print(f'Error running fallback Nuitka: {e}')",
+              "        print(f'Error running minimal Nuitka: {e}')",
+              "        return False",
+              "",
+              "def build_ultra_minimal():",
+              "    print('Trying ultra-minimal build without any exclusions...')",
+              "    ",
+              "    nuitka_cmd = [",
+              "        sys.executable, '-m', 'nuitka',",
+              "        '--standalone',",
+              "        '--mingw64',",
+              "        '--output-filename=BloodPressureEstimation.dll',",
+              "        '--output-dir=dist',",
+              "        '--remove-output',",
+              "        '--assume-yes-for-downloads',",
+              "        'bp_estimation_optimized.py'",
+              "    ]",
+              "    ",
+              "    try:",
+              "        result = subprocess.run(nuitka_cmd, capture_output=True, text=True)",
+              "        print('ULTRA MINIMAL STDOUT:', result.stdout)",
+              "        if result.stderr:",
+              "            print('ULTRA MINIMAL STDERR:', result.stderr)",
+              "        return result.returncode == 0",
+              "    except Exception as e:",
+              "        print(f'Ultra minimal build error: {e}')",
               "        return False",
               "",
               "if __name__ == '__main__':",
