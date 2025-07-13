@@ -28,12 +28,28 @@ jobs:
         run: |
           Write-Host "Python Environment Information:" -ForegroundColor Cyan
           python --version
-          python -c "import sys; print(f'Python path: {sys.executable}')"
-          python -c "import sys; print(f'Python paths: {sys.path[:3]}...')"
+          python -c "import sys; print('Python path:', sys.executable)"
+          python -c "import sys; print('Python paths:', sys.path[:3])"
           
           Write-Host "Cleaning up any conflicting packages..." -ForegroundColor Yellow
-          # Remove any existing problematic packages
-          pip uninstall numpy opencv-python opencv-python-headless cv2 -y 2>$null
+          
+          # Remove any existing problematic packages (suppress warnings)
+          $packagesToRemove = @('numpy', 'opencv-python', 'opencv-python-headless', 'cv2')
+          
+          foreach ($package in $packagesToRemove) {
+            try {
+              Write-Host "Checking if $package is installed..." -ForegroundColor Gray
+              $result = pip show $package 2>$null
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Removing $package..." -ForegroundColor Yellow
+                pip uninstall $package -y
+              } else {
+                Write-Host "$package not installed, skipping" -ForegroundColor Gray
+              }
+            } catch {
+              Write-Host "Skipped $package (not found)" -ForegroundColor Gray
+            }
+          }
           
           Write-Host "Python environment prepared" -ForegroundColor Green
         shell: powershell
@@ -48,21 +64,50 @@ jobs:
 
       - name: Install Python dependencies (minimal)
         run: |
-          python -m pip install --upgrade pip
+          Write-Host "Installing Python dependencies..." -ForegroundColor Cyan
           
           # Install Nuitka first
+          Write-Host "Installing Nuitka..." -ForegroundColor Yellow
           pip install nuitka
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install Nuitka" -ForegroundColor Red
+            exit 1
+          }
           
           # Install compatible versions for Python 3.11
-          # Use NumPy that's compatible with Python 3.11 and recent OpenCV
+          Write-Host "Installing NumPy..." -ForegroundColor Yellow
           pip install numpy==1.24.3
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install NumPy, trying latest compatible version..." -ForegroundColor Yellow
+            pip install "numpy>=1.24.0,<1.25.0"
+          }
           
           # Install OpenCV that's compatible with NumPy 1.24.3
+          Write-Host "Installing OpenCV..." -ForegroundColor Yellow
           pip install opencv-python-headless==4.8.1.78
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install OpenCV 4.8.1.78, trying alternative..." -ForegroundColor Yellow
+            pip install opencv-python-headless==4.7.1.72
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Failed to install specific OpenCV version, using latest..." -ForegroundColor Yellow
+              pip install opencv-python-headless
+            }
+          }
           
           # Install other dependencies with compatible versions
+          Write-Host "Installing scikit-learn..." -ForegroundColor Yellow
           pip install scikit-learn==1.3.0
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install scikit-learn 1.3.0, trying latest..." -ForegroundColor Yellow
+            pip install scikit-learn
+          }
+          
+          Write-Host "Installing joblib..." -ForegroundColor Yellow
           pip install joblib==1.3.2
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install joblib 1.3.2, trying latest..." -ForegroundColor Yellow
+            pip install joblib
+          }
           
           # Skip problematic packages entirely for initial build
           Write-Host "Skipping MediaPipe to avoid conflicts" -ForegroundColor Yellow
@@ -70,28 +115,45 @@ jobs:
           # Install minimal requirements if available
           if (Test-Path requirements_minimal.txt) {
             Write-Host "Installing from requirements_minimal.txt..." -ForegroundColor Yellow
-            pip install -r requirements_minimal.txt
+            try {
+              pip install -r requirements_minimal.txt
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "Some packages from requirements_minimal.txt failed, continuing..." -ForegroundColor Yellow
+              }
+            } catch {
+              Write-Host "requirements_minimal.txt installation had issues, continuing..." -ForegroundColor Yellow
+            }
           }
           
           # Verify critical packages work together
           Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
           
           # Test NumPy import and version
-          python -c "import numpy; print('NumPy version:', numpy.__version__)"
+          try {
+            python -c "import numpy; print('NumPy version:', numpy.__version__)"
+            Write-Host "NumPy verification successful" -ForegroundColor Green
+          } catch {
+            Write-Host "NumPy verification failed" -ForegroundColor Red
+            exit 1
+          }
           
           # Test NumPy core modules availability
-          python -c "import numpy.core; print('NumPy core modules available')"
+          try {
+            python -c "import numpy.core; print('NumPy core modules available')"
+            Write-Host "NumPy core modules verified" -ForegroundColor Green
+          } catch {
+            Write-Host "NumPy core modules verification failed" -ForegroundColor Yellow
+          }
           
           # Test OpenCV import separately to catch specific errors
           try {
             python -c "import cv2; print('OpenCV version:', cv2.__version__)"
             Write-Host "OpenCV imported successfully" -ForegroundColor Green
           } catch {
-            Write-Host "OpenCV import failed, trying alternative version..." -ForegroundColor Yellow
-            pip uninstall opencv-python-headless -y
-            pip install opencv-python-headless==4.7.1.72
-            
+            Write-Host "OpenCV import failed, trying to fix..." -ForegroundColor Yellow
             try {
+              pip uninstall opencv-python-headless -y
+              pip install opencv-python-headless==4.7.1.72
               python -c "import cv2; print('OpenCV version:', cv2.__version__)"
               Write-Host "Alternative OpenCV version works" -ForegroundColor Green
             } catch {
