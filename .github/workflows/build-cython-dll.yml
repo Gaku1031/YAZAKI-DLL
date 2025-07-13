@@ -532,11 +532,22 @@ jobs:
           python -c "import sys; print('Python path:'); [print(p) for p in sys.path]" 2>$null
 
           # Test import
-          $importTest = python -c "import bp_estimation_cython; print('Cython module imported successfully')" 2>&1
+          Write-Host "Checking for Python modules in tests\CSharpTest\:" -ForegroundColor Yellow
+          Get-ChildItem "tests\CSharpTest\" -Filter "*.pyd" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
+          Get-ChildItem "tests\CSharpTest\" -Filter "*.dll" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
+
+          $importTest = python -c "import BloodPressureEstimation; print('Cython module imported successfully')" 2>&1
           if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] Cython module can be imported" -ForegroundColor Green
           } else {
             Write-Host "[WARNING] Cython module import test failed: $importTest" -ForegroundColor Yellow
+            Write-Host "Trying alternative import..." -ForegroundColor Yellow
+            $importTest2 = python -c "import sys; sys.path.append('.'); import BloodPressureEstimation; print('Cython module imported successfully')" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "[OK] Cython module can be imported with sys.path" -ForegroundColor Green
+            } else {
+              Write-Host "[WARNING] Alternative import also failed: $importTest2" -ForegroundColor Yellow
+            }
           }
         shell: powershell
 
