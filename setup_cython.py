@@ -57,7 +57,7 @@ cython_extensions = cythonize(
     compiler_directives={
         "language_level": 3,
         "boundscheck": False,
-        "wraparound": False,
+        "wraparound": True,  # Allow negative indexing
         "cdivision": True,
         "nonecheck": False,
         "embedsignature": False,

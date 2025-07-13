@@ -1,7 +1,7 @@
 # cython: language_level=3
 # distutils: language=c++
 # cython: boundscheck=False
-# cython: wraparound=False
+# cython: wraparound=True
 # cython: cdivision=True
 # cython: nonecheck=False
 

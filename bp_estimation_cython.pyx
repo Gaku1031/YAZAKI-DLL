@@ -1,7 +1,7 @@
 # cython: language_level=3
 # distutils: language=c++
 # cython: boundscheck=False
-# cython: wraparound=False
+# cython: wraparound=True
 # cython: cdivision=True
 # cython: nonecheck=False
 
@@ -321,7 +321,7 @@ class BloodPressureEstimator:
         # Feature calculation
         rri_array = np.array(rri_values)
         bmi = weight / ((height / 100) ** 2)
-        sex_feature = 1 if sex == 1 else 0  # 1=male, 2=female → 1=male, 0=female
+        sex_feature = 1 if sex == 1 else 0  # 1=male, 2=female -> 1=male, 0=female
 
         feature_vector = np.array([
             rri_array.mean(),
@@ -387,9 +387,10 @@ class CythonBPEstimator:
         if not request_id:
             return False
 
-        # ${yyyyMMddHHmmssfff}_${顧客コード}_${乗務員コード}
+        # Request ID format: yyyyMMddHHmmssfff_customer_code_driver_code
         pattern = r'^\d{17}_\d{10}_\d{10}$'
-        return bool(re.match(pattern, request_id))
+        match_result = re.match(pattern, request_id)
+        return match_result is not None
 
     def start_blood_pressure_analysis_request(self, request_id: str, height: int,
                                               weight: int, sex: int,
