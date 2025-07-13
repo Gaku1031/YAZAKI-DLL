@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script to create Windows DLL from Cython code
+Setup script to create pure Windows DLL from Cython code
 """
 
 from setuptools import setup, Extension
@@ -8,7 +8,7 @@ from Cython.Build import cythonize
 import numpy as np
 import os
 
-# Define the Cython extension as a DLL
+# Define the Cython extension as a pure Windows DLL
 extensions = [
     Extension(
         "BloodPressureEstimation",  # DLL name
@@ -17,7 +17,13 @@ extensions = [
         libraries=["python311"],  # Link with Python library
         define_macros=[("MS_WIN64", None)],  # Windows 64-bit
         extra_compile_args=["/O2", "/MD"],  # Optimize and use MD runtime
-        extra_link_args=["/DLL"]
+        extra_link_args=["/DLL", "/EXPORT:InitializeDLL",
+                         "/EXPORT:StartBloodPressureAnalysisRequest",
+                         "/EXPORT:GetProcessingStatus",
+                         "/EXPORT:CancelBloodPressureAnalysis",
+                         "/EXPORT:GetVersionInfo",
+                         "/EXPORT:GenerateRequestId",
+                         "/EXPORT:DllMain"]
     )
 ]
 

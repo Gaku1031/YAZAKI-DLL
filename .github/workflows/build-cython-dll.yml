@@ -269,17 +269,17 @@ jobs:
 
           Write-Host "Cython extension built successfully" -ForegroundColor Green
 
-          # Check for built DLL (including .pyd files which are Windows DLLs)
-          $dllFiles = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
+          # Check for built pure Windows DLL
+          $dllFiles = @("BloodPressureEstimation*.dll")
           foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             if ($files) {
               foreach ($file in $files) {
                 $size = [math]::Round($file.Length / 1MB, 2)
-                Write-Host "[OK] Built DLL: $($file.Name) ($size MB)" -ForegroundColor Green
+                Write-Host "[OK] Built pure Windows DLL: $($file.Name) ($size MB)" -ForegroundColor Green
               }
             } else {
-              Write-Host "[WARNING] No files found matching pattern: $pattern" -ForegroundColor Yellow
+              Write-Host "[WARNING] No pure Windows DLL found matching pattern: $pattern" -ForegroundColor Yellow
             }
           }
 
@@ -299,8 +299,8 @@ jobs:
         run: |
           Write-Host "Verifying Cython DLL..." -ForegroundColor Yellow
 
-          # Check for built DLL (including .pyd files which are Windows DLLs)
-          $dllFiles = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
+          # Check for built pure Windows DLL
+          $dllFiles = @("BloodPressureEstimation*.dll")
           $totalSize = 0
           $dllCount = 0
 
@@ -312,7 +312,7 @@ jobs:
                 $sizeMB = [math]::Round($size / 1MB, 2)
                 $totalSize += $size
                 $dllCount++
-                Write-Host "DLL: $($file.Name) ($sizeMB MB)" -ForegroundColor Cyan
+                Write-Host "Pure Windows DLL: $($file.Name) ($sizeMB MB)" -ForegroundColor Cyan
               }
             }
           }
@@ -363,22 +363,14 @@ jobs:
           # Create dist_cython directory
           New-Item -ItemType Directory -Path "dist_cython" -Force | Out-Null
 
-          # Copy built extensions (including .pyd files which are Windows DLLs)
-          $extensions = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
+          # Copy built pure Windows DLL
+          $extensions = @("BloodPressureEstimation*.dll")
           foreach ($pattern in $extensions) {
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
-              # If it's a .pyd file, rename it to .dll for C# compatibility
-              if ($file.Extension -eq ".pyd") {
-                $dllName = $file.BaseName + ".dll"
-                Copy-Item $file "dist_cython\$dllName"
-                $size = [math]::Round($file.Length / 1MB, 2)
-                Write-Host "[OK] Copied and renamed $($file.Name) to $dllName ($size MB)" -ForegroundColor Green
-              } else {
-                Copy-Item $file "dist_cython\"
-                $size = [math]::Round($file.Length / 1MB, 2)
-                Write-Host "[OK] Copied $($file.Name) ($size MB) to distribution" -ForegroundColor Green
-              }
+              Copy-Item $file "dist_cython\"
+              $size = [math]::Round($file.Length / 1MB, 2)
+              Write-Host "[OK] Copied pure Windows DLL $($file.Name) ($size MB) to distribution" -ForegroundColor Green
             }
           }
 
@@ -417,11 +409,11 @@ jobs:
         run: |
           Write-Host "Setting up test environment..." -ForegroundColor Yellow
 
-          # Copy Windows DLL (including .pyd files which are Windows DLLs)
+          # Copy pure Windows DLL
           Write-Host "Checking for built files..." -ForegroundColor Yellow
           Get-ChildItem -Filter "BloodPressureEstimation*" | ForEach-Object { Write-Host "Found: $($_.Name)" -ForegroundColor Cyan }
 
-          $dllFiles = @("BloodPressureEstimation*.dll", "BloodPressureEstimation*.pyd")
+          $dllFiles = @("BloodPressureEstimation*.dll")
           $copiedFiles = @()
 
           foreach ($pattern in $dllFiles) {
@@ -429,20 +421,12 @@ jobs:
             if ($files) {
               foreach ($file in $files) {
                 Write-Host "Processing file: $($file.Name)" -ForegroundColor Yellow
-                # If it's a .pyd file, rename it to .dll for C# compatibility
-                if ($file.Extension -eq ".pyd") {
-                  $dllName = $file.BaseName + ".dll"
-                  Copy-Item $file "tests\CSharpTest\$dllName"
-                  $copiedFiles += $dllName
-                  Write-Host "[OK] Copied and renamed $($file.Name) to $dllName" -ForegroundColor Green
-                } else {
-                  Copy-Item $file "tests\CSharpTest\"
-                  $copiedFiles += $file.Name
-                  Write-Host "[OK] Copied $($file.Name) to test directory" -ForegroundColor Green
-                }
+                Copy-Item $file "tests\CSharpTest\"
+                $copiedFiles += $file.Name
+                Write-Host "[OK] Copied pure Windows DLL $($file.Name) to test directory" -ForegroundColor Green
               }
             } else {
-              Write-Host "[WARNING] No files found matching pattern: $pattern" -ForegroundColor Yellow
+              Write-Host "[WARNING] No pure Windows DLL found matching pattern: $pattern" -ForegroundColor Yellow
             }
           }
 
@@ -549,7 +533,6 @@ jobs:
               Write-Host "[WARNING] Alternative import also failed: $importTest2" -ForegroundColor Yellow
             }
           }
-        shell: powershell
 
       - name: Run C# Integration Tests
         shell: powershell
@@ -559,14 +542,6 @@ jobs:
           $testExe = "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe"
           if (Test-Path $testExe) {
             Write-Host "Test executable found: $testExe" -ForegroundColor Green
-            
-            # Set environment variables for the test process
-            $env:PYTHONPATH = "tests\CSharpTest;$env:PYTHONPATH"
-            $env:PYTHONHOME = "C:\hostedtoolcache\windows\Python\3.11.9\x64"
-            
-            Write-Host "Environment variables set:" -ForegroundColor Cyan
-            Write-Host "  PYTHONPATH: $env:PYTHONPATH" -ForegroundColor Cyan
-            Write-Host "  PYTHONHOME: $env:PYTHONHOME" -ForegroundColor Cyan
             
             try {
               $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru
