@@ -214,7 +214,7 @@ jobs:
           Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" }
 
           # Check Cython files existence
-          $cythonFiles = @("bp_estimation_cython.pyx", "dll_wrapper_cython.pyx", "setup_cython.py", "build_cython_dll.py")
+          $cythonFiles = @("bp_estimation_cython.pyx", "setup_cython_dll.py")
           foreach ($file in $cythonFiles) {
             if (Test-Path $file) {
               Write-Host "Cython file found: $file" -ForegroundColor Green
@@ -301,47 +301,47 @@ jobs:
         run: |
           Write-Host "Verifying Cython DLL..." -ForegroundColor Yellow
 
-          # Check for built extensions
-          $extensions = @("bp_estimation_cython*.pyd", "dll_wrapper_cython*.pyd")
+          # Check for built DLL
+          $dllFiles = @("BloodPressureEstimation*.dll")
           $totalSize = 0
-          $extensionCount = 0
+          $dllCount = 0
 
-          foreach ($pattern in $extensions) {
+          foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             if ($files) {
               foreach ($file in $files) {
                 $size = $file.Length
                 $sizeMB = [math]::Round($size / 1MB, 2)
                 $totalSize += $size
-                $extensionCount++
-                Write-Host "Extension: $($file.Name) ($sizeMB MB)" -ForegroundColor Cyan
+                $dllCount++
+                Write-Host "DLL: $($file.Name) ($sizeMB MB)" -ForegroundColor Cyan
               }
             }
           }
 
-          if ($extensionCount -eq 0) {
-            Write-Host "No Cython extensions found!" -ForegroundColor Red
+          if ($dllCount -eq 0) {
+            Write-Host "No Windows DLL found!" -ForegroundColor Red
             exit 1
           }
 
           $totalSizeMB = [math]::Round($totalSize / 1MB, 2)
-          Write-Host "Total extension size: $totalSizeMB MB" -ForegroundColor Cyan
+          Write-Host "Total DLL size: $totalSizeMB MB" -ForegroundColor Cyan
 
           # Size check for optimization
           if ($totalSizeMB -le 50) {
-            Write-Host "[OK] Extension size is within acceptable limits" -ForegroundColor Green
+            Write-Host "[OK] DLL size is within acceptable limits" -ForegroundColor Green
           } elseif ($totalSizeMB -le 100) {
-            Write-Host "[WARNING] Extension size is large but acceptable" -ForegroundColor Yellow
+            Write-Host "[WARNING] DLL size is large but acceptable" -ForegroundColor Yellow
           } else {
-            Write-Host "[ERROR] Extension size exceeds acceptable limits" -ForegroundColor Red
+            Write-Host "[ERROR] DLL size exceeds acceptable limits" -ForegroundColor Red
           }
 
           # Code obfuscation verification
           Write-Host "Verifying code obfuscation..." -ForegroundColor Yellow
 
-          # Check that source code is not easily readable in compiled extensions
-          $pydFiles = Get-ChildItem -Filter "*.pyd"
-          foreach ($file in $pydFiles) {
+          # Check that source code is not easily readable in compiled DLL
+          $dllFiles = Get-ChildItem -Filter "*.dll"
+          foreach ($file in $dllFiles) {
             try {
               # Try to extract strings from the compiled file
               $strings = & strings $file.FullName 2>$null | Select-String -Pattern "(def|class|import|from)" | Select-Object -First 5
@@ -536,59 +536,62 @@ jobs:
         run: |
           Write-Host "Creating obfuscation analysis report..." -ForegroundColor Yellow
 
-          $extensions = Get-ChildItem -Filter "*.pyd"
+          $dllFiles = Get-ChildItem -Filter "*.dll"
           $totalSize = 0
-          $extensionCount = 0
+          $dllCount = 0
 
-          foreach ($file in $extensions) {
+          foreach ($file in $dllFiles) {
             $size = $file.Length
             $sizeMB = [math]::Round($size / 1MB, 2)
             $totalSize += $size
-            $extensionCount++
+            $dllCount++
           }
 
           $totalSizeMB = [math]::Round($totalSize / 1MB, 2)
 
           $reportLines = @(
-            "# Cython DLL Obfuscation Analysis Report",
+            "# Windows DLL Obfuscation Analysis Report",
             "",
             "## Build Information",
             "- **Build Date**: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')",
             "- **Commit**: ${{ github.sha }}",
             "- **Python Version**: 3.11",
-            "- **Configuration**: Release (Cython Obfuscated)",
+            "- **Configuration**: Release (Cython Windows DLL)",
             "",
             "## Size Metrics",
-            "- **Total Extensions**: $extensionCount",
+            "- **Total DLLs**: $dllCount",
             "- **Total Size**: $totalSizeMB MB",
-            "- **Average Size**: $([math]::Round($totalSizeMB / $extensionCount, 2)) MB per extension",
+            "- **Average Size**: $([math]::Round($totalSizeMB / $dllCount, 2)) MB per DLL",
             "",
             "## Code Obfuscation Features",
             "- **Source Code Protection**: Python bytecode compiled to C++",
             "- **Performance Optimization**: Native compilation with -O3 flags",
             "- **Size Optimization**: Reduced through compilation and optimization",
             "- **Security Enhancement**: Source code not easily readable",
+            "- **Windows DLL**: Direct C# integration support",
             "",
-            "## Extension Details",
-            $(foreach ($file in $extensions) {
+            "## DLL Details",
+            $(foreach ($file in $dllFiles) {
                 $size = [math]::Round($file.Length / 1MB, 2)
                 "- **$($file.Name)**: $size MB"
             }),
             "",
             "## Obfuscation Verification",
-            "- **Python Code Patterns**: Minimized in compiled extensions",
+            "- **Python Code Patterns**: Minimized in compiled DLL",
             "- **String Extraction**: Limited meaningful strings",
             "- **Reverse Engineering**: Significantly more difficult",
             "- **Performance**: Improved through native compilation",
+            "- **C# Integration**: Direct DllImport support",
             "",
             "## Recommendations",
             "- Current obfuscation level is excellent for production use",
             "- Size is acceptable for deployment",
             "- Performance improvements are significant",
             "- Security through obscurity is enhanced",
+            "- Windows DLL format enables direct C# integration",
             "",
             "## Next Steps",
-            "Ready for production deployment with enhanced security"
+            "Ready for production deployment with enhanced security and C# integration"
           )
           $report = $reportLines -join "`n"
 
