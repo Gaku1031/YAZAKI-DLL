@@ -368,9 +368,17 @@ jobs:
           foreach ($pattern in $extensions) {
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
-              Copy-Item $file "dist_cython\"
-              $size = [math]::Round($file.Length / 1MB, 2)
-              Write-Host "[OK] Copied $($file.Name) ($size MB) to distribution" -ForegroundColor Green
+              # If it's a .pyd file, rename it to .dll for C# compatibility
+              if ($file.Extension -eq ".pyd") {
+                $dllName = $file.BaseName + ".dll"
+                Copy-Item $file "dist_cython\$dllName"
+                $size = [math]::Round($file.Length / 1MB, 2)
+                Write-Host "[OK] Copied and renamed $($file.Name) to $dllName ($size MB)" -ForegroundColor Green
+              } else {
+                Copy-Item $file "dist_cython\"
+                $size = [math]::Round($file.Length / 1MB, 2)
+                Write-Host "[OK] Copied $($file.Name) ($size MB) to distribution" -ForegroundColor Green
+              }
             }
           }
 
@@ -414,8 +422,15 @@ jobs:
           foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
-              Copy-Item $file "tests\CSharpTest\"
-              Write-Host "[OK] Copied $($file.Name) to test directory" -ForegroundColor Green
+              # If it's a .pyd file, rename it to .dll for C# compatibility
+              if ($file.Extension -eq ".pyd") {
+                $dllName = $file.BaseName + ".dll"
+                Copy-Item $file "tests\CSharpTest\$dllName"
+                Write-Host "[OK] Copied and renamed $($file.Name) to $dllName" -ForegroundColor Green
+              } else {
+                Copy-Item $file "tests\CSharpTest\"
+                Write-Host "[OK] Copied $($file.Name) to test directory" -ForegroundColor Green
+              }
             }
           }
 
