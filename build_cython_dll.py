@@ -7,9 +7,6 @@ import os
 import sys
 import subprocess
 import shutil
-from setuptools import setup, Extension
-from Cython.Build import cythonize
-import numpy as np
 
 
 def build_windows_dll():
@@ -27,41 +24,18 @@ def build_windows_dll():
         if file.endswith('.pyd'):
             os.remove(file)
 
-    # Define the extension
-    extensions = [
-        Extension(
-            "BloodPressureEstimation",
-            sources=["bp_estimation_cython.pyx"],
-            include_dirs=[np.get_include()],
-            libraries=["python311"],
-            define_macros=[("MS_WIN64", None)],
-            extra_compile_args=["/O2", "/MD"],
-            extra_link_args=[
-                "/DLL",
-                "/EXPORT:InitializeDLL",
-                "/EXPORT:StartBloodPressureAnalysisRequest",
-                "/EXPORT:GetProcessingStatus",
-                "/EXPORT:CancelBloodPressureAnalysis",
-                "/EXPORT:GetVersionInfo",
-                "/EXPORT:GenerateRequestId",
-                "/EXPORT:DllMain"
-            ]
-        )
-    ]
+    # Use the existing setup_cython_dll.py to build
+    print("Running setup_cython_dll.py...")
+    result = subprocess.run([sys.executable, 'setup_cython_dll.py', 'build_ext', '--inplace'],
+                            capture_output=True, text=True)
 
-    # Build the extension
-    setup(
-        name="BloodPressureEstimation",
-        ext_modules=cythonize(extensions, compiler_directives={
-            'language_level': 3,
-            'boundscheck': False,
-            'wraparound': False,
-            'initializedcheck': False,
-            'cdivision': True,
-            'embedsignature': False
-        }),
-        zip_safe=False,
-    )
+    if result.returncode != 0:
+        print("Build failed:")
+        print(result.stdout)
+        print(result.stderr)
+        return False
+
+    print("Build completed successfully")
 
     # Find the built file and rename it to .dll
     built_files = []
@@ -80,7 +54,6 @@ def build_windows_dll():
 
         # Verify the DLL has the exported functions
         try:
-            import subprocess
             result = subprocess.run(['dumpbin', '/EXPORTS', dll_file],
                                     capture_output=True, text=True, shell=True)
             if 'InitializeDLL' in result.stdout:
