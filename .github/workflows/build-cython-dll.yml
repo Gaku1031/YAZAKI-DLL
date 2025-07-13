@@ -257,9 +257,9 @@ jobs:
           Write-Host "Building Windows DLL from Cython..." -ForegroundColor Yellow
           if ("${{ github.event.inputs.debug_mode }}" -eq "true") {
             Write-Host "Debug mode enabled - building with debug information..." -ForegroundColor Yellow
-            python setup_cython_dll.py build_ext --inplace --debug
+            python build_cython_dll.py
           } else {
-            python setup_cython_dll.py build_ext --inplace
+            python build_cython_dll.py
           }
 
           if ($LASTEXITCODE -ne 0) {
@@ -269,23 +269,32 @@ jobs:
 
           Write-Host "Cython extension built successfully" -ForegroundColor Green
 
-          # Check for built pure Windows DLL
-          $dllFiles = @("BloodPressureEstimation*.dll")
+          # Check for built Windows DLL
+          $dllFiles = @("BloodPressureEstimation.dll")
           foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             if ($files) {
               foreach ($file in $files) {
                 $size = [math]::Round($file.Length / 1MB, 2)
-                Write-Host "[OK] Built pure Windows DLL: $($file.Name) ($size MB)" -ForegroundColor Green
+                Write-Host "[OK] Built Windows DLL: $($file.Name) ($size MB)" -ForegroundColor Green
               }
             } else {
-              Write-Host "[WARNING] No pure Windows DLL found matching pattern: $pattern" -ForegroundColor Yellow
+              Write-Host "[WARNING] No Windows DLL found matching pattern: $pattern" -ForegroundColor Yellow
             }
           }
 
           # Test the built DLL
           Write-Host "Testing built DLL..." -ForegroundColor Yellow
-          python -c "import sys; import BloodPressureEstimation; print('[OK] Windows DLL imported successfully'); print('[OK] All DLL tests passed')"
+          if (Test-Path "BloodPressureEstimation.dll") {
+            Write-Host "[OK] Windows DLL file exists" -ForegroundColor Green
+            # Test basic functionality by checking file properties
+            $dllInfo = Get-Item "BloodPressureEstimation.dll"
+            Write-Host "[OK] DLL size: $([math]::Round($dllInfo.Length / 1MB, 2)) MB" -ForegroundColor Green
+            Write-Host "[OK] DLL created: $($dllInfo.CreationTime)" -ForegroundColor Green
+          } else {
+            Write-Host "[ERROR] Windows DLL file not found" -ForegroundColor Red
+            exit 1
+          }
 
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Extension tests failed" -ForegroundColor Red

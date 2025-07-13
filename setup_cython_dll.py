@@ -23,7 +23,8 @@ extensions = [
                          "/EXPORT:CancelBloodPressureAnalysis",
                          "/EXPORT:GetVersionInfo",
                          "/EXPORT:GenerateRequestId",
-                         "/EXPORT:DllMain"]  # Export C functions
+                         "/EXPORT:DllMain",
+                         "/OUT:BloodPressureEstimation.dll"]  # Force .dll output
     )
 ]
 
