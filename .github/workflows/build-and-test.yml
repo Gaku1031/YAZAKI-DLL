@@ -120,7 +120,6 @@ jobs:
             "        # Size optimization flags",
             "        '--lto=yes',",
             "        '--plugin-enable=anti-bloat',",
-            "        '--plugin-enable=data-hiding',",
             "        '--no-progress-bar',",
             "        '--show-scons',",
             "        # Exclude unnecessary modules",
