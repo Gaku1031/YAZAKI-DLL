@@ -552,6 +552,7 @@ jobs:
         shell: powershell
 
       - name: Run C# Integration Tests
+        shell: powershell
         run: |
           Write-Host "Running C# integration tests..." -ForegroundColor Yellow
 
@@ -559,15 +560,16 @@ jobs:
           if (Test-Path $testExe) {
             Write-Host "Test executable found: $testExe" -ForegroundColor Green
             
-            # Set environment variables for the test
+            # Set environment variables for the test process
             $env:PYTHONPATH = "tests\CSharpTest;$env:PYTHONPATH"
             $env:PYTHONHOME = "C:\hostedtoolcache\windows\Python\3.11.9\x64"
             
+            Write-Host "Environment variables set:" -ForegroundColor Cyan
+            Write-Host "  PYTHONPATH: $env:PYTHONPATH" -ForegroundColor Cyan
+            Write-Host "  PYTHONHOME: $env:PYTHONHOME" -ForegroundColor Cyan
+            
             try {
-              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru -EnvironmentVariable @{
-                "PYTHONPATH" = "tests\CSharpTest;$env:PYTHONPATH"
-                "PYTHONHOME" = "C:\hostedtoolcache\windows\Python\3.11.9\x64"
-              }
+              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru
               $exitCode = $testProcess.ExitCode
               
               if ($exitCode -eq 0) {
@@ -583,7 +585,6 @@ jobs:
           } else {
             Write-Host "[WARNING] Test executable not found - skipping C# integration tests" -ForegroundColor Yellow
           }
-        shell: powershell
 
       - name: Create Obfuscation Report
         run: |
