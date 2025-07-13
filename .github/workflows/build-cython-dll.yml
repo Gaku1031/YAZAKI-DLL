@@ -104,7 +104,7 @@ jobs:
           $packagesToRemove = @("numpy", "opencv-python", "opencv-python-headless", "scipy", "scikit-learn", "joblib", "mediapipe")
           foreach ($package in $packagesToRemove) {
             try {
-              pip uninstall $package -y --quiet 2>$null
+              pip uninstall $package -y 2>$null
               Write-Host "Removed $package (if it was installed)" -ForegroundColor Gray
             } catch {
               Write-Host "Package $package was not installed or already removed" -ForegroundColor Gray
@@ -130,7 +130,8 @@ jobs:
           Write-Host "Installing NumPy 1.24.3..." -ForegroundColor Yellow
           try {
             # Force uninstall any existing NumPy to avoid conflicts
-            pip uninstall numpy -y --quiet 2>$null
+            pip uninstall numpy -y 2>$null
+            # Install NumPy with specific version
             pip install numpy==1.24.3 --force-reinstall --no-cache-dir
             Write-Host "[OK] NumPy installed" -ForegroundColor Green
           } catch {
@@ -171,7 +172,8 @@ jobs:
           Write-Host "Installing scipy..." -ForegroundColor Yellow
           try {
             # Force uninstall any existing scipy to avoid conflicts
-            pip uninstall scipy -y --quiet 2>$null
+            pip uninstall scipy -y 2>$null
+            # Install scipy with specific version
             pip install scipy==1.11.4 --force-reinstall --no-cache-dir
             Write-Host "[OK] scipy installed" -ForegroundColor Green
           } catch {
