@@ -76,6 +76,10 @@ jobs:
           # Upgrade pip first
           python -m pip install --upgrade pip
 
+          # Clean up any existing packages to avoid conflicts
+          Write-Host "Cleaning up existing packages..." -ForegroundColor Yellow
+          pip uninstall numpy opencv-python opencv-python-headless scipy scikit-learn joblib mediapipe -y --quiet 2>$null
+
           # Install Cython and build tools
           Write-Host "Installing Cython..." -ForegroundColor Yellow
           pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall
@@ -102,6 +106,10 @@ jobs:
           # Install MediaPipe
           Write-Host "Installing MediaPipe..." -ForegroundColor Yellow
           pip install mediapipe==0.10.7 --force-reinstall
+
+          # Verify all packages are compatible
+          Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
+          python -c "import sys; import numpy as np; import cv2; import sklearn; import scipy; import mediapipe; print(f'NumPy: {np.__version__}'); print(f'OpenCV: {cv2.__version__}'); print(f'scikit-learn: {sklearn.__version__}'); print(f'scipy: {scipy.__version__}'); print(f'MediaPipe: {mediapipe.__version__}'); print('All packages imported successfully')"
 
           Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
 
@@ -227,16 +235,16 @@ jobs:
             if ($files) {
               foreach ($file in $files) {
                 $size = [math]::Round($file.Length / 1MB, 2)
-                Write-Host "✓ Built extension: $($file.Name) ($size MB)" -ForegroundColor Green
+                Write-Host "[OK] Built extension: $($file.Name) ($size MB)" -ForegroundColor Green
               }
             } else {
-              Write-Host "⚠ No files found matching pattern: $pattern" -ForegroundColor Yellow
+              Write-Host "[WARNING] No files found matching pattern: $pattern" -ForegroundColor Yellow
             }
           }
 
           # Test the built extensions
           Write-Host "Testing built extensions..." -ForegroundColor Yellow
-          python -c "import sys; import bp_estimation_cython; print('✓ Main Cython module imported successfully'); print('✓ All extension tests passed')"
+          python -c "import sys; import bp_estimation_cython; print('[OK] Main Cython module imported successfully'); print('[OK] All extension tests passed')"
 
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Extension tests failed" -ForegroundColor Red
@@ -278,11 +286,11 @@ jobs:
 
           # Size check for optimization
           if ($totalSizeMB -le 50) {
-            Write-Host "✓ Extension size is within acceptable limits" -ForegroundColor Green
+            Write-Host "[OK] Extension size is within acceptable limits" -ForegroundColor Green
           } elseif ($totalSizeMB -le 100) {
-            Write-Host "⚠ Extension size is large but acceptable" -ForegroundColor Yellow
+            Write-Host "[WARNING] Extension size is large but acceptable" -ForegroundColor Yellow
           } else {
-            Write-Host "✗ Extension size exceeds acceptable limits" -ForegroundColor Red
+            Write-Host "[ERROR] Extension size exceeds acceptable limits" -ForegroundColor Red
           }
 
           # Code obfuscation verification
@@ -295,16 +303,16 @@ jobs:
               # Try to extract strings from the compiled file
               $strings = & strings $file.FullName 2>$null | Select-String -Pattern "(def|class|import|from)" | Select-Object -First 5
               if ($strings) {
-                Write-Host "⚠ Some Python code patterns found in $($file.Name)" -ForegroundColor Yellow
+                Write-Host "[WARNING] Some Python code patterns found in $($file.Name)" -ForegroundColor Yellow
               } else {
-                Write-Host "✓ Code obfuscation verified for $($file.Name)" -ForegroundColor Green
+                Write-Host "[OK] Code obfuscation verified for $($file.Name)" -ForegroundColor Green
               }
             } catch {
-              Write-Host "✓ Code obfuscation verification completed for $($file.Name)" -ForegroundColor Green
+              Write-Host "[OK] Code obfuscation verification completed for $($file.Name)" -ForegroundColor Green
             }
           }
 
-          Write-Host "✓ Cython DLL verification completed" -ForegroundColor Green
+          Write-Host "[OK] Cython DLL verification completed" -ForegroundColor Green
         shell: powershell
 
       - name: Create Cython Distribution Package
@@ -321,17 +329,17 @@ jobs:
             foreach ($file in $files) {
               Copy-Item $file "dist_cython\"
               $size = [math]::Round($file.Length / 1MB, 2)
-              Write-Host "✓ Copied $($file.Name) ($size MB) to distribution" -ForegroundColor Green
+              Write-Host "[OK] Copied $($file.Name) ($size MB) to distribution" -ForegroundColor Green
             }
           }
 
           # Copy models directory if it exists
           if (Test-Path "models_compressed") {
             Copy-Item "models_compressed" "dist_cython\models" -Recurse -Force
-            Write-Host "✓ Copied models directory to distribution" -ForegroundColor Green
+            Write-Host "[OK] Copied models directory to distribution" -ForegroundColor Green
           } elseif (Test-Path "models") {
             Copy-Item "models" "dist_cython\" -Recurse -Force
-            Write-Host "✓ Copied models directory to distribution" -ForegroundColor Green
+            Write-Host "[OK] Copied models directory to distribution" -ForegroundColor Green
           }
 
           # Create README for distribution
@@ -339,7 +347,7 @@ jobs:
 
           $readmeContent | Out-File -FilePath "dist_cython\README.md" -Encoding UTF8
 
-          Write-Host "✓ Created distribution package" -ForegroundColor Green
+          Write-Host "[OK] Created distribution package" -ForegroundColor Green
           Write-Host "Distribution contents:" -ForegroundColor Cyan
           Get-ChildItem "dist_cython" -Recurse | Format-Table Name, Length, LastWriteTime
         shell: powershell
@@ -366,30 +374,30 @@ jobs:
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
               Copy-Item $file "tests\CSharpTest\"
-              Write-Host "✓ Copied $($file.Name) to test directory" -ForegroundColor Green
+              Write-Host "[OK] Copied $($file.Name) to test directory" -ForegroundColor Green
             }
           }
 
           # Copy models (prioritize compressed models)
           if (Test-Path "models_compressed") {
             Copy-Item "models_compressed" "tests\CSharpTest\models" -Recurse -Force
-            Write-Host "✓ Copied compressed models directory" -ForegroundColor Green
+            Write-Host "[OK] Copied compressed models directory" -ForegroundColor Green
           } elseif (Test-Path "models") {
             Copy-Item "models" "tests\CSharpTest\" -Recurse -Force
-            Write-Host "✓ Copied models directory" -ForegroundColor Green
+            Write-Host "[OK] Copied models directory" -ForegroundColor Green
           } else {
-            Write-Host "⚠ Models directory not found" -ForegroundColor Yellow
+            Write-Host "[WARNING] Models directory not found" -ForegroundColor Yellow
           }
 
           # Copy sample data
           if (Test-Path "sample-data") {
             Copy-Item "sample-data" "tests\CSharpTest\" -Recurse -Force
-            Write-Host "✓ Copied sample data" -ForegroundColor Green
+            Write-Host "[OK] Copied sample data" -ForegroundColor Green
           } else {
-            Write-Host "⚠ Sample data directory not found" -ForegroundColor Yellow
+            Write-Host "[WARNING] Sample data directory not found" -ForegroundColor Yellow
           }
 
-          Write-Host "✓ Test environment setup completed" -ForegroundColor Green
+          Write-Host "[OK] Test environment setup completed" -ForegroundColor Green
         shell: powershell
 
       - name: Build C# Test Project
@@ -400,13 +408,13 @@ jobs:
             dotnet build tests/CSharpTest/BloodPressureTest.csproj --configuration Release --verbosity normal
             
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "✓ C# test project built successfully" -ForegroundColor Green
+              Write-Host "[OK] C# test project built successfully" -ForegroundColor Green
             } else {
-              Write-Host "✗ C# test project build failed" -ForegroundColor Red
+              Write-Host "[ERROR] C# test project build failed" -ForegroundColor Red
               exit 1
             }
           } else {
-            Write-Host "⚠ C# test project not found - skipping C# tests" -ForegroundColor Yellow
+            Write-Host "[WARNING] C# test project not found - skipping C# tests" -ForegroundColor Yellow
           }
         shell: powershell
 
@@ -423,9 +431,9 @@ jobs:
               $exitCode = $testProcess.ExitCode
               
               if ($exitCode -eq 0) {
-                Write-Host "✓ C# integration tests passed" -ForegroundColor Green
+                Write-Host "[OK] C# integration tests passed" -ForegroundColor Green
               } else {
-                Write-Host "✗ C# integration tests failed with exit code: $exitCode" -ForegroundColor Red
+                Write-Host "[ERROR] C# integration tests failed with exit code: $exitCode" -ForegroundColor Red
                 exit 1
               }
             } catch {
@@ -433,7 +441,7 @@ jobs:
               exit 1
             }
           } else {
-            Write-Host "⚠ Test executable not found - skipping C# integration tests" -ForegroundColor Yellow
+            Write-Host "[WARNING] Test executable not found - skipping C# integration tests" -ForegroundColor Yellow
           }
         shell: powershell
 
