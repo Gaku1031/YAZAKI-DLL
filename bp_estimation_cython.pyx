@@ -355,16 +355,9 @@ class BloodPressureEstimator:
         
         return "\n".join(csv_data)
 
-cdef class CythonBPEstimator:
+# Main Cython class
+class CythonBPEstimator:
     """Cython-based blood pressure estimation class with code obfuscation"""
-    
-    cdef public bool is_initialized
-    cdef public dict processing_requests
-    cdef public dict request_status
-    cdef public str version
-    cdef public object lock
-    cdef public object rppg_processor
-    cdef public object bp_estimator
     
     def __init__(self):
         self.is_initialized = False
@@ -375,7 +368,7 @@ cdef class CythonBPEstimator:
         self.rppg_processor = RPPGProcessor()
         self.bp_estimator = None
 
-    def initialize(self, str model_dir = "models") -> bool:
+    def initialize(self, model_dir: str = "models") -> bool:
         """Cython initialization with obfuscation"""
         try:
             # Initialize blood pressure estimator
@@ -389,7 +382,7 @@ cdef class CythonBPEstimator:
             logger.error(f"Initialization error: {e}")
             return False
 
-    def _validate_request_id(self, str request_id) -> bool:
+    def _validate_request_id(self, request_id: str) -> bool:
         """README.md compliant request ID validation"""
         if not request_id:
             return False
@@ -398,10 +391,10 @@ cdef class CythonBPEstimator:
         pattern = r'^\d{17}_\d{10}_\d{10}$'
         return bool(re.match(pattern, request_id))
 
-    def start_blood_pressure_analysis_request(self, str request_id, int height,
-                                              int weight, int sex,
-                                              str measurement_movie_path,
-                                              object callback = None) -> Optional[str]:
+    def start_blood_pressure_analysis_request(self, request_id: str, height: int,
+                                              weight: int, sex: int,
+                                              measurement_movie_path: str,
+                                              callback = None) -> Optional[str]:
         """README.md compliant blood pressure analysis request"""
 
         if not self.is_initialized:
@@ -440,9 +433,9 @@ cdef class CythonBPEstimator:
 
         return None
 
-    def _process_blood_pressure_analysis(self, str request_id, int height, int weight,
-                                       int sex, str measurement_movie_path,
-                                       object callback):
+    def _process_blood_pressure_analysis(self, request_id: str, height: int, weight: int,
+                                       sex: int, measurement_movie_path: str,
+                                       callback):
         """Blood pressure analysis processing (asynchronous)"""
         try:
             # rPPG processing
@@ -474,14 +467,12 @@ cdef class CythonBPEstimator:
                 if request_id in self.request_status:
                     del self.request_status[request_id]
 
-
-
-    def get_processing_status(self, str request_id) -> str:
+    def get_processing_status(self, request_id: str) -> str:
         """README.md compliant processing status retrieval"""
         with self.lock:
             return self.request_status.get(request_id, ProcessingStatus.NONE)
 
-    def cancel_blood_pressure_analysis(self, str request_id) -> bool:
+    def cancel_blood_pressure_analysis(self, request_id: str) -> bool:
         """README.md compliant blood pressure analysis cancellation"""
         with self.lock:
             if request_id in self.processing_requests:
@@ -495,25 +486,25 @@ cdef class CythonBPEstimator:
         return f"v{self.version}"
 
 # Global instance
-cdef CythonBPEstimator estimator = CythonBPEstimator()
+estimator = CythonBPEstimator()
 
 # README.md compliant export functions
-def initialize_dll(str model_dir = "models") -> bool:
+def initialize_dll(model_dir: str = "models") -> bool:
     """DLL initialization (C# call compatible)"""
     return estimator.initialize(model_dir)
 
-def start_blood_pressure_analysis_request(str request_id, int height, int weight,
-                                          int sex, str measurement_movie_path,
-                                          object callback = None) -> Optional[str]:
+def start_blood_pressure_analysis_request(request_id: str, height: int, weight: int,
+                                          sex: int, measurement_movie_path: str,
+                                          callback = None) -> Optional[str]:
     """Blood pressure analysis request (README.md compliant)"""
     return estimator.start_blood_pressure_analysis_request(
         request_id, height, weight, sex, measurement_movie_path, callback)
 
-def get_processing_status(str request_id) -> str:
+def get_processing_status(request_id: str) -> str:
     """Processing status retrieval (README.md compliant)"""
     return estimator.get_processing_status(request_id)
 
-def cancel_blood_pressure_analysis(str request_id) -> bool:
+def cancel_blood_pressure_analysis(request_id: str) -> bool:
     """Blood pressure analysis cancellation (README.md compliant)"""
     return estimator.cancel_blood_pressure_analysis(request_id)
 
@@ -521,7 +512,7 @@ def get_version_info() -> str:
     """Version information retrieval (README.md compliant)"""
     return estimator.get_version_info()
 
-def generate_request_id(str customer_code, str driver_code) -> str:
+def generate_request_id(customer_code: str, driver_code: str) -> str:
     """Request ID generation (README.md compliant)"""
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
     return f"{timestamp}_{customer_code}_{driver_code}"

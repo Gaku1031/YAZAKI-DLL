@@ -13,7 +13,6 @@ from Cython.Build import cythonize
 from Cython.Compiler import Options
 
 # Cython compiler options for obfuscation
-Options.docstrings = False
 Options.annotate = False
 
 # Platform-specific settings
@@ -38,6 +37,17 @@ extensions = [
         include_dirs=[],
         libraries=[],
         library_dirs=[],
+    ),
+    Extension(
+        "dll_wrapper_cython",
+        sources=["dll_wrapper_cython.pyx"],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
+        define_macros=define_macros,
+        include_dirs=[],
+        libraries=[],
+        library_dirs=[],
     )
 ]
 
@@ -51,7 +61,6 @@ cython_extensions = cythonize(
         "cdivision": True,
         "nonecheck": False,
         "embedsignature": False,
-        "docstrings": False,
     }
 )
 

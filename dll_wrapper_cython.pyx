@@ -19,17 +19,19 @@ from libcpp cimport bool
 from libc.stdlib cimport malloc, free
 from libc.string cimport strcpy, strlen
 
+# Import the main Cython module functions
+from bp_estimation_cython import (
+    initialize_dll,
+    start_blood_pressure_analysis_request,
+    get_processing_status,
+    cancel_blood_pressure_analysis,
+    get_version_info,
+    generate_request_id
+)
+
 # Windows-specific imports
-IF UNAME_SYSNAME == "Windows":
-    from libcpp cimport bool
-    from cpython.bytes cimport PyBytes_AsString, PyBytes_FromString
-    from cpython.unicode cimport PyUnicode_AsUTF8String, PyUnicode_FromString
-
-# Import the main Cython module
-from bp_estimation_cython cimport *
-
-# Windows DLL export functions
-IF UNAME_SYSNAME == "Windows":
+import platform
+if platform.system() == "Windows":
     import ctypes
     from ctypes import wintypes
     
@@ -111,7 +113,7 @@ IF UNAME_SYSNAME == "Windows":
             return str(e).encode('utf-8')
 
 # Non-Windows fallback functions
-ELSE:
+else:
     def InitializeDLL(model_dir_ptr=None):
         """DLL initialization (non-Windows)"""
         try:
