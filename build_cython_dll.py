@@ -24,31 +24,41 @@ def build_windows_dll():
         if file.endswith('.pyd'):
             os.remove(file)
 
-    # Use the existing setup_cython_dll.py to build
+        # Use the existing setup_cython_dll.py to build
     print("Running setup_cython_dll.py...")
     result = subprocess.run([sys.executable, 'setup_cython_dll.py', 'build_ext', '--inplace'],
                             capture_output=True, text=True)
 
-    if result.returncode != 0:
-        print("Build failed:")
-        print(result.stdout)
+    print("Build output:")
+    print(result.stdout)
+    if result.stderr:
+        print("Build errors:")
         print(result.stderr)
-        return False
 
-    print("Build completed successfully")
+    # Even if the build had warnings, let's check if files were created
+    print("Build process completed (return code: {})".format(result.returncode))
 
     # Find the built file and rename it to .dll
+    print("Searching for built files...")
     built_files = []
     for root, dirs, files in os.walk('build'):
         for file in files:
+            print(f"Found file: {os.path.join(root, file)}")
             if file.startswith('BloodPressureEstimation') and file.endswith('.pyd'):
                 built_files.append(os.path.join(root, file))
+
+    # Also check for files in current directory
+    for file in os.listdir('.'):
+        if file.startswith('BloodPressureEstimation') and file.endswith('.pyd'):
+            built_files.append(file)
+            print(f"Found .pyd file in current directory: {file}")
 
     if built_files:
         # Copy the .pyd file and rename it to .dll
         pyd_file = built_files[0]
         dll_file = 'BloodPressureEstimation.dll'
 
+        print(f"Copying {pyd_file} to {dll_file}")
         shutil.copy2(pyd_file, dll_file)
         print(f"Created Windows DLL: {dll_file}")
 
@@ -66,6 +76,10 @@ def build_windows_dll():
         return True
     else:
         print("No built files found")
+        print("Available files in build directory:")
+        for root, dirs, files in os.walk('build'):
+            for file in files:
+                print(f"  {os.path.join(root, file)}")
         return False
 
 
