@@ -101,47 +101,96 @@ jobs:
 
           # Clean up any existing packages to avoid conflicts
           Write-Host "Cleaning up existing packages..." -ForegroundColor Yellow
-          pip uninstall numpy opencv-python opencv-python-headless scipy scikit-learn joblib mediapipe -y --quiet 2>$null
+          $packagesToRemove = @("numpy", "opencv-python", "opencv-python-headless", "scipy", "scikit-learn", "joblib", "mediapipe")
+          foreach ($package in $packagesToRemove) {
+            try {
+              pip uninstall $package -y --quiet 2>$null
+              Write-Host "Removed $package (if it was installed)" -ForegroundColor Gray
+            } catch {
+              Write-Host "Package $package was not installed or already removed" -ForegroundColor Gray
+            }
+          }
 
           # Install Cython and build tools
           Write-Host "Installing Cython..." -ForegroundColor Yellow
-          if ("${{ github.event.inputs.force_rebuild }}" -eq "true") {
-            Write-Host "Force rebuilding all packages..." -ForegroundColor Yellow
-            pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall --no-cache-dir
-          } else {
-            pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall
+          try {
+            if ("${{ github.event.inputs.force_rebuild }}" -eq "true") {
+              Write-Host "Force rebuilding all packages..." -ForegroundColor Yellow
+              pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall --no-cache-dir
+            } else {
+              pip install cython>=3.0.0 setuptools>=65.0.0 wheel>=0.38.0 --force-reinstall
+            }
+            Write-Host "[OK] Cython and build tools installed" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install Cython: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
           }
 
           # Install NumPy 1.24.3 (compatible with other packages)
           Write-Host "Installing NumPy 1.24.3..." -ForegroundColor Yellow
-          pip install numpy==1.24.3 --force-reinstall
+          try {
+            pip install numpy==1.24.3 --force-reinstall
+            Write-Host "[OK] NumPy installed" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install NumPy: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
 
           # Install OpenCV compatible with NumPy 1.24.3
           Write-Host "Installing OpenCV..." -ForegroundColor Yellow  
-          pip install opencv-python-headless==4.8.1.78 --force-reinstall
+          try {
+            pip install opencv-python-headless==4.8.1.78 --force-reinstall
+            Write-Host "[OK] OpenCV installed" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install OpenCV: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
 
           # Install other dependencies with compatible versions
           Write-Host "Installing scikit-learn..." -ForegroundColor Yellow
-          pip install scikit-learn==1.3.0 --force-reinstall
+          try {
+            pip install scikit-learn==1.3.0 --force-reinstall
+            Write-Host "[OK] scikit-learn installed" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install scikit-learn: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
 
           Write-Host "Installing joblib..." -ForegroundColor Yellow
-          pip install joblib==1.3.2 --force-reinstall
+          try {
+            pip install joblib==1.3.2 --force-reinstall
+            Write-Host "[OK] joblib installed" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install joblib: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
 
           # Install scipy compatible with NumPy 1.24.3
           Write-Host "Installing scipy..." -ForegroundColor Yellow
-          pip install scipy==1.11.4 --force-reinstall
+          try {
+            pip install scipy==1.11.4 --force-reinstall
+            Write-Host "[OK] scipy installed" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install scipy: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
 
           # Install MediaPipe
           Write-Host "Installing MediaPipe..." -ForegroundColor Yellow
-          pip install mediapipe==0.10.7 --force-reinstall
+          try {
+            pip install mediapipe==0.10.7 --force-reinstall
+            Write-Host "[OK] MediaPipe installed" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install MediaPipe: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
 
           # Verify all packages are compatible
           Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
           python -c "import sys; import numpy as np; import cv2; import sklearn; import scipy; import mediapipe; print(f'NumPy: {np.__version__}'); print(f'OpenCV: {cv2.__version__}'); print(f'scikit-learn: {sklearn.__version__}'); print(f'scipy: {scipy.__version__}'); print(f'MediaPipe: {mediapipe.__version__}'); print('All packages imported successfully')"
 
-          Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
-
           # Check installed packages
+          Write-Host "Installed packages:" -ForegroundColor Yellow
           pip list
 
           # Run pip check to confirm no broken dependencies
