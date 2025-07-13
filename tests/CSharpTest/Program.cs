@@ -41,7 +41,7 @@ namespace BloodPressureDllTest
 
         public static void TestBalancedDLL()
         {
-            Console.WriteLine("=== Balanced 20MB DLL Integration Test ===");
+            Console.WriteLine("=== Blood Pressure DLL Integration Test ===");
 
             try
             {

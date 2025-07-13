@@ -255,13 +255,13 @@ jobs:
           Write-Host "Final NumPy version check before building..." -ForegroundColor Yellow
           python -c "import numpy as np; print(f'Final NumPy version: {np.__version__}'); assert np.__version__ == '1.24.3', f'CRITICAL: NumPy version {np.__version__} is not 1.24.3. Build will fail.'; print('NumPy version is correct for Cython build')"
 
-          # Build Cython extension with obfuscation
-          Write-Host "Building Cython extension with obfuscation..." -ForegroundColor Yellow
+          # Build Windows DLL from Cython
+          Write-Host "Building Windows DLL from Cython..." -ForegroundColor Yellow
           if ("${{ github.event.inputs.debug_mode }}" -eq "true") {
             Write-Host "Debug mode enabled - building with debug information..." -ForegroundColor Yellow
-            python setup_cython.py build_ext --inplace --debug
+            python setup_cython_dll.py build_ext --inplace --debug
           } else {
-            python setup_cython.py build_ext --inplace
+            python setup_cython_dll.py build_ext --inplace
           }
 
           if ($LASTEXITCODE -ne 0) {
@@ -271,23 +271,23 @@ jobs:
 
           Write-Host "Cython extension built successfully" -ForegroundColor Green
 
-          # Check for built extensions
-          $extensions = @("bp_estimation_cython*.pyd", "dll_wrapper_cython*.pyd")
-          foreach ($pattern in $extensions) {
+          # Check for built DLL
+          $dllFiles = @("BloodPressureEstimation*.dll")
+          foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             if ($files) {
               foreach ($file in $files) {
                 $size = [math]::Round($file.Length / 1MB, 2)
-                Write-Host "[OK] Built extension: $($file.Name) ($size MB)" -ForegroundColor Green
+                Write-Host "[OK] Built DLL: $($file.Name) ($size MB)" -ForegroundColor Green
               }
             } else {
               Write-Host "[WARNING] No files found matching pattern: $pattern" -ForegroundColor Yellow
             }
           }
 
-          # Test the built extensions
-          Write-Host "Testing built extensions..." -ForegroundColor Yellow
-          python -c "import sys; import bp_estimation_cython; print('[OK] Main Cython module imported successfully'); print('[OK] All extension tests passed')"
+          # Test the built DLL
+          Write-Host "Testing built DLL..." -ForegroundColor Yellow
+          python -c "import sys; import BloodPressureEstimation; print('[OK] Windows DLL imported successfully'); print('[OK] All DLL tests passed')"
 
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Extension tests failed" -ForegroundColor Red
@@ -411,9 +411,9 @@ jobs:
         run: |
           Write-Host "Setting up test environment..." -ForegroundColor Yellow
 
-          # Copy Cython extensions
-          $extensions = @("bp_estimation_cython*.pyd", "dll_wrapper_cython*.pyd")
-          foreach ($pattern in $extensions) {
+          # Copy Windows DLL
+          $dllFiles = @("BloodPressureEstimation*.dll")
+          foreach ($pattern in $dllFiles) {
             $files = Get-ChildItem -Filter $pattern
             foreach ($file in $files) {
               Copy-Item $file "tests\CSharpTest\"
@@ -440,6 +440,22 @@ jobs:
             Write-Host "[WARNING] Sample data directory not found" -ForegroundColor Yellow
           }
 
+          # Copy Python dependencies for C# test
+          Write-Host "Copying Python dependencies for C# test..." -ForegroundColor Yellow
+          $pythonDeps = @("numpy", "scipy", "scikit-learn", "opencv-python-headless", "mediapipe")
+          foreach ($dep in $pythonDeps) {
+            try {
+              $depPath = python -c "import $dep; print($dep.__file__)" 2>$null
+              if ($depPath) {
+                $depDir = Split-Path $depPath -Parent
+                Copy-Item $depDir "tests\CSharpTest\python_deps\" -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "[OK] Copied $dep dependencies" -ForegroundColor Green
+              }
+            } catch {
+              Write-Host "[WARNING] Could not copy $dep dependencies" -ForegroundColor Yellow
+            }
+          }
+
           Write-Host "[OK] Test environment setup completed" -ForegroundColor Green
         shell: powershell
 
@@ -461,6 +477,27 @@ jobs:
           }
         shell: powershell
 
+      - name: Setup Python Environment for C# Tests
+        run: |
+          Write-Host "Setting up Python environment for C# tests..." -ForegroundColor Yellow
+
+          # Set PYTHONPATH to include the test directory
+          $env:PYTHONPATH = "tests\CSharpTest;$env:PYTHONPATH"
+          Write-Host "PYTHONPATH set to: $env:PYTHONPATH" -ForegroundColor Cyan
+
+          # Verify Python can find the Cython modules
+          Write-Host "Verifying Python can find Cython modules..." -ForegroundColor Yellow
+          python -c "import sys; print('Python path:'); [print(p) for p in sys.path]" 2>$null
+
+          # Test import
+          $importTest = python -c "import bp_estimation_cython; print('Cython module imported successfully')" 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] Cython module can be imported" -ForegroundColor Green
+          } else {
+            Write-Host "[WARNING] Cython module import test failed: $importTest" -ForegroundColor Yellow
+          }
+        shell: powershell
+
       - name: Run C# Integration Tests
         run: |
           Write-Host "Running C# integration tests..." -ForegroundColor Yellow
@@ -469,8 +506,15 @@ jobs:
           if (Test-Path $testExe) {
             Write-Host "Test executable found: $testExe" -ForegroundColor Green
             
+            # Set environment variables for the test
+            $env:PYTHONPATH = "tests\CSharpTest;$env:PYTHONPATH"
+            $env:PYTHONHOME = "C:\hostedtoolcache\windows\Python\3.11.9\x64"
+            
             try {
-              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru
+              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru -EnvironmentVariable @{
+                "PYTHONPATH" = "tests\CSharpTest;$env:PYTHONPATH"
+                "PYTHONHOME" = "C:\hostedtoolcache\windows\Python\3.11.9\x64"
+              }
               $exitCode = $testProcess.ExitCode
               
               if ($exitCode -eq 0) {
