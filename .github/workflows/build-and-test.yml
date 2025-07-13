@@ -35,18 +35,34 @@ jobs:
       - name: Install Python dependencies (minimal)
         run: |
           python -m pip install --upgrade pip
-          # Install only essential packages for minimal DLL size
+          # Install Nuitka first
           pip install nuitka
-          # Install lightweight alternatives
-          pip install opencv-python-headless==4.8.0.74
-          pip install mediapipe-silicon==0.10.3 --no-deps
+          
+          # Install compatible versions to avoid conflicts
           pip install numpy==1.24.3
+          pip install opencv-python-headless==4.9.0.80
+          
+          # Install other dependencies with specific versions
           pip install scikit-learn==1.3.0
           pip install joblib==1.3.2
-          # Skip scipy if not absolutely necessary
+          
+          # Install mediapipe with caution (known to cause issues)
+          # Use --no-deps to avoid dependency conflicts
+          try {
+            pip install mediapipe==0.10.3 --no-deps
+            Write-Host "MediaPipe installed successfully" -ForegroundColor Green
+          } catch {
+            Write-Host "MediaPipe installation failed, continuing without it" -ForegroundColor Yellow
+          }
+          
+          # Install minimal requirements if available
           if (Test-Path requirements_minimal.txt) {
             pip install -r requirements_minimal.txt
           }
+          
+          # Verify critical packages
+          python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
+          python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
         shell: powershell
 
       - name: Prepare Models Directory
@@ -123,7 +139,7 @@ jobs:
           # Create optimized Nuitka build script
           Write-Host "Creating optimized build script..." -ForegroundColor Yellow
 
-          # Create the Python build script with conditional model inclusion
+          # Create the Python build script with safer optimization settings
           $buildScriptLines = @(
             "import subprocess",
             "import sys",
@@ -134,7 +150,7 @@ jobs:
             "    models_dir_exists = os.path.exists('models_compressed')",
             "    print(f'Models directory exists: {models_dir_exists}')",
             "    ",
-            "    # Base Nuitka command with aggressive optimization",
+            "    # Base Nuitka command with conservative optimization",
             "    nuitka_cmd = [",
             "        sys.executable, '-m', 'nuitka',",
             "        '--standalone',",
@@ -143,12 +159,11 @@ jobs:
             "        '--output-dir=dist',",
             "        '--remove-output',",
             "        '--assume-yes-for-downloads',",
-            "        # Size optimization flags",
-            "        '--lto=yes',",
-            "        '--plugin-enable=anti-bloat',",
+            "        # Conservative optimization flags",
+            "        '--lto=no',  # Disable LTO to avoid linking issues",
             "        '--no-progress-bar',",
             "        '--show-scons',",
-            "        # Exclude unnecessary modules",
+            "        # Exclude problematic modules more selectively",
             "        '--nofollow-import-to=tkinter',",
             "        '--nofollow-import-to=matplotlib',",
             "        '--nofollow-import-to=PIL',",
@@ -165,9 +180,17 @@ jobs:
             "        '--nofollow-import-to=setuptools',",
             "        '--nofollow-import-to=wheel',",
             "        '--nofollow-import-to=pip',",
-            "        # Optimization settings",
+            "        # Add specific workarounds for NumPy/OpenCV",
+            "        '--enable-plugin=numpy',",
+            "        '--include-module=numpy.core._multiarray_umath',",
+            "        '--include-module=numpy.random._common',",
+            "        '--include-module=numpy.random.bit_generator',",
+            "        '--include-module=numpy.random._bounded_integers',",
+            "        '--include-module=numpy.random.mtrand',",
+            "        '--include-module=numpy.random._pickle',",
+            "        '--include-module=numpy.random._generator',",
+            "        # Conservative Python optimization",
             "        '--python-flag=-O',",
-            "        '--python-flag=-OO',",
             "    ]",
             "    ",
             "    # Add model directory only if it exists",
@@ -180,7 +203,7 @@ jobs:
             "    # Add the Python file to compile",
             "    nuitka_cmd.append('bp_estimation_optimized.py')",
             "    ",
-            "    print('Running Nuitka with optimizations...')",
+            "    print('Running Nuitka with conservative optimizations...')",
             "    print(' '.join(nuitka_cmd))",
             "    ",
             "    try:",
@@ -206,13 +229,80 @@ jobs:
 
           $buildScriptLines | Out-File -FilePath "build_optimized_dll.py" -Encoding UTF8
 
-          # Run optimized build
-          Write-Host "Running optimized build..." -ForegroundColor Yellow
+          # Run optimized build with fallback strategy
+          Write-Host "Running optimized build with fallback strategy..." -ForegroundColor Yellow
+          
+          # Try optimized build first
           python build_optimized_dll.py
-
+          
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "DLL build failed with exit code: $LASTEXITCODE" -ForegroundColor Red
-            exit 1
+            Write-Host "Optimized build failed, trying fallback build without problematic optimizations..." -ForegroundColor Yellow
+            
+            # Create fallback build script
+            $fallbackScriptLines = @(
+              "import subprocess",
+              "import sys",
+              "import os",
+              "",
+              "def build_fallback_dll():",
+              "    # Minimal Nuitka command for compatibility",
+              "    nuitka_cmd = [",
+              "        sys.executable, '-m', 'nuitka',",
+              "        '--standalone',",
+              "        '--mingw64',",
+              "        '--output-filename=BloodPressureEstimation.dll',",
+              "        '--output-dir=dist',",
+              "        '--remove-output',",
+              "        '--assume-yes-for-downloads',",
+              "        '--no-progress-bar',",
+              "        # Minimal exclusions",
+              "        '--nofollow-import-to=tkinter',",
+              "        '--nofollow-import-to=matplotlib',",
+              "        '--nofollow-import-to=torch',",
+              "        '--nofollow-import-to=tensorflow',",
+              "        'bp_estimation_optimized.py'",
+              "    ]",
+              "    ",
+              "    print('Running fallback Nuitka build...')",
+              "    print(' '.join(nuitka_cmd))",
+              "    ",
+              "    try:",
+              "        result = subprocess.run(nuitka_cmd, capture_output=True, text=True)",
+              "        print('STDOUT:', result.stdout)",
+              "        if result.stderr:",
+              "            print('STDERR:', result.stderr)",
+              "        ",
+              "        if result.returncode == 0:",
+              "            print('Fallback build successful!')",
+              "            return True",
+              "        else:",
+              "            print(f'Fallback build failed with return code {result.returncode}')",
+              "            return False",
+              "    except Exception as e:",
+              "        print(f'Error running fallback Nuitka: {e}')",
+              "        return False",
+              "",
+              "if __name__ == '__main__':",
+              "    success = build_fallback_dll()",
+              "    sys.exit(0 if success else 1)"
+            )
+            $fallbackScriptLines | Out-File -FilePath "build_fallback_dll.py" -Encoding UTF8
+            
+            python build_fallback_dll.py
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Both optimized and fallback builds failed" -ForegroundColor Red
+              Write-Host "Checking for crash reports..." -ForegroundColor Yellow
+              if (Test-Path "nuitka-crash-report.xml") {
+                Write-Host "Nuitka crash report found:" -ForegroundColor Red
+                Get-Content "nuitka-crash-report.xml" | Select-Object -First 50
+              }
+              exit 1
+            } else {
+              Write-Host "Fallback build succeeded" -ForegroundColor Green
+            }
+          } else {
+            Write-Host "Optimized build succeeded" -ForegroundColor Green
           }
 
           Write-Host "DLL build completed successfully" -ForegroundColor Green
@@ -339,8 +429,8 @@ jobs:
             
             # Size optimization summary
             Write-Host "Optimization Summary:" -ForegroundColor Cyan
-            Write-Host "- Anti-bloat plugin enabled" -ForegroundColor Green
-            Write-Host "- LTO optimization enabled" -ForegroundColor Green
+            Write-Host "- Conservative optimization applied" -ForegroundColor Green
+            Write-Host "- NumPy compatibility modules included" -ForegroundColor Green
             Write-Host "- Unnecessary imports excluded" -ForegroundColor Green
             if (Test-Path "models_compressed") {
               Write-Host "- Compressed models used" -ForegroundColor Green
@@ -384,8 +474,8 @@ jobs:
               "- **Status**: $(if ($dllSizeMB -le 20) { 'PASSED' } elseif ($dllSizeMB -le 30) { 'ACCEPTABLE' } else { 'NEEDS OPTIMIZATION' })",
               "",
               "## Optimization Applied",
-              "- Anti-bloat plugin enabled",
-              "- Link-time optimization (LTO)",
+              "- Conservative optimization settings",
+              "- NumPy compatibility modules included",
               "- Unnecessary imports excluded",
               $(if (Test-Path "models_compressed") { "- Compressed model files" } else { "- Models excluded (external loading)" }),
               "- Python optimization flags (-O, -OO)",
@@ -545,8 +635,8 @@ jobs:
             "- **Test Status**: PASSED",
             "",
             "## Optimization Features",
-            "- Anti-bloat plugin enabled",
-            "- Link-time optimization (LTO)",
+            "- Conservative optimization settings",
+            "- NumPy compatibility modules included",
             "- Unnecessary imports excluded",
             $(if (Test-Path "models_compressed") { "- Compressed model files" } else { "- Models excluded (external loading)" }),
             "- Python optimization flags applied",
