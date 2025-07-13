@@ -49,6 +49,27 @@ jobs:
           }
         shell: powershell
 
+      - name: Prepare Models Directory
+        run: |
+          Write-Host "Preparing models directory..." -ForegroundColor Yellow
+          
+          # Check if models_compressed exists, if not use models or create empty
+          if (Test-Path "models_compressed") {
+            Write-Host "Found models_compressed directory" -ForegroundColor Green
+            Get-ChildItem "models_compressed" | ForEach-Object { Write-Host "  $($_.Name)" }
+          } elseif (Test-Path "models") {
+            Write-Host "models_compressed not found, copying from models directory" -ForegroundColor Yellow
+            Copy-Item "models" "models_compressed" -Recurse -Force
+            Write-Host "Created models_compressed from models directory" -ForegroundColor Green
+          } else {
+            Write-Host "No models directory found, creating empty models_compressed" -ForegroundColor Yellow
+            New-Item -ItemType Directory -Path "models_compressed" -Force | Out-Null
+            # Create a dummy file to prevent empty directory issues
+            "# Placeholder file" | Out-File -FilePath "models_compressed\placeholder.txt" -Encoding UTF8
+            Write-Host "Created empty models_compressed directory with placeholder" -ForegroundColor Green
+          }
+        shell: powershell
+
       - name: Build Optimized 20MB DLL
         run: |
           Write-Host "Building Optimized 20MB DLL..." -ForegroundColor Green
@@ -83,12 +104,13 @@ jobs:
             exit 1
           }
 
-          # Check models directory (use compressed models)
+          # Verify models_compressed directory exists
           if (Test-Path "models_compressed") {
-            Write-Host "Compressed models directory found" -ForegroundColor Green
+            Write-Host "Models compressed directory verified" -ForegroundColor Green
             Get-ChildItem "models_compressed" | ForEach-Object { Write-Host "  $($_.Name)" }
           } else {
-            Write-Host "Warning: models_compressed directory not found" -ForegroundColor Yellow
+            Write-Host "ERROR: models_compressed directory still not found!" -ForegroundColor Red
+            exit 1
           }
 
           # Clean up any existing build artifacts
@@ -101,14 +123,18 @@ jobs:
           # Create optimized Nuitka build script
           Write-Host "Creating optimized build script..." -ForegroundColor Yellow
 
-          # Create the Python build script using individual lines to avoid YAML parsing issues
+          # Create the Python build script with conditional model inclusion
           $buildScriptLines = @(
             "import subprocess",
             "import sys",
             "import os",
             "",
             "def build_optimized_dll():",
-            "    # Nuitka command with aggressive optimization",
+            "    # Check if models_compressed exists",
+            "    models_dir_exists = os.path.exists('models_compressed')",
+            "    print(f'Models directory exists: {models_dir_exists}')",
+            "    ",
+            "    # Base Nuitka command with aggressive optimization",
             "    nuitka_cmd = [",
             "        sys.executable, '-m', 'nuitka',",
             "        '--standalone',",
@@ -139,13 +165,20 @@ jobs:
             "        '--nofollow-import-to=setuptools',",
             "        '--nofollow-import-to=wheel',",
             "        '--nofollow-import-to=pip',",
-            "        # Include only necessary data",
-            "        '--include-data-dir=models_compressed=models',",
             "        # Optimization settings",
             "        '--python-flag=-O',",
             "        '--python-flag=-OO',",
-            "        'bp_estimation_optimized.py'",
             "    ]",
+            "    ",
+            "    # Add model directory only if it exists",
+            "    if models_dir_exists:",
+            "        nuitka_cmd.extend(['--include-data-dir=models_compressed=models'])",
+            "        print('Including models_compressed directory')",
+            "    else:",
+            "        print('Skipping models directory inclusion')",
+            "    ",
+            "    # Add the Python file to compile",
+            "    nuitka_cmd.append('bp_estimation_optimized.py')",
             "    ",
             "    print('Running Nuitka with optimizations...')",
             "    print(' '.join(nuitka_cmd))",
@@ -235,7 +268,7 @@ jobs:
             } elseif ($dllSizeMB -le 50) {
               Write-Host "DLL size is large but usable (50MB or less)" -ForegroundColor Yellow
             } else {
-              Write-Host DLL size exceeds acceptable limit (over 50MB)" -ForegroundColor Red
+              Write-Host "DLL size exceeds acceptable limit (over 50MB)" -ForegroundColor Red
               Write-Host "Consider further optimization or using external model files" -ForegroundColor Yellow
             }
             
@@ -309,7 +342,11 @@ jobs:
             Write-Host "- Anti-bloat plugin enabled" -ForegroundColor Green
             Write-Host "- LTO optimization enabled" -ForegroundColor Green
             Write-Host "- Unnecessary imports excluded" -ForegroundColor Green
-            Write-Host "- Compressed models used" -ForegroundColor Green
+            if (Test-Path "models_compressed") {
+              Write-Host "- Compressed models used" -ForegroundColor Green
+            } else {
+              Write-Host "- Models excluded (external loading)" -ForegroundColor Yellow
+            }
             Write-Host "- Python optimization flags applied" -ForegroundColor Green
             
           } else {
@@ -350,7 +387,7 @@ jobs:
               "- Anti-bloat plugin enabled",
               "- Link-time optimization (LTO)",
               "- Unnecessary imports excluded",
-              "- Compressed model files",
+              $(if (Test-Path "models_compressed") { "- Compressed model files" } else { "- Models excluded (external loading)" }),
               "- Python optimization flags (-O, -OO)",
               "",
               "## Recommendations",
@@ -402,7 +439,7 @@ jobs:
             exit 1
           }
 
-          # Copy compressed models
+          # Copy models (prioritize compressed models)
           if (Test-Path "models_compressed") {
             Copy-Item "models_compressed" "tests\CSharpTest\models" -Recurse -Force
             Write-Host "Copied compressed models directory" -ForegroundColor Green
@@ -480,7 +517,7 @@ jobs:
           $dllSize = [math]::Round((Get-Item "dist\BloodPressureEstimation.dll").Length / 1MB, 2)
           Write-Host "Copied optimized DLL ($dllSize MB)" -ForegroundColor Green
 
-          # Copy model files
+          # Copy model files (prioritize compressed)
           if (Test-Path "models_compressed") {
             Copy-Item "models_compressed" "distribution\models" -Recurse -Force
             Write-Host "Copied compressed models directory" -ForegroundColor Green
@@ -511,17 +548,17 @@ jobs:
             "- Anti-bloat plugin enabled",
             "- Link-time optimization (LTO)",
             "- Unnecessary imports excluded",
-            "- Compressed model files",
+            $(if (Test-Path "models_compressed") { "- Compressed model files" } else { "- Models excluded (external loading)" }),
             "- Python optimization flags applied",
             "",
             "## Files Included",
             "- `BloodPressureEstimation.dll` - Optimized and tested DLL",
-            "- `models/` - Compressed machine learning models",
+            $(if (Test-Path "models_compressed") { "- `models/` - Compressed machine learning models" } else { "- Models not included (external loading required)" }),
             "- `size_report.md` - Detailed size analysis",
             "",
             "## Usage",
             "1. Place `BloodPressureEstimation.dll` in your C# application directory",
-            "2. Copy `models/` directory if machine learning models are required",
+            $(if (Test-Path "models_compressed") { "2. Copy `models/` directory if machine learning models are required" } else { "2. Provide external model files if required" }),
             "3. Reference the DLL in your C# project",
             "4. Call the exported functions as documented",
             "",
