@@ -24,6 +24,20 @@ jobs:
           python-version: "3.11"
           architecture: "x64"
 
+      - name: Verify Python Environment
+        run: |
+          Write-Host "Python Environment Information:" -ForegroundColor Cyan
+          python --version
+          python -c "import sys; print(f'Python path: {sys.executable}')"
+          python -c "import sys; print(f'Python paths: {sys.path[:3]}...')"
+          
+          Write-Host "Cleaning up any conflicting packages..." -ForegroundColor Yellow
+          # Remove any existing problematic packages
+          pip uninstall numpy opencv-python opencv-python-headless cv2 -y 2>$null
+          
+          Write-Host "Python environment prepared" -ForegroundColor Green
+        shell: powershell
+
       - name: Cache Python dependencies
         uses: actions/cache@v3
         with:
@@ -39,14 +53,16 @@ jobs:
           # Install Nuitka first
           pip install nuitka
           
-          # Install compatible versions to avoid NumPy/OpenCV conflicts
-          # Use older, more stable versions
-          pip install numpy==1.21.6
-          pip install opencv-python-headless==4.6.0.66
+          # Install compatible versions for Python 3.11
+          # Use NumPy that's compatible with Python 3.11 and recent OpenCV
+          pip install numpy==1.24.3
+          
+          # Install OpenCV that's compatible with NumPy 1.24.3
+          pip install opencv-python-headless==4.8.1.78
           
           # Install other dependencies with compatible versions
-          pip install scikit-learn==1.1.3
-          pip install joblib==1.2.0
+          pip install scikit-learn==1.3.0
+          pip install joblib==1.3.2
           
           # Skip problematic packages entirely for initial build
           Write-Host "Skipping MediaPipe to avoid conflicts" -ForegroundColor Yellow
@@ -59,17 +75,31 @@ jobs:
           
           # Verify critical packages work together
           Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
-          python -c "import numpy; print(f'NumPy version: {numpy.__version__}'); print(f'NumPy array API available: {hasattr(numpy.core, \"multiarray\")}')"
           
+          # Test NumPy import and version
+          python -c "import numpy; print('NumPy version:', numpy.__version__)"
+          
+          # Test NumPy core modules availability
+          python -c "import numpy.core; print('NumPy core modules available')"
+          
+          # Test OpenCV import separately to catch specific errors
           try {
-            python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
+            python -c "import cv2; print('OpenCV version:', cv2.__version__)"
             Write-Host "OpenCV imported successfully" -ForegroundColor Green
           } catch {
-            Write-Host "OpenCV import failed, trying alternative approach..." -ForegroundColor Yellow
+            Write-Host "OpenCV import failed, trying alternative version..." -ForegroundColor Yellow
             pip uninstall opencv-python-headless -y
-            pip install opencv-python==4.5.5.64
-            python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
+            pip install opencv-python-headless==4.7.1.72
+            
+            try {
+              python -c "import cv2; print('OpenCV version:', cv2.__version__)"
+              Write-Host "Alternative OpenCV version works" -ForegroundColor Green
+            } catch {
+              Write-Host "OpenCV still failing, will build without it" -ForegroundColor Yellow
+            }
           }
+          
+          Write-Host "Package installation completed" -ForegroundColor Green
         shell: powershell
 
       - name: Prepare Models Directory
@@ -156,34 +186,51 @@ jobs:
           # Create optimized Nuitka build script
           Write-Host "Creating optimized build script..." -ForegroundColor Yellow
 
-          # Create the Python build script with safer optimization settings
+          # Create the Python build script with enhanced compatibility
           $buildScriptLines = @(
             "import subprocess",
             "import sys",
             "import os",
+            "",
+            "def test_imports():",
+            "    '''Test critical imports before building'''",
+            "    print('Testing critical imports...')",
+            "    ",
+            "    # Test NumPy",
+            "    try:",
+            "        import numpy as np",
+            "        print(f'NumPy {np.__version__} imported successfully')",
+            "        # Test basic NumPy functionality",
+            "        test_array = np.array([1, 2, 3])",
+            "        print('NumPy basic functionality works')",
+            "    except Exception as e:",
+            "        print(f'NumPy import/test failed: {e}')",
+            "        return False",
+            "    ",
+            "    # Test OpenCV (optional)",
+            "    try:",
+            "        import cv2",
+            "        print(f'OpenCV {cv2.__version__} imported successfully')",
+            "        # Test basic OpenCV functionality",
+            "        test_img = cv2.imread('nonexistent.jpg')",  # This should return None, not crash",
+            "        print('OpenCV basic functionality works')",
+            "    except Exception as e:",
+            "        print(f'OpenCV import/test failed: {e}')",
+            "        print('Continuing without OpenCV - build may still succeed')",
+            "    ",
+            "    return True",
             "",
             "def build_optimized_dll():",
             "    # Check if models_compressed exists",
             "    models_dir_exists = os.path.exists('models_compressed')",
             "    print(f'Models directory exists: {models_dir_exists}')",
             "    ",
-            "    # Test imports before building",
-            "    print('Testing critical imports...')",
-            "    try:",
-            "        import numpy",
-            "        print(f'NumPy {numpy.__version__} imported successfully')",
-            "    except Exception as e:",
-            "        print(f'NumPy import failed: {e}')",
+            "    # Test imports first",
+            "    if not test_imports():",
+            "        print('Critical import tests failed')",
             "        return False",
             "    ",
-            "    try:",
-            "        import cv2",
-            "        print(f'OpenCV {cv2.__version__} imported successfully')",
-            "    except Exception as e:",
-            "        print(f'OpenCV import failed: {e}')",
-            "        print('Continuing without OpenCV...')",
-            "    ",
-            "    # Very conservative Nuitka command",
+            "    # Build Nuitka command with maximum compatibility",
             "    nuitka_cmd = [",
             "        sys.executable, '-m', 'nuitka',",
             "        '--standalone',",
@@ -194,21 +241,23 @@ jobs:
             "        '--assume-yes-for-downloads',",
             "        '--no-progress-bar',",
             "        '--show-scons',",
-            "        # Only essential exclusions",
+            "        # Conservative exclusions only",
             "        '--nofollow-import-to=tkinter',",
             "        '--nofollow-import-to=matplotlib',",
             "        '--nofollow-import-to=torch',",
             "        '--nofollow-import-to=tensorflow',",
             "        '--nofollow-import-to=pandas',",
             "        '--nofollow-import-to=plotly',",
-            "        # Force include NumPy core modules",
+            "        '--nofollow-import-to=jupyter',",
+            "        '--nofollow-import-to=IPython',",
+            "        # Include essential NumPy modules explicitly",
             "        '--include-module=numpy',",
             "        '--include-module=numpy.core',",
-            "        '--include-module=numpy.core.multiarray',",
-            "        '--include-module=numpy.core._multiarray_umath',",
             "        '--include-module=numpy.lib',",
             "        '--include-module=numpy.linalg',",
-            "        # No aggressive optimizations",
+            "        # Include sklearn modules if used",
+            "        '--include-module=sklearn',",
+            "        '--include-module=joblib',",
             "    ]",
             "    ",
             "    # Add model directory only if it exists",
@@ -221,14 +270,16 @@ jobs:
             "    # Add the Python file to compile",
             "    nuitka_cmd.append('bp_estimation_optimized.py')",
             "    ",
-            "    print('Running Nuitka with conservative settings...')",
+            "    print('Running Nuitka with compatibility-first settings...')",
             "    print(' '.join(nuitka_cmd))",
             "    ",
             "    try:",
-            "        result = subprocess.run(nuitka_cmd, capture_output=True, text=True)",
-            "        print('STDOUT:', result.stdout)",
+            "        result = subprocess.run(nuitka_cmd, capture_output=True, text=True, timeout=1800)  # 30 min timeout",
+            "        print('STDOUT:')",
+            "        print(result.stdout)",
             "        if result.stderr:",
-            "            print('STDERR:', result.stderr)",
+            "            print('STDERR:')",
+            "            print(result.stderr)",
             "        ",
             "        if result.returncode == 0:",
             "            print('Build successful!')",
@@ -236,6 +287,9 @@ jobs:
             "        else:",
             "            print(f'Build failed with return code {result.returncode}')",
             "            return False",
+            "    except subprocess.TimeoutExpired:",
+            "        print('Build timed out after 30 minutes')",
+            "        return False",
             "    except Exception as e:",
             "        print(f'Error running Nuitka: {e}')",
             "        return False",
