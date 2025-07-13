@@ -179,7 +179,7 @@ def get_current_time():
     return time.time()
 
 # C wrapper functions for DLL export
-cdef int InitializeDLL(const char* model_dir) nogil:
+cdef public int InitializeDLL(const char* model_dir) nogil:
     cdef int ret_val
     
     with gil:
@@ -190,7 +190,7 @@ cdef int InitializeDLL(const char* model_dir) nogil:
         except:
             return 0
 
-cdef const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path) nogil:
+cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path) nogil:
     cdef PyObject* result
     cdef const char* ret_str
     
@@ -207,7 +207,7 @@ cdef const char* StartBloodPressureAnalysisRequest(const char* request_id, int h
         except:
             return b"ERROR: Exception occurred"
 
-cdef const char* GetProcessingStatus(const char* request_id) nogil:
+cdef public const char* GetProcessingStatus(const char* request_id) nogil:
     cdef PyObject* result
     cdef const char* ret_str
     
@@ -223,7 +223,7 @@ cdef const char* GetProcessingStatus(const char* request_id) nogil:
         except:
             return b"ERROR: Exception occurred"
 
-cdef int CancelBloodPressureAnalysis(const char* request_id) nogil:
+cdef public int CancelBloodPressureAnalysis(const char* request_id) nogil:
     cdef int ret_val
     
     with gil:
@@ -234,7 +234,7 @@ cdef int CancelBloodPressureAnalysis(const char* request_id) nogil:
         except:
             return 0
 
-cdef const char* GetVersionInfo() nogil:
+cdef public const char* GetVersionInfo() nogil:
     cdef PyObject* result
     cdef const char* ret_str
     
@@ -249,7 +249,7 @@ cdef const char* GetVersionInfo() nogil:
         except:
             return b"ERROR: Version info not available"
 
-cdef const char* GenerateRequestId() nogil:
+cdef public const char* GenerateRequestId() nogil:
     cdef PyObject* result
     cdef const char* ret_str
     
