@@ -54,57 +54,61 @@ jobs:
 
       - name: Install Python dependencies (minimal)
         run: |
-          $ErrorActionPreference = "Continue"
+          $ErrorActionPreference = "Stop"
           
           Write-Host "Installing Python dependencies..." -ForegroundColor Cyan
           
           # Upgrade pip first
           python -m pip install --upgrade pip
-          
-          # Clean install approach - force reinstall key packages
+      
+          # Install Nuitka (no dependency issues)
           Write-Host "Installing Nuitka..." -ForegroundColor Yellow
           pip install nuitka --force-reinstall
-          
-          # Install compatible versions for Python 3.11
-          Write-Host "Installing NumPy..." -ForegroundColor Yellow
-          pip install numpy==1.24.3 --force-reinstall
-          
-          # Install OpenCV that's compatible with NumPy 1.24.3
+      
+          # Install NumPy 1.24.3 and pin it with no-deps
+          Write-Host "Installing NumPy 1.24.3..." -ForegroundColor Yellow
+          pip install numpy==1.24.3 --force-reinstall --no-deps
+      
+          # Install OpenCV compatible with NumPy 1.24.3
           Write-Host "Installing OpenCV..." -ForegroundColor Yellow  
-          pip install opencv-python-headless==4.8.1.78
-          
+          pip install opencv-python-headless==4.8.1.78 --force-reinstall
+      
           # Install other dependencies
           Write-Host "Installing scikit-learn..." -ForegroundColor Yellow
-          pip install scikit-learn==1.3.0
-          
+          pip install scikit-learn==1.3.0 --force-reinstall
+      
           Write-Host "Installing joblib..." -ForegroundColor Yellow
-          pip install joblib==1.3.2
-          
-          # Skip problematic packages entirely for initial build
+          pip install joblib==1.3.2 --force-reinstall
+      
+          # Skip MediaPipe
           Write-Host "Skipping MediaPipe to avoid conflicts" -ForegroundColor Yellow
-          
-          # Install minimal requirements if available
+      
+          # Install from requirements_minimal.txt only if it exists (but skip numpy to avoid override)
           if (Test-Path requirements_minimal.txt) {
-            Write-Host "Installing from requirements_minimal.txt..." -ForegroundColor Yellow
-            pip install -r requirements_minimal.txt
+            Write-Host "Installing from requirements_minimal.txt (excluding NumPy)..." -ForegroundColor Yellow
+            pip install -r requirements_minimal.txt --no-deps
           }
-          
+      
           Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
-          
-          # Test critical imports with error handling
+      
+          # Check installed packages
+          pip list
+      
+          # Run pip check to confirm no broken dependencies
+          Write-Host "Running pip check..." -ForegroundColor Yellow
+          pip check
+      
+          # Test critical imports
           Write-Host "Testing NumPy..." -ForegroundColor Gray
           python -c "import numpy; print('NumPy version:', numpy.__version__)"
-          
+      
           Write-Host "Testing NumPy core..." -ForegroundColor Gray  
           python -c "import numpy.core; print('NumPy core modules available')"
-          
+      
           Write-Host "Testing OpenCV..." -ForegroundColor Gray
           python -c "import cv2; print('OpenCV version:', cv2.__version__)"
-          
+      
           Write-Host "Package installation and verification completed" -ForegroundColor Green
-          
-          # Reset error action preference  
-          $ErrorActionPreference = "Stop"
         shell: powershell
 
       - name: Prepare Models Directory
