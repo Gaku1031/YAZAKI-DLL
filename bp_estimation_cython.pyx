@@ -15,6 +15,9 @@ from datetime import datetime
 
 # Windows DLL exports for pure C functions
 # (Functions will be exported via setup.py configuration)
+cdef extern from "Python.h":
+    void Py_Initialize()
+    void Py_Finalize()
 
 # Global variables
 models = {}
@@ -179,7 +182,7 @@ def get_current_time():
     return time.time()
 
 # Pure C wrapper functions for DLL export
-def DllMain(hModule, ul_reason_for_call, lpReserved):
+cdef public int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved):
     global python_initialized
     if ul_reason_for_call == 1:  # DLL_PROCESS_ATTACH
         if not python_initialized:
@@ -189,49 +192,78 @@ def DllMain(hModule, ul_reason_for_call, lpReserved):
             python_initialized = False
     return 1
 
-def InitializeDLL(model_dir):
+cdef public int InitializeDLL(const char* model_dir):
+    cdef str model_dir_str
     try:
-        model_dir_str = model_dir.decode('utf-8') if isinstance(model_dir, bytes) else str(model_dir)
+        if model_dir:
+            model_dir_str = model_dir.decode('utf-8')
+        else:
+            model_dir_str = ""
         ret_val = 1 if initialize_models(model_dir_str) else 0
         return ret_val
     except:
         return 0
 
-def StartBloodPressureAnalysisRequest(request_id, height, weight, sex, movie_path):
+cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path):
+    cdef str request_id_str, movie_path_str, result_str
+    cdef bytes result_bytes
     try:
-        request_id_str = request_id.decode('utf-8') if isinstance(request_id, bytes) else str(request_id)
-        movie_path_str = movie_path.decode('utf-8') if isinstance(movie_path, bytes) else str(movie_path)
+        if request_id:
+            request_id_str = request_id.decode('utf-8')
+        else:
+            request_id_str = ""
+        if movie_path:
+            movie_path_str = movie_path.decode('utf-8')
+        else:
+            movie_path_str = ""
         result_str = start_blood_pressure_analysis(request_id_str, height, weight, sex, movie_path_str)
-        return result_str.encode('utf-8')
+        result_bytes = result_str.encode('utf-8')
+        return result_bytes
     except:
         return b"ERROR: Exception occurred"
 
-def GetProcessingStatus(request_id):
+cdef public const char* GetProcessingStatus(const char* request_id):
+    cdef str request_id_str, result_str
+    cdef bytes result_bytes
     try:
-        request_id_str = request_id.decode('utf-8') if isinstance(request_id, bytes) else str(request_id)
+        if request_id:
+            request_id_str = request_id.decode('utf-8')
+        else:
+            request_id_str = ""
         result_str = get_processing_status(request_id_str)
-        return result_str.encode('utf-8')
+        result_bytes = result_str.encode('utf-8')
+        return result_bytes
     except:
         return b"ERROR: Exception occurred"
 
-def CancelBloodPressureAnalysis(request_id):
+cdef public int CancelBloodPressureAnalysis(const char* request_id):
+    cdef str request_id_str
     try:
-        request_id_str = request_id.decode('utf-8') if isinstance(request_id, bytes) else str(request_id)
+        if request_id:
+            request_id_str = request_id.decode('utf-8')
+        else:
+            request_id_str = ""
         ret_val = 1 if cancel_blood_pressure_analysis(request_id_str) else 0
         return ret_val
     except:
         return 0
 
-def GetVersionInfo():
+cdef public const char* GetVersionInfo():
+    cdef str result_str
+    cdef bytes result_bytes
     try:
         result_str = get_version_info()
-        return result_str.encode('utf-8')
+        result_bytes = result_str.encode('utf-8')
+        return result_bytes
     except:
         return b"ERROR: Version info not available"
 
-def GenerateRequestId():
+cdef public const char* GenerateRequestId():
+    cdef str result_str
+    cdef bytes result_bytes
     try:
         result_str = generate_request_id()
-        return result_str.encode('utf-8')
+        result_bytes = result_str.encode('utf-8')
+        return result_bytes
     except:
         return b"ERROR: Could not generate request ID" 
