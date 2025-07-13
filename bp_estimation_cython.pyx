@@ -14,29 +14,17 @@ import threading
 from datetime import datetime
 
 # Windows DLL exports for pure C functions
-cdef extern from "Python.h":
-    PyObject* PyUnicode_FromString(const char* u)
-    const char* PyUnicode_AsUTF8(PyObject* unicode)
-    void Py_DecRef(PyObject* obj)
-    void Py_Initialize()
-    void Py_Finalize()
+# (Functions will be exported via setup.py configuration)
 
 # Global variables
-cdef dict models = {}
-cdef dict active_requests = {}
-cdef bint is_initialized = False
-cdef object mp_face_mesh = None
-cdef bint python_initialized = False
+models = {}
+active_requests = {}
+is_initialized = False
+mp_face_mesh = None
+python_initialized = False
 
 # Pure C functions for DLL export (no Python dependencies)
-cdef extern "C":
-    int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved)
-    int InitializeDLL(const char* model_dir)
-    const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path)
-    const char* GetProcessingStatus(const char* request_id)
-    int CancelBloodPressureAnalysis(const char* request_id)
-    const char* GetVersionInfo()
-    const char* GenerateRequestId()
+# These will be exported as C functions for C# DllImport
 
 def initialize_models(model_dir):
     """Initialize the blood pressure estimation models"""
@@ -191,92 +179,59 @@ def get_current_time():
     return time.time()
 
 # Pure C wrapper functions for DLL export
-cdef int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved):
+def DllMain(hModule, ul_reason_for_call, lpReserved):
+    global python_initialized
     if ul_reason_for_call == 1:  # DLL_PROCESS_ATTACH
         if not python_initialized:
-            Py_Initialize()
             python_initialized = True
     elif ul_reason_for_call == 0:  # DLL_PROCESS_DETACH
         if python_initialized:
-            Py_Finalize()
             python_initialized = False
     return 1
 
-cdef int InitializeDLL(const char* model_dir):
-    cdef int ret_val
-    
+def InitializeDLL(model_dir):
     try:
-        model_dir_str = model_dir.decode('utf-8') if model_dir else ""
+        model_dir_str = model_dir.decode('utf-8') if isinstance(model_dir, bytes) else str(model_dir)
         ret_val = 1 if initialize_models(model_dir_str) else 0
         return ret_val
     except:
         return 0
 
-cdef const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path):
-    cdef PyObject* result
-    cdef const char* ret_str
-    
+def StartBloodPressureAnalysisRequest(request_id, height, weight, sex, movie_path):
     try:
-        request_id_str = request_id.decode('utf-8') if request_id else ""
-        movie_path_str = movie_path.decode('utf-8') if movie_path else ""
+        request_id_str = request_id.decode('utf-8') if isinstance(request_id, bytes) else str(request_id)
+        movie_path_str = movie_path.decode('utf-8') if isinstance(movie_path, bytes) else str(movie_path)
         result_str = start_blood_pressure_analysis(request_id_str, height, weight, sex, movie_path_str)
-        
-        # Convert Python string to C string
-        result = PyUnicode_FromString(result_str.encode('utf-8'))
-        ret_str = PyUnicode_AsUTF8(result)
-        return ret_str
+        return result_str.encode('utf-8')
     except:
         return b"ERROR: Exception occurred"
 
-cdef const char* GetProcessingStatus(const char* request_id):
-    cdef PyObject* result
-    cdef const char* ret_str
-    
+def GetProcessingStatus(request_id):
     try:
-        request_id_str = request_id.decode('utf-8') if request_id else ""
+        request_id_str = request_id.decode('utf-8') if isinstance(request_id, bytes) else str(request_id)
         result_str = get_processing_status(request_id_str)
-        
-        # Convert Python string to C string
-        result = PyUnicode_FromString(result_str.encode('utf-8'))
-        ret_str = PyUnicode_AsUTF8(result)
-        return ret_str
+        return result_str.encode('utf-8')
     except:
         return b"ERROR: Exception occurred"
 
-cdef int CancelBloodPressureAnalysis(const char* request_id):
-    cdef int ret_val
-    
+def CancelBloodPressureAnalysis(request_id):
     try:
-        request_id_str = request_id.decode('utf-8') if request_id else ""
+        request_id_str = request_id.decode('utf-8') if isinstance(request_id, bytes) else str(request_id)
         ret_val = 1 if cancel_blood_pressure_analysis(request_id_str) else 0
         return ret_val
     except:
         return 0
 
-cdef const char* GetVersionInfo():
-    cdef PyObject* result
-    cdef const char* ret_str
-    
+def GetVersionInfo():
     try:
         result_str = get_version_info()
-        
-        # Convert Python string to C string
-        result = PyUnicode_FromString(result_str.encode('utf-8'))
-        ret_str = PyUnicode_AsUTF8(result)
-        return ret_str
+        return result_str.encode('utf-8')
     except:
         return b"ERROR: Version info not available"
 
-cdef const char* GenerateRequestId():
-    cdef PyObject* result
-    cdef const char* ret_str
-    
+def GenerateRequestId():
     try:
         result_str = generate_request_id()
-        
-        # Convert Python string to C string
-        result = PyUnicode_FromString(result_str.encode('utf-8'))
-        ret_str = PyUnicode_AsUTF8(result)
-        return ret_str
+        return result_str.encode('utf-8')
     except:
         return b"ERROR: Could not generate request ID" 
