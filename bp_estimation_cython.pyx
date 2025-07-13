@@ -34,7 +34,6 @@ import re
 import cv2
 import numpy as np
 import mediapipe as mp
-import pandas as pd
 import joblib
 import threading
 import time
@@ -44,9 +43,6 @@ from collections import deque
 from typing import Dict, List, Tuple, Optional, Callable
 from scipy import signal
 from scipy.signal import butter, find_peaks, lfilter
-from sklearn.decomposition import PCA
-from scipy.signal import savgol_filter
-import pywt
 from scipy.stats import zscore
 import logging
 import re
