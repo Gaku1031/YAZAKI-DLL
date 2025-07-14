@@ -481,7 +481,7 @@ jobs:
           $env:PATH = "$PWD;$env:PATH"
           Write-Host "Running C# integration test in dist_csharp..."
           try {
-            $testProcess = Start-Process -FilePath "BloodPressureTest.exe" -NoNewWindow -Wait -PassThru
+            $testProcess = Start-Process -FilePath "BloodPressureTest.exe" -NoNewWindow -Wait -PassThru -Environment @{ "PATH" = "$PWD;$env:PATH" }
             $exitCode = $testProcess.ExitCode
             if ($exitCode -eq 0) {
               Write-Host "[OK] C# integration test passed"
