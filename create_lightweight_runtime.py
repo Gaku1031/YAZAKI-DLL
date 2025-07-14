@@ -52,8 +52,13 @@ def create_lightweight_runtime():
             'PIL',  # Pillow（必要部分のみコピー）
         ]
 
-        # ファイルサイズ制限（200KB以上のファイルは除外）
-        max_file_size = 200 * 1024  # 200KB
+        # ファイルサイズ制限（100KB以上のファイルは除外）
+        max_file_size = 100 * 1024  # 100KB
+
+        # サイズ監視用
+        total_copied_files = 0
+        total_copied_size = 0
+        large_files_skipped = 0
 
         # 追加の除外パターン
         additional_exclusions = [
@@ -172,7 +177,6 @@ def create_lightweight_runtime():
                 f"Source site-packages not found: {source_site_packages}")
 
         # モジュールをコピー（サイズ最適化付き）
-        total_copied_size = 0
         for module in required_modules:
             module_path = source_site_packages / module
             if module_path.exists():
@@ -194,6 +198,7 @@ def create_lightweight_runtime():
                                     if size_excluded:
                                         print(
                                             f"Skipping large file: {item.name} ({file_size / (1024*1024):.2f} MB)")
+                                        large_files_skipped += 1
                                 else:
                                     size_excluded = False
 
@@ -204,13 +209,18 @@ def create_lightweight_runtime():
                             file_size = src.stat().st_size
                             if file_size <= max_file_size:
                                 shutil.copy2(src, dst)
+                                total_copied_files += 1
+                                total_copied_size += file_size
                             else:
                                 print(
                                     f"Skipping large file: {src.name} ({file_size / (1024*1024):.2f} MB)")
+                                large_files_skipped += 1
 
                     copy_with_exclusions(module_path, target_path)
                 else:
                     shutil.copy2(module_path, target_path)
+                    total_copied_files += 1
+                    total_copied_size += module_path.stat().st_size
 
                 # サイズを計算
                 if target_path.exists():
@@ -230,6 +240,8 @@ def create_lightweight_runtime():
 
         print(
             f"Total modules size: {total_copied_size / (1024 * 1024):.2f} MB")
+        print(f"Total files copied: {total_copied_files}")
+        print(f"Large files skipped: {large_files_skipped}")
 
         # 作成したCythonモジュールをコピー
         cython_module = Path("BloodPressureEstimation.dll")
@@ -440,6 +452,33 @@ print("\\n=== All Tests Passed Successfully! ===")
             print(test_process.stderr)
             # Don't exit here, just warn
             print("WARNING: Runtime test failed, but continuing...")
+
+            # Additional diagnostic: check if test script exists
+            print(f"Checking if test script exists: {test_script}")
+            if test_script.exists():
+                print(
+                    f"Test script exists, size: {test_script.stat().st_size} bytes")
+            else:
+                print("Test script does not exist!")
+                print("Runtime directory contents:")
+                for item in runtime_dir.iterdir():
+                    print(f"  {item.name}")
+
+            # Try to run a simple Python test instead
+            print("Trying simple Python test...")
+            simple_test = subprocess.run([
+                str(python_exe_path),
+                "-c", "import sys; print('Python version:', sys.version); print('SUCCESS')"
+            ], capture_output=True, text=True, cwd=str(runtime_dir))
+
+            if simple_test.returncode == 0:
+                print("Simple Python test passed!")
+                print("Simple test output:")
+                print(simple_test.stdout)
+            else:
+                print("Simple Python test failed!")
+                print("Simple test errors:")
+                print(simple_test.stderr)
 
         print("Runtime verification completed successfully")
         return runtime_dir

@@ -691,6 +691,34 @@ jobs:
                 Write-Host "No test error file found" -ForegroundColor Yellow
               }
               
+              # Additional diagnostic: check runtime contents
+              Write-Host "Additional diagnostic information:" -ForegroundColor Cyan
+              Write-Host "Runtime directory contents:" -ForegroundColor Yellow
+              Get-ChildItem $runtimeInTest -Recurse | ForEach-Object { 
+                $size = if ($_.PSIsContainer) { "DIR" } else { "$([math]::Round($_.Length / 1KB, 1)) KB" }
+                Write-Host "  $($_.FullName.Replace($runtimeInTest, '')) ($size)" -ForegroundColor Gray 
+              }
+              
+              # Check if BloodPressureEstimation.dll is valid
+              $dllPath = Join-Path $runtimeInTest "BloodPressureEstimation.dll"
+              if (Test-Path $dllPath) {
+                $dllInfo = Get-Item $dllPath
+                Write-Host "BloodPressureEstimation.dll info:" -ForegroundColor Cyan
+                Write-Host "  Size: $([math]::Round($dllInfo.Length / 1KB, 1)) KB" -ForegroundColor Gray
+                Write-Host "  Created: $($dllInfo.CreationTime)" -ForegroundColor Gray
+                
+                # Try to read first few bytes to check if it's a valid file
+                try {
+                  $bytes = [System.IO.File]::ReadAllBytes($dllPath)
+                  $header = [System.Text.Encoding]::ASCII.GetString($bytes[0..99])
+                  Write-Host "  Header: $($header.Substring(0, [Math]::Min(50, $header.Length)))..." -ForegroundColor Gray
+                } catch {
+                  Write-Host "  Error reading DLL: $($_.Exception.Message)" -ForegroundColor Red
+                }
+              } else {
+                Write-Host "BloodPressureEstimation.dll NOT FOUND!" -ForegroundColor Red
+              }
+              
               if ($exitCode -eq 0) {
                 Write-Host "[OK] C# test with lightweight runtime passed" -ForegroundColor Green
               } else {
