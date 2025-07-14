@@ -441,6 +441,64 @@ jobs:
           }
         shell: powershell
 
+      - name: Prepare C# Integration Package (dist_csharp)
+        run: |
+          # create dist_csharp directory
+          New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
+
+          # DLL, python311.dll, 依存パッケージ, モデル, テストEXEをコピー
+          Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
+          if (Test-Path "python311.dll") { Copy-Item "python311.dll" "dist_csharp\" -Force }
+          if (Test-Path "dist_cython\python_deps") { Copy-Item "dist_cython\python_deps" "dist_csharp\" -Recurse -Force }
+          if (Test-Path "models_compressed") { Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force }
+          elseif (Test-Path "models") { Copy-Item "models" "dist_csharp\models" -Recurse -Force }
+          if (Test-Path "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe") { Copy-Item "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe" "dist_csharp\" -Force }
+
+          # README自動生成
+          $readme = @(
+            "# BloodPressureEstimation C# Integration Package",
+            "",
+            "このフォルダをそのままC#アプリの実行ディレクトリにコピーしてご利用ください。",
+            "",
+            "- BloodPressureEstimation.dll: CythonでビルドしたDLL",
+            "- python311.dll: PythonランタイムDLL",
+            "- python_deps/: 必要なPython依存パッケージ",
+            "- models/: 学習済みモデル",
+            "- BloodPressureTest.exe: C#テスト実行ファイル",
+            "",
+            "C#からの呼び出し例や詳細はREADME_DLL.mdを参照してください。"
+          )
+          $readme -join "`n" | Out-File -FilePath "dist_csharp\README.txt" -Encoding UTF8
+        shell: powershell
+
+      - name: Run C# Integration Test in dist_csharp
+        run: |
+          Push-Location "dist_csharp"
+          $env:PATH = "$PWD;$env:PATH"
+          Write-Host "Running C# integration test in dist_csharp..."
+          try {
+            $testProcess = Start-Process -FilePath "BloodPressureTest.exe" -NoNewWindow -Wait -PassThru
+            $exitCode = $testProcess.ExitCode
+            if ($exitCode -eq 0) {
+              Write-Host "[OK] C# integration test passed"
+            } else {
+              Write-Host "[ERROR] C# integration test failed with exit code: $exitCode"
+              exit 1
+            }
+          } catch {
+            Write-Host "[ERROR] Exception during C# integration test: $($_.Exception.Message)"
+            exit 1
+          }
+          Pop-Location
+        shell: powershell
+
+      - name: Upload C# Integration Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BloodPressureEstimation-CSharp-Package-${{ github.sha }}
+          path: dist_csharp/
+          retention-days: 30
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
@@ -574,45 +632,8 @@ jobs:
           Write-Host "[INFO] The DLL is designed for DllImport from C#, not Python import" -ForegroundColor Cyan
 
       - name: Run C# Integration Tests
-        shell: powershell
-        run: |
-          Write-Host "Running C# integration tests..." -ForegroundColor Yellow
-
-          # Check if the DLL exists
-          $dllFile = "tests\CSharpTest\BloodPressureEstimation.dll"
-          if (Test-Path $dllFile) {
-            Write-Host "Windows DLL found: $dllFile" -ForegroundColor Green
-            $dllInfo = Get-Item $dllFile
-            Write-Host "DLL size: $([math]::Round($dllInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
-          } else {
-            Write-Host "[ERROR] Windows DLL not found: $dllFile" -ForegroundColor Red
-            exit 1
-          }
-
-          # Check if C# test project exists
-          $testExe = "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe"
-          if (Test-Path $testExe) {
-            Write-Host "Test executable found: $testExe" -ForegroundColor Green
-            
-            try {
-              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru
-              $exitCode = $testProcess.ExitCode
-              
-              if ($exitCode -eq 0) {
-                Write-Host "[OK] C# integration tests passed" -ForegroundColor Green
-              } else {
-                Write-Host "[ERROR] C# integration tests failed with exit code: $exitCode" -ForegroundColor Red
-                Write-Host "[INFO] This is expected since the DLL is a Python extension renamed to .dll" -ForegroundColor Yellow
-                Write-Host "[INFO] For proper C# integration, a pure Windows DLL would be needed" -ForegroundColor Yellow
-              }
-            } catch {
-              Write-Host "Error running integration tests: $($_.Exception.Message)" -ForegroundColor Red
-              Write-Host "[INFO] This is expected since the DLL is a Python extension renamed to .dll" -ForegroundColor Yellow
-            }
-          } else {
-            Write-Host "[WARNING] Test executable not found - skipping C# integration tests" -ForegroundColor Yellow
-            Write-Host "[INFO] The Windows DLL was created successfully for demonstration" -ForegroundColor Cyan
-          }
+        if: false
+        run: echo "Skipping old DLL-only integration test."
 
       - name: Create Obfuscation Report
         run: |
