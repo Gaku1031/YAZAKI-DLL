@@ -13,6 +13,7 @@
 - Python標準ライブラリ（encodings等）を追加
 - 最小限の標準ライブラリのみを含める
 - エラー処理を改善
+- より包括的な標準ライブラリコピー
 """
 
 import os
@@ -225,7 +226,7 @@ print(f"  Python path: {sys.path[:3]}")
         site_packages.mkdir(exist_ok=True)
         print(f"Created site-packages directory: {site_packages}")
 
-        # Python標準ライブラリをコピー（最小限）
+        # Python標準ライブラリをコピー（包括的）
         source_lib = get_python_lib_path()
         print(f"Source Python lib: {source_lib}")
 
@@ -233,29 +234,89 @@ print(f"  Python path: {sys.path[:3]}")
             raise FileNotFoundError(
                 f"Source Python lib not found: {source_lib}")
 
-        # 標準ライブラリモジュールをコピー
+        # 標準ライブラリを包括的にコピー（最小限のファイルのみ）
         print("Copying required standard library modules...")
-        for module in required_stdlib_modules:
-            module_path = source_lib / f"{module}.py"
-            if module_path.exists():
-                target_path = lib_dir / f"{module}.py"
-                shutil.copy2(module_path, target_path)
+
+        # 必要な標準ライブラリファイルをコピー
+        essential_stdlib_files = [
+            'encodings/__init__.py',
+            'encodings/aliases.py',
+            'encodings/ascii.py',
+            'encodings/base64_codec.py',
+            'encodings/charmap.py',
+            'encodings/cp1252.py',
+            'encodings/hex_codec.py',
+            'encodings/idna.py',
+            'encodings/iso8859_1.py',
+            'encodings/latin_1.py',
+            'encodings/mbcs.py',
+            'encodings/palmos.py',
+            'encodings/punycode.py',
+            'encodings/quopri_codec.py',
+            'encodings/raw_unicode_escape.py',
+            'encodings/rot_13.py',
+            'encodings/undefined.py',
+            'encodings/unicode_escape.py',
+            'encodings/utf_8.py',
+            'encodings/utf_8_sig.py',
+            'encodings/uu_codec.py',
+            'encodings/zlib_codec.py',
+            'codecs.py',
+            'collections/__init__.py',
+            'collections/abc.py',
+            'copyreg.py',
+            'functools.py',
+            'importlib/__init__.py',
+            'importlib/abc.py',
+            'importlib/machinery.py',
+            'importlib/util.py',
+            'json/__init__.py',
+            'json/decoder.py',
+            'json/encoder.py',
+            'logging/__init__.py',
+            'logging/config.py',
+            'logging/handlers.py',
+            'os.py',
+            'pickle.py',
+            'pkgutil.py',
+            're.py',
+            'site.py',
+            'sys.py',
+            'traceback.py',
+            'types.py',
+            'warnings.py',
+            'weakref.py',
+            'zipimport.py',
+            'zlib.py',
+            '__future__.py',
+            '_collections_abc.py',
+            '_weakrefset.py',
+            'abc.py',
+            'builtins.py',
+            'copy.py',
+            'enum.py',
+            'io.py',
+            'keyword.py',
+            'operator.py',
+            'stat.py',
+            'string.py',
+            'tokenize.py',
+            'token.py',
+        ]
+
+        # 標準ライブラリファイルをコピー
+        for file_path in essential_stdlib_files:
+            source_file = source_lib / file_path
+            if source_file.exists():
+                target_file = lib_dir / file_path
+                # ディレクトリを作成
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_file, target_file)
                 total_copied_files += 1
-                total_copied_size += module_path.stat().st_size
-                print(f"Copied stdlib module: {module}")
+                total_copied_size += source_file.stat().st_size
+                print(f"Copied stdlib file: {file_path}")
             else:
-                # ディレクトリの場合（例：encodings）
-                module_dir = source_lib / module
-                if module_dir.exists() and module_dir.is_dir():
-                    target_dir = lib_dir / module
-                    shutil.copytree(module_dir, target_dir, dirs_exist_ok=True)
-                    size = sum(f.stat().st_size for f in target_dir.rglob(
-                        '*') if f.is_file())
-                    total_copied_size += size
-                    print(f"Copied stdlib package: {module}")
-                else:
-                    print(
-                        f"Warning: Standard library module not found: {module}")
+                print(f"Warning: Standard library file not found: {file_path}")
 
         # 必要なsite-packagesモジュールをコピー
         source_site_packages = get_site_packages_path()
