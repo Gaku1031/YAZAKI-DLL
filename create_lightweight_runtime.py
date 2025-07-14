@@ -9,11 +9,10 @@
 3. __pycache__ディレクトリを除外
 4. 各モジュールのサイズを監視
 
-代替案（20MB制限を満たせない場合）:
-1. より軽量なライブラリを使用（例：OpenCV→PIL、scikit-learn→簡易実装）
-2. 事前コンパイルされたモデルを使用
-3. サーバーサイド処理に移行
-4. ネイティブC++実装に移行
+修正点:
+- Python標準ライブラリ（encodings等）を追加
+- 最小限の標準ライブラリのみを含める
+- エラー処理を改善
 """
 
 import os
@@ -33,6 +32,12 @@ def get_site_packages_path():
     return python_dir / "Lib" / "site-packages"
 
 
+def get_python_lib_path():
+    """Python標準ライブラリのパスを取得"""
+    python_dir = Path(sys.executable).parent
+    return python_dir / "Lib"
+
+
 def create_lightweight_runtime():
     """軽量Pythonランタイムを作成"""
 
@@ -50,6 +55,30 @@ def create_lightweight_runtime():
             'mediapipe',  # MediaPipe（必要部分のみコピー）
             'joblib',  # モデル読み込み用
             'PIL',  # Pillow（必要部分のみコピー）
+        ]
+
+        # 必要な標準ライブラリモジュール（最小限）
+        required_stdlib_modules = [
+            'encodings',  # 文字エンコーディング（必須）
+            'codecs',  # エンコーディングサポート
+            'collections',  # コレクション型
+            'copyreg',  # コピー登録
+            'functools',  # 関数ツール
+            'importlib',  # インポートシステム
+            'json',  # JSON処理
+            'logging',  # ログ機能
+            'os',  # OS機能
+            'pickle',  # シリアライゼーション
+            'pkgutil',  # パッケージユーティリティ
+            're',  # 正規表現
+            'site',  # サイト設定
+            'sys',  # システム機能
+            'traceback',  # トレースバック
+            'types',  # 型定義
+            'warnings',  # 警告
+            'weakref',  # 弱参照
+            'zipimport',  # ZIPインポート
+            'zlib',  # 圧縮
         ]
 
         # ファイルサイズ制限（100KB以上のファイルは除外）
@@ -196,7 +225,39 @@ print(f"  Python path: {sys.path[:3]}")
         site_packages.mkdir(exist_ok=True)
         print(f"Created site-packages directory: {site_packages}")
 
-        # 必要なモジュールをコピー
+        # Python標準ライブラリをコピー（最小限）
+        source_lib = get_python_lib_path()
+        print(f"Source Python lib: {source_lib}")
+
+        if not source_lib.exists():
+            raise FileNotFoundError(
+                f"Source Python lib not found: {source_lib}")
+
+        # 標準ライブラリモジュールをコピー
+        print("Copying required standard library modules...")
+        for module in required_stdlib_modules:
+            module_path = source_lib / f"{module}.py"
+            if module_path.exists():
+                target_path = lib_dir / f"{module}.py"
+                shutil.copy2(module_path, target_path)
+                total_copied_files += 1
+                total_copied_size += module_path.stat().st_size
+                print(f"Copied stdlib module: {module}")
+            else:
+                # ディレクトリの場合（例：encodings）
+                module_dir = source_lib / module
+                if module_dir.exists() and module_dir.is_dir():
+                    target_dir = lib_dir / module
+                    shutil.copytree(module_dir, target_dir, dirs_exist_ok=True)
+                    size = sum(f.stat().st_size for f in target_dir.rglob(
+                        '*') if f.is_file())
+                    total_copied_size += size
+                    print(f"Copied stdlib package: {module}")
+                else:
+                    print(
+                        f"Warning: Standard library module not found: {module}")
+
+        # 必要なsite-packagesモジュールをコピー
         source_site_packages = get_site_packages_path()
         print(f"Source site-packages: {source_site_packages}")
 
