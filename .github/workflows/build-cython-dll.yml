@@ -441,6 +441,11 @@ jobs:
           }
         shell: powershell
 
+      - name: Copy DLL for C# Test Build
+        run: |
+          Copy-Item "BloodPressureEstimation.dll" "tests\CSharpTest\" -Force
+        shell: powershell
+
       - name: Build and Publish C# Test Project
         run: |
           dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp
