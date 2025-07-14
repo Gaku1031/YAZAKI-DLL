@@ -61,7 +61,7 @@ namespace BloodPressureEstimation
                 }
 
                 // Test Python import first with detailed output
-                var testImportScript = $@"
+                var testImportScript = @"
 import sys
 import os
 print('Python version:', sys.version)
@@ -70,15 +70,36 @@ print('Current directory:', os.getcwd())
 print('Python path:', sys.path)
 
 # Add current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
 print('Updated Python path:', sys.path)
+
+# List files in current directory
+print('Files in current directory:')
+for item in os.listdir(current_dir):
+    print('  ' + item)
 
 try:
     import BloodPressureEstimation
     print('SUCCESS: BloodPressureEstimation imported')
     print('Module file:', BloodPressureEstimation.__file__)
+    
+    # Test basic functionality
+    try:
+        version_info = BloodPressureEstimation.get_version_info()
+        print('Version info:', version_info)
+    except Exception as e:
+        print('WARNING: Could not call get_version_info:', e)
+        
+    try:
+        request_id = BloodPressureEstimation.generate_request_id()
+        print('Generated request ID:', request_id)
+    except Exception as e:
+        print('WARNING: Could not call generate_request_id:', e)
+        
 except Exception as e:
     print('ERROR importing BloodPressureEstimation:', e)
+    print('Error type:', type(e).__name__)
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -86,6 +107,7 @@ except Exception as e:
 try:
     import numpy
     print('SUCCESS: NumPy imported')
+    print('NumPy version:', numpy.__version__)
 except Exception as e:
     print('ERROR importing NumPy:', e)
     sys.exit(1)
@@ -93,6 +115,7 @@ except Exception as e:
 try:
     import cv2
     print('SUCCESS: OpenCV imported')
+    print('OpenCV version:', cv2.__version__)
 except Exception as e:
     print('ERROR importing OpenCV:', e)
     sys.exit(1)
@@ -100,6 +123,7 @@ except Exception as e:
 try:
     import sklearn
     print('SUCCESS: scikit-learn imported')
+    print('scikit-learn version:', sklearn.__version__)
 except Exception as e:
     print('ERROR importing scikit-learn:', e)
     sys.exit(1)
@@ -109,6 +133,20 @@ try:
     print('SUCCESS: MediaPipe imported')
 except Exception as e:
     print('ERROR importing MediaPipe:', e)
+    sys.exit(1)
+
+try:
+    import joblib
+    print('SUCCESS: joblib imported')
+except Exception as e:
+    print('ERROR importing joblib:', e)
+    sys.exit(1)
+
+try:
+    from PIL import Image
+    print('SUCCESS: PIL imported')
+except Exception as e:
+    print('ERROR importing PIL:', e)
     sys.exit(1)
 
 print('All imports successful')

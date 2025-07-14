@@ -305,6 +305,16 @@ jobs:
 
           # Create lightweight runtime
           Write-Host "Creating lightweight Python runtime..." -ForegroundColor Yellow
+
+          # Check if the script exists
+          if (Test-Path "create_lightweight_runtime.py") {
+            Write-Host "Found create_lightweight_runtime.py script" -ForegroundColor Green
+          } else {
+            Write-Host "[ERROR] create_lightweight_runtime.py script not found" -ForegroundColor Red
+            exit 1
+          }
+
+          # Run the script with detailed output
           python create_lightweight_runtime.py
 
           if ($LASTEXITCODE -ne 0) {
@@ -312,7 +322,8 @@ jobs:
             exit 1
           }
 
-          # Verify lightweight runtime
+          # Verify lightweight runtime was created
+          Write-Host "Verifying lightweight runtime creation..." -ForegroundColor Yellow
           if (Test-Path "lightweight_runtime") {
             $runtimeSize = Get-ChildItem "lightweight_runtime" -Recurse | Measure-Object -Property Length -Sum
             $runtimeSizeMB = [math]::Round($runtimeSize.Sum / 1MB, 2)
@@ -327,13 +338,37 @@ jobs:
             $pythonExe = "lightweight_runtime\python.exe"
             if (Test-Path $pythonExe) {
               try {
-                $testScript = 'import sys; print("Python version:", sys.version); import BloodPressureEstimation; print("SUCCESS")'
-                $testProcess = Start-Process -FilePath $pythonExe -ArgumentList "-c", $testScript -NoNewWindow -Wait -PassThru
+                # Create a temporary test script file to avoid PowerShell escaping issues
+                $testScriptContent = "import sys`nprint('Python version:', sys.version)`ntry:`n    import BloodPressureEstimation`n    print('SUCCESS: BloodPressureEstimation imported successfully')`nexcept ImportError as e:`n    print('ERROR: Failed to import BloodPressureEstimation:', e)`n    sys.exit(1)`nexcept Exception as e:`n    print('ERROR: Unexpected error:', e)`n    sys.exit(1)"
+                $testScriptPath = "test_import_temp.py"
+                $testScriptContent | Out-File -FilePath $testScriptPath -Encoding UTF8
+                
+                Write-Host "Created test script: $testScriptPath" -ForegroundColor Cyan
+                Write-Host "Test script contents:" -ForegroundColor Cyan
+                Get-Content $testScriptPath | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                
+                $testProcess = Start-Process -FilePath $pythonExe -ArgumentList $testScriptPath -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
+                
+                if (Test-Path "test_output.txt") {
+                  Write-Host "Test output:" -ForegroundColor Cyan
+                  Get-Content "test_output.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                }
+                
+                if (Test-Path "test_error.txt") {
+                  Write-Host "Test errors:" -ForegroundColor Red
+                  Get-Content "test_error.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+                }
+                
                 if ($testProcess.ExitCode -eq 0) {
                   Write-Host "[OK] Python import test passed" -ForegroundColor Green
                 } else {
                   Write-Host "[WARNING] Python import test failed with exit code: $($testProcess.ExitCode)" -ForegroundColor Yellow
                 }
+                
+                # Clean up temporary files
+                if (Test-Path $testScriptPath) { Remove-Item $testScriptPath -Force }
+                if (Test-Path "test_output.txt") { Remove-Item "test_output.txt" -Force }
+                if (Test-Path "test_error.txt") { Remove-Item "test_error.txt" -Force }
               } catch {
                 Write-Host "[WARNING] Python import test failed: $($_.Exception.Message)" -ForegroundColor Yellow
               }
@@ -560,14 +595,26 @@ jobs:
         run: |
           Write-Host "Testing lightweight runtime with C#..." -ForegroundColor Yellow
 
-          # Copy lightweight runtime to test directory
+          # Check if lightweight runtime exists
           if (Test-Path "lightweight_runtime") {
-            Copy-Item "lightweight_runtime" "lightweight_runtime_csharp\bin\Release\net6.0\" -Recurse -Force
-            Write-Host "[OK] Copied lightweight runtime to test directory" -ForegroundColor Green
+            Write-Host "Lightweight runtime found" -ForegroundColor Green
+            $runtimeSize = Get-ChildItem "lightweight_runtime" -Recurse | Measure-Object -Property Length -Sum
+            $runtimeSizeMB = [math]::Round($runtimeSize.Sum / 1MB, 2)
+            Write-Host "Runtime size: $runtimeSizeMB MB" -ForegroundColor Cyan
+            
+            # List runtime contents
+            Write-Host "Runtime contents:" -ForegroundColor Cyan
+            Get-ChildItem "lightweight_runtime" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
           } else {
             Write-Host "[ERROR] Lightweight runtime not found" -ForegroundColor Red
+            Write-Host "Current directory contents:" -ForegroundColor Yellow
+            Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
             exit 1
           }
+
+          # Copy lightweight runtime to test directory
+          Copy-Item "lightweight_runtime" "lightweight_runtime_csharp\bin\Release\net6.0\" -Recurse -Force
+          Write-Host "[OK] Copied lightweight runtime to test directory" -ForegroundColor Green
 
           # Copy sample data if available
           if (Test-Path "sample-data") {
@@ -579,14 +626,56 @@ jobs:
             "Dummy video file for testing" | Out-File -FilePath "lightweight_runtime_csharp\bin\Release\net6.0\sample-data\video.mp4" -Encoding UTF8
           }
 
-          # Run the C# test
+          # Run the C# test with detailed output
           Write-Host "Running C# test with lightweight runtime..." -ForegroundColor Yellow
           $testExe = "lightweight_runtime_csharp\bin\Release\net6.0\BloodPressureWrapper.exe"
 
           if (Test-Path $testExe) {
+            Write-Host "Test executable found: $testExe" -ForegroundColor Green
+            
+            # Check test directory contents before running
+            Write-Host "Test directory contents before running:" -ForegroundColor Cyan
+            Get-ChildItem "lightweight_runtime_csharp\bin\Release\net6.0\" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+            
+            # Check if lightweight runtime is properly copied
+            $runtimeInTest = "lightweight_runtime_csharp\bin\Release\net6.0\lightweight_runtime"
+            if (Test-Path $runtimeInTest) {
+              Write-Host "Lightweight runtime found in test directory" -ForegroundColor Green
+              $runtimeSize = Get-ChildItem $runtimeInTest -Recurse | Measure-Object -Property Length -Sum
+              $runtimeSizeMB = [math]::Round($runtimeSize.Sum / 1MB, 2)
+              Write-Host "Runtime size in test directory: $runtimeSizeMB MB" -ForegroundColor Cyan
+              
+              # List key files in runtime
+              Write-Host "Key files in test runtime:" -ForegroundColor Cyan
+              $keyFiles = @("python.exe", "BloodPressureEstimation.dll", "models")
+              foreach ($file in $keyFiles) {
+                $filePath = Join-Path $runtimeInTest $file
+                if (Test-Path $filePath) {
+                  $size = (Get-Item $filePath).Length
+                  Write-Host "  $file ($size bytes)" -ForegroundColor Green
+                } else {
+                  Write-Host "  $file (NOT FOUND)" -ForegroundColor Red
+                }
+              }
+            } else {
+              Write-Host "[ERROR] Lightweight runtime not found in test directory: $runtimeInTest" -ForegroundColor Red
+            }
+            
             try {
-              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru
+              Write-Host "Starting C# test process..." -ForegroundColor Yellow
+              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
               $exitCode = $testProcess.ExitCode
+              
+              # Display test output
+              if (Test-Path "test_output.txt") {
+                Write-Host "C# test output:" -ForegroundColor Cyan
+                Get-Content "test_output.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+              }
+              
+              if (Test-Path "test_error.txt") {
+                Write-Host "C# test errors:" -ForegroundColor Red
+                Get-Content "test_error.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              }
               
               if ($exitCode -eq 0) {
                 Write-Host "[OK] C# test with lightweight runtime passed" -ForegroundColor Green
@@ -594,14 +683,22 @@ jobs:
                 Write-Host "[ERROR] C# test with lightweight runtime failed with exit code: $exitCode" -ForegroundColor Red
                 exit 1
               }
+              
+              # Clean up temporary files
+              if (Test-Path "test_output.txt") { Remove-Item "test_output.txt" -Force }
+              if (Test-Path "test_error.txt") { Remove-Item "test_error.txt" -Force }
             } catch {
               Write-Host "Error running C# test: $($_.Exception.Message)" -ForegroundColor Red
+              Write-Host "Exception details: $($_.Exception)" -ForegroundColor Red
               exit 1
             }
           } else {
             Write-Host "[ERROR] C# test executable not found: $testExe" -ForegroundColor Red
+            Write-Host "Checking test directory contents:" -ForegroundColor Yellow
+            Get-ChildItem "lightweight_runtime_csharp\bin\Release\net6.0\" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
             exit 1
           }
+        shell: powershell
 
       - name: Verify Lightweight Runtime Package
         shell: powershell
