@@ -182,6 +182,9 @@ def get_current_time():
     """Get current timestamp"""
     return time.time()
 
+# staticバッファを用意
+cdef char result_buffer[1024]
+
 # Pure C wrapper functions for DLL export
 cdef public int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved):
     global python_initialized
@@ -208,6 +211,7 @@ cdef public int InitializeDLL(const char* model_dir):
 cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path):
     cdef str request_id_str, movie_path_str, result_str
     cdef bytes result_bytes
+    cdef int n
     try:
         if request_id:
             request_id_str = request_id.decode('utf-8')
@@ -219,13 +223,22 @@ cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id
             movie_path_str = ""
         result_str = start_blood_pressure_analysis(request_id_str, height, weight, sex, movie_path_str)
         result_bytes = result_str.encode('utf-8')
-        return result_bytes
+        n = min(len(result_bytes), 1023)
+        from libc.string cimport memcpy
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
     except:
-        return b"ERROR: Exception occurred"
+        result_bytes = b"ERROR: Exception occurred"
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
 
 cdef public const char* GetProcessingStatus(const char* request_id):
     cdef str request_id_str, result_str
     cdef bytes result_bytes
+    cdef int n
     try:
         if request_id:
             request_id_str = request_id.decode('utf-8')
@@ -233,9 +246,17 @@ cdef public const char* GetProcessingStatus(const char* request_id):
             request_id_str = ""
         result_str = get_processing_status(request_id_str)
         result_bytes = result_str.encode('utf-8')
-        return result_bytes
+        n = min(len(result_bytes), 1023)
+        from libc.string cimport memcpy
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
     except:
-        return b"ERROR: Exception occurred"
+        result_bytes = b"ERROR: Exception occurred"
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
 
 cdef public int CancelBloodPressureAnalysis(const char* request_id):
     cdef str request_id_str
@@ -252,19 +273,37 @@ cdef public int CancelBloodPressureAnalysis(const char* request_id):
 cdef public const char* GetVersionInfo():
     cdef str result_str
     cdef bytes result_bytes
+    cdef int n
     try:
         result_str = get_version_info()
         result_bytes = result_str.encode('utf-8')
-        return result_bytes
+        n = min(len(result_bytes), 1023)
+        from libc.string cimport memcpy
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
     except:
-        return b"ERROR: Version info not available"
+        result_bytes = b"ERROR: Version info not available"
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
 
 cdef public const char* GenerateRequestId():
     cdef str result_str
     cdef bytes result_bytes
+    cdef int n
     try:
         result_str = generate_request_id()
         result_bytes = result_str.encode('utf-8')
-        return result_bytes
+        n = min(len(result_bytes), 1023)
+        from libc.string cimport memcpy
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
     except:
-        return b"ERROR: Could not generate request ID" 
+        result_bytes = b"ERROR: Could not generate request ID"
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer 

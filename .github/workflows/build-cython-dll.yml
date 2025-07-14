@@ -402,6 +402,45 @@ jobs:
           Get-ChildItem "dist_cython" -Recurse | Format-Table Name, Length, LastWriteTime
         shell: powershell
 
+      - name: Post-process dist_cython for C# DllImport
+        run: |
+          # 1. 必要なDLLをdist_cythonにコピー
+          $pythonDir = Split-Path (python -c "import sys; print(sys.executable)") -Parent
+          $pythonDll = Join-Path $pythonDir "python311.dll"
+          if (Test-Path $pythonDll) {
+            Copy-Item $pythonDll "dist_cython\" -Force
+            Write-Host "[OK] Copied python311.dll to dist_cython"
+          } else {
+            Write-Host "[WARNING] python311.dll not found"
+          }
+
+          # 2. 必要なsite-packages（numpy, opencv, mediapipe, sklearn, scipy, joblib）だけをdist_cython/python_depsにコピー
+          $deps = @("numpy", "cv2", "mediapipe", "sklearn", "scipy", "joblib")
+          foreach ($dep in $deps) {
+            try {
+              $depPath = python -c "import $dep; print($dep.__file__)" 2>$null
+              if ($depPath) {
+                $depDir = Split-Path $depPath -Parent
+                Copy-Item $depDir "dist_cython\python_deps\" -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "[OK] Copied $dep to dist_cython/python_deps/"
+              }
+            } catch {
+              Write-Host "[WARNING] Could not copy $dep"
+            }
+          }
+
+          # 3. 不要なファイルを除外（例: *.pyd, *.so, *.pyc, *.pyo, *.egg-info）
+          Get-ChildItem "dist_cython" -Recurse -Include *.pyd,*.so,*.pyc,*.pyo,*.egg-info | Remove-Item -Force
+
+          # 4. DLLサイズチェック
+          $dll = Get-Item "dist_cython\BloodPressureEstimation.dll"
+          if ($dll.Length -gt 100MB) {
+            Write-Host "[WARNING] DLL size exceeds 100MB: $([math]::Round($dll.Length / 1MB, 2)) MB"
+          } else {
+            Write-Host "[OK] DLL size: $([math]::Round($dll.Length / 1MB, 2)) MB"
+          }
+        shell: powershell
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
