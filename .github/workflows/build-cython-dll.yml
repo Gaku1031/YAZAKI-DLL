@@ -450,18 +450,18 @@ jobs:
           if (Test-Path "models_compressed") { Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force }
           elseif (Test-Path "models") { Copy-Item "models" "dist_csharp\models" -Recurse -Force }
           if (Test-Path "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe") { Copy-Item "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe" "dist_csharp\" -Force }
-          # README自動生成（Set-Contentのみ-Encdoing UTF8、Add-Contentはデフォルト）
+          # README generation (English only for compatibility)
           Set-Content -Path 'dist_csharp\README.txt' -Value '# BloodPressureEstimation C# Integration Package' -Encoding UTF8
           Add-Content -Path 'dist_csharp\README.txt' -Value ''
-          Add-Content -Path 'dist_csharp\README.txt' -Value 'このフォルダをそのままC#アプリの実行ディレクトリにコピーしてご利用ください。'
+          Add-Content -Path 'dist_csharp\README.txt' -Value 'Copy this folder as-is to your C# application directory.'
           Add-Content -Path 'dist_csharp\README.txt' -Value ''
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- BloodPressureEstimation.dll: CythonでビルドしたDLL'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- python311.dll: PythonランタイムDLL'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- python_deps/: 必要なPython依存パッケージ'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- models/: 学習済みモデル'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- BloodPressureTest.exe: C#テスト実行ファイル'
+          Add-Content -Path 'dist_csharp\README.txt' -Value '- BloodPressureEstimation.dll: Cython-built DLL'
+          Add-Content -Path 'dist_csharp\README.txt' -Value '- python311.dll: Python runtime DLL'
+          Add-Content -Path 'dist_csharp\README.txt' -Value '- python_deps/: Required Python dependencies'
+          Add-Content -Path 'dist_csharp\README.txt' -Value '- models/: Trained models'
+          Add-Content -Path 'dist_csharp\README.txt' -Value '- BloodPressureTest.exe: C# test executable'
           Add-Content -Path 'dist_csharp\README.txt' -Value ''
-          Add-Content -Path 'dist_csharp\README.txt' -Value 'C#からの呼び出し例や詳細はREADME_DLL.mdを参照してください。'
+          Add-Content -Path 'dist_csharp\README.txt' -Value 'See README_DLL.md for C# usage examples and details.'
         shell: powershell
 
       - name: Run C# Integration Test in dist_csharp
