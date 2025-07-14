@@ -3,17 +3,11 @@
 軽量Pythonランタイム作成スクリプト
 必要なモジュールのみを含む最小構成のPythonランタイムを作成
 
-サイズ最適化戦略:
-1. 必要最小限のモジュールのみを含める
-2. テストファイル、ドキュメント、サンプルファイルを除外
-3. __pycache__ディレクトリを除外
-4. 各モジュールのサイズを監視
-
 修正点:
-- Python標準ライブラリ（encodings等）を追加
-- 最小限の標準ライブラリのみを含める
-- エラー処理を改善
+- encodingsモジュールの確実なコピー
+- Python初期化に必要なファイルの追加
 - より包括的な標準ライブラリコピー
+- エラー処理の改善
 """
 
 import os
@@ -58,102 +52,6 @@ def create_lightweight_runtime():
             'PIL',  # Pillow（必要部分のみコピー）
         ]
 
-        # 必要な標準ライブラリモジュール（最小限）
-        required_stdlib_modules = [
-            'encodings',  # 文字エンコーディング（必須）
-            'codecs',  # エンコーディングサポート
-            'collections',  # コレクション型
-            'copyreg',  # コピー登録
-            'functools',  # 関数ツール
-            'importlib',  # インポートシステム
-            'json',  # JSON処理
-            'logging',  # ログ機能
-            'os',  # OS機能
-            'pickle',  # シリアライゼーション
-            'pkgutil',  # パッケージユーティリティ
-            're',  # 正規表現
-            'site',  # サイト設定
-            'sys',  # システム機能
-            'traceback',  # トレースバック
-            'types',  # 型定義
-            'warnings',  # 警告
-            'weakref',  # 弱参照
-            'zipimport',  # ZIPインポート
-            'zlib',  # 圧縮
-        ]
-
-        # ファイルサイズ制限（100KB以上のファイルは除外）
-        max_file_size = 100 * 1024  # 100KB
-
-        # サイズ監視用
-        total_copied_files = 0
-        total_copied_size = 0
-        large_files_skipped = 0
-
-        # 追加の除外パターン
-        additional_exclusions = [
-            '*.pyc',
-            '*.pyo',
-            '__pycache__',
-            '*.so',
-            '*.dylib',
-            '*.dll',
-            '*.exe',
-            '*.pdb',
-            '*.lib',
-            '*.a',
-            '*.o',
-            '*.obj',
-            '*.exp',
-            '*.map',
-            '*.def',
-            '*.spec',
-            '*.manifest',
-            '*.rc',
-            '*.res',
-            '*.ico',
-            '*.bmp',
-            '*.gif',
-            '*.jpg',
-            '*.jpeg',
-            '*.png',
-            '*.tiff',
-            '*.svg',
-            '*.pdf',
-            '*.doc',
-            '*.docx',
-            '*.xls',
-            '*.xlsx',
-            '*.ppt',
-            '*.pptx',
-            '*.txt',
-            '*.md',
-            '*.rst',
-            '*.html',
-            '*.htm',
-            '*.css',
-            '*.js',
-            '*.json',
-            '*.xml',
-            '*.yaml',
-            '*.yml',
-            '*.ini',
-            '*.cfg',
-            '*.conf',
-            '*.log',
-            '*.tmp',
-            '*.bak',
-            '*.old',
-            '*.orig',
-            '*.rej',
-            '*.swp',
-            '*.swo',
-            '*~',
-            '.#*',
-            '#*#',
-            '.#*#',
-        ]
-
         # 軽量ランタイムディレクトリを作成
         runtime_dir = Path("lightweight_runtime")
         if runtime_dir.exists():
@@ -161,34 +59,6 @@ def create_lightweight_runtime():
             shutil.rmtree(runtime_dir)
         runtime_dir.mkdir(exist_ok=True)
         print(f"Created runtime directory: {runtime_dir}")
-
-        # Python環境設定ファイルを作成
-        pythonrc_path = runtime_dir / "pythonrc.py"
-        pythonrc_content = """# Python environment configuration for lightweight runtime
-import sys
-import os
-
-# Set Python path to current directory
-current_dir = os.path.dirname(os.path.abspath(__file__))
-lib_dir = os.path.join(current_dir, 'Lib')
-site_packages = os.path.join(lib_dir, 'site-packages')
-
-# Add site-packages to Python path
-if site_packages not in sys.path:
-    sys.path.insert(0, site_packages)
-
-# Add current directory to Python path
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
-print(f"Python environment configured:")
-print(f"  Current directory: {current_dir}")
-print(f"  Site-packages: {site_packages}")
-print(f"  Python path: {sys.path[:3]}")
-"""
-        with open(pythonrc_path, 'w', encoding='utf-8') as f:
-            f.write(pythonrc_content)
-        print(f"Created Python environment configuration: {pythonrc_path}")
 
         # Python実行ファイルをコピー
         python_exe = Path(sys.executable)
@@ -234,108 +104,9 @@ print(f"  Python path: {sys.path[:3]}")
             raise FileNotFoundError(
                 f"Source Python lib not found: {source_lib}")
 
-        # 標準ライブラリを包括的にコピー（最小限のファイルのみ）
-        print("Copying required standard library modules...")
-
-        # 方法1: 必要なファイルを個別にコピー
-        essential_stdlib_files = [
-            'encodings/__init__.py',
-            'encodings/aliases.py',
-            'encodings/ascii.py',
-            'encodings/base64_codec.py',
-            'encodings/charmap.py',
-            'encodings/cp1252.py',
-            'encodings/hex_codec.py',
-            'encodings/idna.py',
-            'encodings/iso8859_1.py',
-            'encodings/latin_1.py',
-            'encodings/mbcs.py',
-            'encodings/palmos.py',
-            'encodings/punycode.py',
-            'encodings/quopri_codec.py',
-            'encodings/raw_unicode_escape.py',
-            'encodings/rot_13.py',
-            'encodings/undefined.py',
-            'encodings/unicode_escape.py',
-            'encodings/utf_8.py',
-            'encodings/utf_8_sig.py',
-            'encodings/uu_codec.py',
-            'encodings/zlib_codec.py',
-            'codecs.py',
-            'collections/__init__.py',
-            'collections/abc.py',
-            'copyreg.py',
-            'functools.py',
-            'importlib/__init__.py',
-            'importlib/abc.py',
-            'importlib/machinery.py',
-            'importlib/util.py',
-            'json/__init__.py',
-            'json/decoder.py',
-            'json/encoder.py',
-            'logging/__init__.py',
-            'logging/config.py',
-            'logging/handlers.py',
-            'os.py',
-            'pickle.py',
-            'pkgutil.py',
-            're.py',
-            'site.py',
-            'sys.py',
-            'traceback.py',
-            'types.py',
-            'warnings.py',
-            'weakref.py',
-            'zipimport.py',
-            'zlib.py',
-            '__future__.py',
-            '_collections_abc.py',
-            '_weakrefset.py',
-            'abc.py',
-            'builtins.py',
-            'copy.py',
-            'enum.py',
-            'io.py',
-            'keyword.py',
-            'operator.py',
-            'stat.py',
-            'string.py',
-            'tokenize.py',
-            'token.py',
-        ]
-
-        # 標準ライブラリファイルをコピー
-        for file_path in essential_stdlib_files:
-            source_file = source_lib / file_path
-            if source_file.exists():
-                target_file = lib_dir / file_path
-                # ディレクトリを作成
-                target_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source_file, target_file)
-                total_copied_files += 1
-                total_copied_size += source_file.stat().st_size
-                print(f"Copied stdlib file: {file_path}")
-            else:
-                print(f"Warning: Standard library file not found: {file_path}")
-
-        # 方法2: encodingsディレクトリ全体をコピー
-        encodings_source = source_lib / "encodings"
-        encodings_target = lib_dir / "encodings"
-        if encodings_source.exists():
-            print(f"Copying entire encodings directory...")
-            if encodings_target.exists():
-                shutil.rmtree(encodings_target)
-            shutil.copytree(encodings_source, encodings_target)
-            size = sum(f.stat().st_size for f in encodings_target.rglob(
-                '*') if f.is_file())
-            total_copied_size += size
-            print(f"Copied entire encodings directory ({size} bytes)")
-        else:
-            print(
-                f"Warning: Source encodings directory not found: {encodings_source}")
-
-        # 方法3: 重要なディレクトリ全体をコピー
-        important_dirs = ['collections', 'importlib', 'json', 'logging']
+        # 方法1: 重要なディレクトリ全体をコピー
+        important_dirs = ['encodings', 'collections',
+                          'importlib', 'json', 'logging']
         for dir_name in important_dirs:
             source_dir = source_lib / dir_name
             target_dir = lib_dir / dir_name
@@ -345,13 +116,12 @@ print(f"  Python path: {sys.path[:3]}")
                 shutil.copytree(source_dir, target_dir)
                 size = sum(f.stat().st_size for f in target_dir.rglob(
                     '*') if f.is_file())
-                total_copied_size += size
                 print(f"Copied entire {dir_name} directory ({size} bytes)")
             else:
                 print(
                     f"Warning: Source {dir_name} directory not found: {source_dir}")
 
-        # 方法4: 最小限のPython標準ライブラリをコピー
+        # 方法2: 最小限のPython標準ライブラリファイルをコピー
         minimal_stdlib_files = [
             '__future__.py',
             '_collections_abc.py',
@@ -390,13 +160,11 @@ print(f"  Python path: {sys.path[:3]}")
             target_file = lib_dir / file_name
             if source_file.exists() and not target_file.exists():
                 shutil.copy2(source_file, target_file)
-                total_copied_files += 1
-                total_copied_size += source_file.stat().st_size
                 print(f"Copied minimal stdlib file: {file_name}")
             elif not source_file.exists():
                 print(f"Warning: Minimal stdlib file not found: {file_name}")
 
-        # 方法5: encodingsモジュールの確実なコピー
+        # 方法3: encodingsモジュールの確実なコピー（再実行）
         print("Ensuring encodings module is properly copied...")
         encodings_source = source_lib / "encodings"
         encodings_target = lib_dir / "encodings"
@@ -418,15 +186,12 @@ print(f"  Python path: {sys.path[:3]}")
                     target_item = encodings_target / item.name
                     shutil.copy2(item, target_item)
                     copied_files += 1
-                    total_copied_files += 1
-                    total_copied_size += item.stat().st_size
                     print(f"Copied encodings file: {item.name}")
                 elif item.is_dir():
                     target_item = encodings_target / item.name
                     shutil.copytree(item, target_item)
                     size = sum(f.stat().st_size for f in target_item.rglob(
                         '*') if f.is_file())
-                    total_copied_size += size
                     copied_files += 1
                     print(f"Copied encodings directory: {item.name}")
 
@@ -498,76 +263,7 @@ This module is used for encoding aliases.
                 file_path = encodings_target / filename
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(content)
-                total_copied_files += 1
-                total_copied_size += len(content.encode('utf-8'))
                 print(f"Created basic encodings file: {filename}")
-
-        # 追加の重要なファイルをコピー
-        additional_files = [
-            'encodings/__init__.py',
-            'encodings/utf_8.py',
-            'encodings/ascii.py',
-            'encodings/latin_1.py',
-            'encodings/cp1252.py',
-            'encodings/charmap.py',
-            'encodings/aliases.py',
-            'encodings/base64_codec.py',
-            'encodings/hex_codec.py',
-            'encodings/idna.py',
-            'encodings/iso8859_1.py',
-            'encodings/mbcs.py',
-            'encodings/palmos.py',
-            'encodings/punycode.py',
-            'encodings/quopri_codec.py',
-            'encodings/raw_unicode_escape.py',
-            'encodings/rot_13.py',
-            'encodings/undefined.py',
-            'encodings/unicode_escape.py',
-            'encodings/utf_8_sig.py',
-            'encodings/uu_codec.py',
-            'encodings/zlib_codec.py',
-        ]
-
-        # 追加ファイルをコピー（重複チェック付き）
-        for file_path in additional_files:
-            source_file = source_lib / file_path
-            target_file = lib_dir / file_path
-            if source_file.exists() and not target_file.exists():
-                target_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source_file, target_file)
-                total_copied_files += 1
-                total_copied_size += source_file.stat().st_size
-                print(f"Copied additional stdlib file: {file_path}")
-
-        # encodingsディレクトリの内容を確認
-        encodings_source = source_lib / "encodings"
-        encodings_target = lib_dir / "encodings"
-        if encodings_source.exists():
-            print(f"Source encodings directory: {encodings_source}")
-            print(f"Target encodings directory: {encodings_target}")
-
-            # encodingsディレクトリの全ファイルをコピー
-            if encodings_source.is_dir():
-                encodings_target.mkdir(parents=True, exist_ok=True)
-                for item in encodings_source.iterdir():
-                    if item.is_file():
-                        target_item = encodings_target / item.name
-                        if not target_item.exists():
-                            shutil.copy2(item, target_item)
-                            total_copied_files += 1
-                            total_copied_size += item.stat().st_size
-                            print(f"Copied encodings file: {item.name}")
-                    elif item.is_dir():
-                        target_item = encodings_target / item.name
-                        if not target_item.exists():
-                            shutil.copytree(item, target_item)
-                            size = sum(f.stat().st_size for f in target_item.rglob(
-                                '*') if f.is_file())
-                            total_copied_size += size
-                            print(f"Copied encodings directory: {item.name}")
-        else:
-            print(
-                f"Warning: Source encodings directory not found: {encodings_source}")
 
         # 必要なsite-packagesモジュールをコピー
         source_site_packages = get_site_packages_path()
@@ -585,22 +281,17 @@ This module is used for encoding aliases.
                 if module_path.is_dir():
                     # 除外ディレクトリをスキップ
                     def copy_with_exclusions(src, dst):
-                        nonlocal total_copied_files, total_copied_size, large_files_skipped
                         if src.is_dir():
                             dst.mkdir(exist_ok=True)
                             for item in src.iterdir():
                                 item_name = item.name
                                 # 除外リストに含まれるかチェック
                                 should_exclude = any(excluded in str(
-                                    item) for excluded in additional_exclusions)
+                                    item) for excluded in ['__pycache__', '*.pyc', '*.pyo'])
                                 # ファイルサイズ制限をチェック
                                 if item.is_file():
                                     file_size = item.stat().st_size
-                                    size_excluded = file_size > max_file_size
-                                    if size_excluded:
-                                        print(
-                                            f"Skipping large file: {item.name} ({file_size / (1024*1024):.2f} MB)")
-                                        large_files_skipped += 1
+                                    size_excluded = file_size > 100 * 1024  # 100KB
                                 else:
                                     size_excluded = False
 
@@ -609,20 +300,15 @@ This module is used for encoding aliases.
                         else:
                             # ファイルサイズをチェック
                             file_size = src.stat().st_size
-                            if file_size <= max_file_size:
+                            if file_size <= 100 * 1024:  # 100KB
                                 shutil.copy2(src, dst)
-                                total_copied_files += 1
-                                total_copied_size += file_size
                             else:
                                 print(
                                     f"Skipping large file: {src.name} ({file_size / (1024*1024):.2f} MB)")
-                                large_files_skipped += 1
 
                     copy_with_exclusions(module_path, target_path)
                 else:
                     shutil.copy2(module_path, target_path)
-                    total_copied_files += 1
-                    total_copied_size += module_path.stat().st_size
 
                 # サイズを計算
                 if target_path.exists():
@@ -631,7 +317,6 @@ This module is used for encoding aliases.
                             '*') if f.is_file())
                     else:
                         size = target_path.stat().st_size
-                    total_copied_size += size
                     size_mb = size / (1024 * 1024)
                     print(f"Copied module: {module} ({size_mb:.2f} MB)")
                 else:
@@ -639,11 +324,6 @@ This module is used for encoding aliases.
                         f"Warning: Module not found: {module} at {module_path}")
             else:
                 print(f"Warning: Module not found: {module} at {module_path}")
-
-        print(
-            f"Total modules size: {total_copied_size / (1024 * 1024):.2f} MB")
-        print(f"Total files copied: {total_copied_files}")
-        print(f"Large files skipped: {large_files_skipped}")
 
         # 作成したCythonモジュールをコピー
         cython_module = Path("BloodPressureEstimation.dll")
@@ -691,13 +371,6 @@ print(f"Python executable: {sys.executable}")
 print(f"Python version: {sys.version}")
 print(f"Current working directory: {os.getcwd()}")
 print(f"Python path: {sys.path}")
-
-# Load environment configuration if available
-try:
-    import pythonrc
-    print("Loaded pythonrc configuration")
-except ImportError:
-    print("pythonrc not found, using default configuration")
 
 # Add the current directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))

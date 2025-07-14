@@ -686,42 +686,40 @@ jobs:
             Write-Host "Testing Python runtime first..." -ForegroundColor Cyan
             $pythonExe = Join-Path $runtimeInTest "python.exe"
             if (Test-Path $pythonExe) {
-              # Copy the test script to runtime directory
-              $testScriptPath = Join-Path $runtimeInTest "test_python_runtime.py"
-              Copy-Item "test_python_runtime.py" $testScriptPath -Force
+              # Create a simple test script to check Python initialization
+              $simpleTestScript = 'import sys; import os; print("Python version:", sys.version); print("Python executable:", sys.executable); print("Current working directory:", os.getcwd()); print("Python path:", sys.path[:3]); import encodings; print("SUCCESS: encodings module imported"); import codecs; print("SUCCESS: codecs module imported"); print("SUCCESS: Basic Python runtime test passed")'
               
-              Write-Host "Copied Python test script: $testScriptPath" -ForegroundColor Cyan
+              Write-Host "Created simple test script" -ForegroundColor Cyan
               
               # Set environment variables for Python
               $env:PYTHONPATH = $runtimeInTest
               $env:PYTHONHOME = $runtimeInTest
               $env:PYTHONUNBUFFERED = "1"
               
-              # Run Python test
-              $pythonProcess = Start-Process -FilePath $pythonExe -ArgumentList "test_python_runtime.py" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "python_test_output.txt" -RedirectStandardError "python_test_error.txt" -WorkingDirectory $runtimeInTest
+              # Run simple Python test
+              $pythonProcess = Start-Process -FilePath $pythonExe -ArgumentList "-c", $simpleTestScript -NoNewWindow -Wait -PassThru -RedirectStandardOutput "simple_test_output.txt" -RedirectStandardError "simple_test_error.txt" -WorkingDirectory $runtimeInTest
               
-              if (Test-Path "python_test_output.txt") {
-                Write-Host "Python test output:" -ForegroundColor Cyan
-                Get-Content "python_test_output.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+              if (Test-Path "simple_test_output.txt") {
+                Write-Host "Simple Python test output:" -ForegroundColor Cyan
+                Get-Content "simple_test_output.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
               }
               
-              if (Test-Path "python_test_error.txt") {
-                Write-Host "Python test errors:" -ForegroundColor Red
-                Get-Content "python_test_error.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              if (Test-Path "simple_test_error.txt") {
+                Write-Host "Simple Python test errors:" -ForegroundColor Red
+                Get-Content "simple_test_error.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
               }
               
               if ($pythonProcess.ExitCode -eq 0) {
-                Write-Host "[OK] Python runtime test passed" -ForegroundColor Green
+                Write-Host "[OK] Simple Python runtime test passed" -ForegroundColor Green
               } else {
-                Write-Host "[ERROR] Python runtime test failed with exit code: $($pythonProcess.ExitCode)" -ForegroundColor Red
+                Write-Host "[ERROR] Simple Python runtime test failed with exit code: $($pythonProcess.ExitCode)" -ForegroundColor Red
                 Write-Host "Python runtime is not working correctly. Skipping C# test." -ForegroundColor Yellow
                 exit 1
               }
               
-              # Clean up Python test files
-              if (Test-Path $testScriptPath) { Remove-Item $testScriptPath -Force }
-              if (Test-Path "python_test_output.txt") { Remove-Item "python_test_output.txt" -Force }
-              if (Test-Path "python_test_error.txt") { Remove-Item "python_test_error.txt" -Force }
+              # Clean up simple test files
+              if (Test-Path "simple_test_output.txt") { Remove-Item "simple_test_output.txt" -Force }
+              if (Test-Path "simple_test_error.txt") { Remove-Item "simple_test_error.txt" -Force }
               
             } else {
               Write-Host "[ERROR] Python executable not found in runtime: $pythonExe" -ForegroundColor Red
