@@ -165,6 +165,20 @@ print('All imports successful')
                     WorkingDirectory = runtimePath
                 };
 
+                // Set environment variables for Python
+                startInfo.EnvironmentVariables["PYTHONPATH"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONHOME"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+                
+                // Copy current environment variables
+                foreach (System.Collections.DictionaryEntry env in Environment.GetEnvironmentVariables())
+                {
+                    if (env.Key != null && env.Value != null)
+                    {
+                        startInfo.EnvironmentVariables[env.Key.ToString()] = env.Value.ToString();
+                    }
+                }
+
                 Console.WriteLine($"Running Python test with: {startInfo.FileName} {startInfo.Arguments}");
 
                 using (var process = Process.Start(startInfo))
@@ -347,6 +361,20 @@ except Exception as e:
                     WorkingDirectory = runtimePath
                 };
 
+                // Set environment variables for Python
+                startInfo.EnvironmentVariables["PYTHONPATH"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONHOME"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+                
+                // Copy current environment variables
+                foreach (System.Collections.DictionaryEntry env in Environment.GetEnvironmentVariables())
+                {
+                    if (env.Key != null && env.Value != null)
+                    {
+                        startInfo.EnvironmentVariables[env.Key.ToString()] = env.Value.ToString();
+                    }
+                }
+
                 using (var process = Process.Start(startInfo))
                 {
                     var output = await process.StandardOutput.ReadToEndAsync();
@@ -395,6 +423,20 @@ except Exception as e:
                     WorkingDirectory = runtimePath
                 };
 
+                // Set environment variables for Python
+                startInfo.EnvironmentVariables["PYTHONPATH"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONHOME"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+                
+                // Copy current environment variables
+                foreach (System.Collections.DictionaryEntry env in Environment.GetEnvironmentVariables())
+                {
+                    if (env.Key != null && env.Value != null)
+                    {
+                        startInfo.EnvironmentVariables[env.Key.ToString()] = env.Value.ToString();
+                    }
+                }
+
                 using (var process = Process.Start(startInfo))
                 {
                     var output = await process.StandardOutput.ReadToEndAsync();
@@ -437,6 +479,20 @@ except Exception as e:
                     WorkingDirectory = runtimePath
                 };
 
+                // Set environment variables for Python
+                startInfo.EnvironmentVariables["PYTHONPATH"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONHOME"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+                
+                // Copy current environment variables
+                foreach (System.Collections.DictionaryEntry env in Environment.GetEnvironmentVariables())
+                {
+                    if (env.Key != null && env.Value != null)
+                    {
+                        startInfo.EnvironmentVariables[env.Key.ToString()] = env.Value.ToString();
+                    }
+                }
+
                 using (var process = Process.Start(startInfo))
                 {
                     var output = await process.StandardOutput.ReadToEndAsync();
@@ -478,6 +534,20 @@ except Exception as e:
                     CreateNoWindow = true,
                     WorkingDirectory = runtimePath
                 };
+
+                // Set environment variables for Python
+                startInfo.EnvironmentVariables["PYTHONPATH"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONHOME"] = runtimePath;
+                startInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+                
+                // Copy current environment variables
+                foreach (System.Collections.DictionaryEntry env in Environment.GetEnvironmentVariables())
+                {
+                    if (env.Key != null && env.Value != null)
+                    {
+                        startInfo.EnvironmentVariables[env.Key.ToString()] = env.Value.ToString();
+                    }
+                }
 
                 using (var process = Process.Start(startInfo))
                 {

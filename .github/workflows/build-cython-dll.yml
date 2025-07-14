@@ -338,16 +338,20 @@ jobs:
             $pythonExe = "lightweight_runtime\python.exe"
             if (Test-Path $pythonExe) {
               try {
-                # Create a temporary test script file to avoid PowerShell escaping issues
-                $testScriptContent = "import sys`nprint('Python version:', sys.version)`ntry:`n    import BloodPressureEstimation`n    print('SUCCESS: BloodPressureEstimation imported successfully')`nexcept ImportError as e:`n    print('ERROR: Failed to import BloodPressureEstimation:', e)`n    sys.exit(1)`nexcept Exception as e:`n    print('ERROR: Unexpected error:', e)`n    sys.exit(1)"
-                $testScriptPath = "test_import_temp.py"
-                $testScriptContent | Out-File -FilePath $testScriptPath -Encoding UTF8
-                
-                Write-Host "Created test script: $testScriptPath" -ForegroundColor Cyan
-                Write-Host "Test script contents:" -ForegroundColor Cyan
-                Get-Content $testScriptPath | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
-                
-                $testProcess = Start-Process -FilePath $pythonExe -ArgumentList $testScriptPath -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
+                              # Create a temporary test script file to avoid PowerShell escaping issues
+              $testScriptContent = "import sys`nimport os`nprint('Python version:', sys.version)`nprint('Python executable:', sys.executable)`nprint('Current directory:', os.getcwd())`nprint('Python path:', sys.path)`n`n# Load environment configuration if available`ntry:`n    import pythonrc`n    print('Loaded pythonrc configuration')`nexcept ImportError:`n    print('pythonrc not found, using default configuration')`n`n# Add current directory to Python path`ncurrent_dir = os.path.dirname(os.path.abspath(__file__))`nif current_dir not in sys.path:`n    sys.path.insert(0, current_dir)`nprint('Updated Python path:', sys.path)`n`ntry:`n    import BloodPressureEstimation`n    print('SUCCESS: BloodPressureEstimation imported successfully')`nexcept ImportError as e:`n    print('ERROR: Failed to import BloodPressureEstimation:', e)`n    sys.exit(1)`nexcept Exception as e:`n    print('ERROR: Unexpected error:', e)`n    sys.exit(1)"
+              $testScriptPath = Join-Path $runtimeInTest "test_import_temp.py"
+              $testScriptContent | Out-File -FilePath $testScriptPath -Encoding UTF8
+              
+              Write-Host "Created test script: $testScriptPath" -ForegroundColor Cyan
+              Write-Host "Test script exists: $(Test-Path $testScriptPath)" -ForegroundColor Cyan
+              
+              # Set environment variables for Python
+              $env:PYTHONPATH = $runtimeInTest
+              $env:PYTHONHOME = $runtimeInTest
+              $env:PYTHONUNBUFFERED = "1"
+              
+              $testProcess = Start-Process -FilePath $pythonExe -ArgumentList $testScriptPath -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -WorkingDirectory $runtimeInTest
                 
                 if (Test-Path "test_output.txt") {
                   Write-Host "Test output:" -ForegroundColor Cyan
@@ -719,33 +723,57 @@ jobs:
                 Write-Host "BloodPressureEstimation.dll NOT FOUND!" -ForegroundColor Red
               }
               
-              # Try to run a simple Python test directly
-              Write-Host "Running direct Python test..." -ForegroundColor Cyan
-              $pythonExe = Join-Path $runtimeInTest "python.exe"
-              if (Test-Path $pythonExe) {
-                $simpleTest = "import sys`nimport os`nprint('Python executable:', sys.executable)`nprint('Python version:', sys.version)`nprint('Current directory:', os.getcwd())`nprint('Python path:', sys.path)`nprint('Trying to import BloodPressureEstimation...')`ntry:`n    import BloodPressureEstimation`n    print('SUCCESS: BloodPressureEstimation imported')`n    print('Module file:', BloodPressureEstimation.__file__)`nexcept Exception as e:`n    print('ERROR importing BloodPressureEstimation:', e)`n    import traceback`n    traceback.print_exc()"
-                $testScriptPath = "direct_test.py"
-                $simpleTest | Out-File -FilePath $testScriptPath -Encoding UTF8
-                
-                $directTest = Start-Process -FilePath $pythonExe -ArgumentList $testScriptPath -NoNewWindow -Wait -PassThru -RedirectStandardOutput "direct_output.txt" -RedirectStandardError "direct_error.txt" -WorkingDirectory $runtimeInTest
-                
-                Write-Host "Direct Python test exit code: $($directTest.ExitCode)" -ForegroundColor Cyan
-                if (Test-Path "direct_output.txt") {
-                  Write-Host "Direct test output:" -ForegroundColor Cyan
-                  Get-Content "direct_output.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
-                }
-                if (Test-Path "direct_error.txt") {
-                  Write-Host "Direct test errors:" -ForegroundColor Red
-                  Get-Content "direct_error.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-                }
-                
-                # Clean up
-                if (Test-Path $testScriptPath) { Remove-Item $testScriptPath -Force }
-                if (Test-Path "direct_output.txt") { Remove-Item "direct_output.txt" -Force }
-                if (Test-Path "direct_error.txt") { Remove-Item "direct_error.txt" -Force }
-              } else {
-                Write-Host "Python executable not found in runtime!" -ForegroundColor Red
+                          # Try to run a simple Python test directly
+            Write-Host "Running direct Python test..." -ForegroundColor Cyan
+            $pythonExe = Join-Path $runtimeInTest "python.exe"
+            if (Test-Path $pythonExe) {
+              # Create test script in the runtime directory to avoid path issues
+              $simpleTest = "import sys`nimport os`nprint('Python executable:', sys.executable)`nprint('Python version:', sys.version)`nprint('Current directory:', os.getcwd())`nprint('Python path:', sys.path)`nprint('Trying to import BloodPressureEstimation...')`ntry:`n    import BloodPressureEstimation`n    print('SUCCESS: BloodPressureEstimation imported')`n    print('Module file:', BloodPressureEstimation.__file__)`nexcept Exception as e:`n    print('ERROR importing BloodPressureEstimation:', e)`n    import traceback`n    traceback.print_exc()"
+              $testScriptPath = Join-Path $runtimeInTest "direct_test.py"
+              $simpleTest | Out-File -FilePath $testScriptPath -Encoding UTF8
+              
+              Write-Host "Created test script at: $testScriptPath" -ForegroundColor Cyan
+              Write-Host "Test script exists: $(Test-Path $testScriptPath)" -ForegroundColor Cyan
+              
+              # Set environment variables to help with Python path issues
+              $env:PYTHONPATH = $runtimeInTest
+              $env:PYTHONHOME = $runtimeInTest
+              
+              # Run Python with explicit working directory and environment
+              $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+              $processInfo.FileName = $pythonExe
+              $processInfo.Arguments = "direct_test.py"
+              $processInfo.WorkingDirectory = $runtimeInTest
+              $processInfo.UseShellExecute = $false
+              $processInfo.RedirectStandardOutput = $true
+              $processInfo.RedirectStandardError = $true
+              $processInfo.EnvironmentVariables["PYTHONPATH"] = $runtimeInTest
+              $processInfo.EnvironmentVariables["PYTHONHOME"] = $runtimeInTest
+              
+              $process = New-Object System.Diagnostics.Process
+              $process.StartInfo = $processInfo
+              $process.Start() | Out-Null
+              $process.WaitForExit()
+              
+              $output = $process.StandardOutput.ReadToEnd()
+              $error = $process.StandardError.ReadToEnd()
+              $exitCode = $process.ExitCode
+              
+              Write-Host "Direct Python test exit code: $exitCode" -ForegroundColor Cyan
+              if ($output) {
+                Write-Host "Direct test output:" -ForegroundColor Cyan
+                $output -split "`n" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
               }
+              if ($error) {
+                Write-Host "Direct test errors:" -ForegroundColor Red
+                $error -split "`n" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              }
+              
+              # Clean up
+              if (Test-Path $testScriptPath) { Remove-Item $testScriptPath -Force }
+            } else {
+              Write-Host "Python executable not found in runtime!" -ForegroundColor Red
+            }
               
               if ($exitCode -eq 0) {
                 Write-Host "[OK] C# test with lightweight runtime passed" -ForegroundColor Green

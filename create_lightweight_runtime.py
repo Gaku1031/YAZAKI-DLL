@@ -132,6 +132,34 @@ def create_lightweight_runtime():
         runtime_dir.mkdir(exist_ok=True)
         print(f"Created runtime directory: {runtime_dir}")
 
+        # Python環境設定ファイルを作成
+        pythonrc_path = runtime_dir / "pythonrc.py"
+        pythonrc_content = """# Python environment configuration for lightweight runtime
+import sys
+import os
+
+# Set Python path to current directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+lib_dir = os.path.join(current_dir, 'Lib')
+site_packages = os.path.join(lib_dir, 'site-packages')
+
+# Add site-packages to Python path
+if site_packages not in sys.path:
+    sys.path.insert(0, site_packages)
+
+# Add current directory to Python path
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+print(f"Python environment configured:")
+print(f"  Current directory: {current_dir}")
+print(f"  Site-packages: {site_packages}")
+print(f"  Python path: {sys.path[:3]}")
+"""
+        with open(pythonrc_path, 'w', encoding='utf-8') as f:
+            f.write(pythonrc_content)
+        print(f"Created Python environment configuration: {pythonrc_path}")
+
         # Python実行ファイルをコピー
         python_exe = Path(sys.executable)
         if not python_exe.exists():
@@ -291,9 +319,17 @@ print(f"Python version: {sys.version}")
 print(f"Current working directory: {os.getcwd()}")
 print(f"Python path: {sys.path}")
 
+# Load environment configuration if available
+try:
+    import pythonrc
+    print("Loaded pythonrc configuration")
+except ImportError:
+    print("pythonrc not found, using default configuration")
+
 # Add the current directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 print(f"Added to path: {current_dir}")
 
 # List files in current directory
