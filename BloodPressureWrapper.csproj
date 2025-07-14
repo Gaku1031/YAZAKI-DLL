@@ -7,9 +7,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="BloodPressureWrapper.cs" />
-    <Compile Include="test_lightweight_runtime.cs" />
-  </ItemGroup>
-
 </Project> 
