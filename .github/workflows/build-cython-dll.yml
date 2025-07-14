@@ -321,8 +321,29 @@ jobs:
             # List runtime contents
             Write-Host "Runtime contents:" -ForegroundColor Cyan
             Get-ChildItem "lightweight_runtime" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
+            
+            # Test Python import in lightweight runtime
+            Write-Host "Testing Python import in lightweight runtime..." -ForegroundColor Yellow
+            $pythonExe = "lightweight_runtime\python.exe"
+            if (Test-Path $pythonExe) {
+              try {
+                $testScript = "import sys; print('Python version:', sys.version); import BloodPressureEstimation; print('SUCCESS')"
+                $testProcess = Start-Process -FilePath $pythonExe -ArgumentList "-c", $testScript -NoNewWindow -Wait -PassThru
+                if ($testProcess.ExitCode -eq 0) {
+                  Write-Host "[OK] Python import test passed" -ForegroundColor Green
+                } else {
+                  Write-Host "[WARNING] Python import test failed with exit code: $($testProcess.ExitCode)" -ForegroundColor Yellow
+                }
+              } catch {
+                Write-Host "[WARNING] Python import test failed: $($_.Exception.Message)" -ForegroundColor Yellow
+              }
+            } else {
+              Write-Host "[ERROR] Python executable not found in lightweight runtime" -ForegroundColor Red
+            }
           } else {
             Write-Host "[ERROR] Lightweight runtime not found" -ForegroundColor Red
+            Write-Host "Current directory contents:" -ForegroundColor Yellow
+            Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
             exit 1
           }
         shell: powershell
