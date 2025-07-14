@@ -237,7 +237,7 @@ print(f"  Python path: {sys.path[:3]}")
         # 標準ライブラリを包括的にコピー（最小限のファイルのみ）
         print("Copying required standard library modules...")
 
-        # 必要な標準ライブラリファイルをコピー
+        # 方法1: 必要なファイルを個別にコピー
         essential_stdlib_files = [
             'encodings/__init__.py',
             'encodings/aliases.py',
@@ -317,6 +317,151 @@ print(f"  Python path: {sys.path[:3]}")
                 print(f"Copied stdlib file: {file_path}")
             else:
                 print(f"Warning: Standard library file not found: {file_path}")
+
+        # 方法2: encodingsディレクトリ全体をコピー
+        encodings_source = source_lib / "encodings"
+        encodings_target = lib_dir / "encodings"
+        if encodings_source.exists():
+            print(f"Copying entire encodings directory...")
+            if encodings_target.exists():
+                shutil.rmtree(encodings_target)
+            shutil.copytree(encodings_source, encodings_target)
+            size = sum(f.stat().st_size for f in encodings_target.rglob(
+                '*') if f.is_file())
+            total_copied_size += size
+            print(f"Copied entire encodings directory ({size} bytes)")
+        else:
+            print(
+                f"Warning: Source encodings directory not found: {encodings_source}")
+
+        # 方法3: 重要なディレクトリ全体をコピー
+        important_dirs = ['collections', 'importlib', 'json', 'logging']
+        for dir_name in important_dirs:
+            source_dir = source_lib / dir_name
+            target_dir = lib_dir / dir_name
+            if source_dir.exists() and source_dir.is_dir():
+                if target_dir.exists():
+                    shutil.rmtree(target_dir)
+                shutil.copytree(source_dir, target_dir)
+                size = sum(f.stat().st_size for f in target_dir.rglob(
+                    '*') if f.is_file())
+                total_copied_size += size
+                print(f"Copied entire {dir_name} directory ({size} bytes)")
+            else:
+                print(
+                    f"Warning: Source {dir_name} directory not found: {source_dir}")
+
+        # 方法4: 最小限のPython標準ライブラリをコピー
+        minimal_stdlib_files = [
+            '__future__.py',
+            '_collections_abc.py',
+            '_weakrefset.py',
+            'abc.py',
+            'builtins.py',
+            'codecs.py',
+            'copy.py',
+            'copyreg.py',
+            'enum.py',
+            'functools.py',
+            'io.py',
+            'keyword.py',
+            'operator.py',
+            'os.py',
+            'pickle.py',
+            'pkgutil.py',
+            're.py',
+            'site.py',
+            'stat.py',
+            'string.py',
+            'sys.py',
+            'token.py',
+            'tokenize.py',
+            'traceback.py',
+            'types.py',
+            'warnings.py',
+            'weakref.py',
+            'zipimport.py',
+            'zlib.py',
+        ]
+
+        # 最小限のファイルをコピー
+        for file_name in minimal_stdlib_files:
+            source_file = source_lib / file_name
+            target_file = lib_dir / file_name
+            if source_file.exists() and not target_file.exists():
+                shutil.copy2(source_file, target_file)
+                total_copied_files += 1
+                total_copied_size += source_file.stat().st_size
+                print(f"Copied minimal stdlib file: {file_name}")
+            elif not source_file.exists():
+                print(f"Warning: Minimal stdlib file not found: {file_name}")
+
+        # 追加の重要なファイルをコピー
+        additional_files = [
+            'encodings/__init__.py',
+            'encodings/utf_8.py',
+            'encodings/ascii.py',
+            'encodings/latin_1.py',
+            'encodings/cp1252.py',
+            'encodings/charmap.py',
+            'encodings/aliases.py',
+            'encodings/base64_codec.py',
+            'encodings/hex_codec.py',
+            'encodings/idna.py',
+            'encodings/iso8859_1.py',
+            'encodings/mbcs.py',
+            'encodings/palmos.py',
+            'encodings/punycode.py',
+            'encodings/quopri_codec.py',
+            'encodings/raw_unicode_escape.py',
+            'encodings/rot_13.py',
+            'encodings/undefined.py',
+            'encodings/unicode_escape.py',
+            'encodings/utf_8_sig.py',
+            'encodings/uu_codec.py',
+            'encodings/zlib_codec.py',
+        ]
+
+        # 追加ファイルをコピー（重複チェック付き）
+        for file_path in additional_files:
+            source_file = source_lib / file_path
+            target_file = lib_dir / file_path
+            if source_file.exists() and not target_file.exists():
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_file, target_file)
+                total_copied_files += 1
+                total_copied_size += source_file.stat().st_size
+                print(f"Copied additional stdlib file: {file_path}")
+
+        # encodingsディレクトリの内容を確認
+        encodings_source = source_lib / "encodings"
+        encodings_target = lib_dir / "encodings"
+        if encodings_source.exists():
+            print(f"Source encodings directory: {encodings_source}")
+            print(f"Target encodings directory: {encodings_target}")
+
+            # encodingsディレクトリの全ファイルをコピー
+            if encodings_source.is_dir():
+                encodings_target.mkdir(parents=True, exist_ok=True)
+                for item in encodings_source.iterdir():
+                    if item.is_file():
+                        target_item = encodings_target / item.name
+                        if not target_item.exists():
+                            shutil.copy2(item, target_item)
+                            total_copied_files += 1
+                            total_copied_size += item.stat().st_size
+                            print(f"Copied encodings file: {item.name}")
+                    elif item.is_dir():
+                        target_item = encodings_target / item.name
+                        if not target_item.exists():
+                            shutil.copytree(item, target_item)
+                            size = sum(f.stat().st_size for f in target_item.rglob(
+                                '*') if f.is_file())
+                            total_copied_size += size
+                            print(f"Copied encodings directory: {item.name}")
+        else:
+            print(
+                f"Warning: Source encodings directory not found: {encodings_source}")
 
         # 必要なsite-packagesモジュールをコピー
         source_site_packages = get_site_packages_path()

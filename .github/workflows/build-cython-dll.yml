@@ -597,9 +597,9 @@ jobs:
           }
         shell: powershell
 
-      - name: Test Lightweight Runtime with C#
+      - name: Debug Lightweight Runtime
         run: |
-          Write-Host "Testing lightweight runtime with C#..." -ForegroundColor Yellow
+          Write-Host "Debugging lightweight runtime..." -ForegroundColor Yellow
 
           # Check if lightweight runtime exists
           if (Test-Path "lightweight_runtime") {
@@ -607,6 +607,10 @@ jobs:
             $runtimeSize = Get-ChildItem "lightweight_runtime" -Recurse | Measure-Object -Property Length -Sum
             $runtimeSizeMB = [math]::Round($runtimeSize.Sum / 1MB, 2)
             Write-Host "Runtime size: $runtimeSizeMB MB" -ForegroundColor Cyan
+            
+            # Run diagnostic script
+            Write-Host "Running diagnostic script..." -ForegroundColor Cyan
+            python debug_runtime.py
             
             # List runtime contents
             Write-Host "Runtime contents:" -ForegroundColor Cyan
@@ -617,6 +621,11 @@ jobs:
             Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
             exit 1
           }
+        shell: powershell
+
+      - name: Test Lightweight Runtime with C#
+        run: |
+          Write-Host "Testing lightweight runtime with C#..." -ForegroundColor Yellow
 
           # Copy lightweight runtime to test directory
           Copy-Item "lightweight_runtime" "lightweight_runtime_csharp\bin\Release\net6.0\" -Recurse -Force
