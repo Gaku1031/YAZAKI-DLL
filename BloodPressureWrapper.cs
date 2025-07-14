@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using System.Linq; // Added for .Take()
+using System.Collections.Generic; // Added for BitConverter
 
 namespace BloodPressureEstimation
 {
@@ -190,13 +192,54 @@ print('All imports successful')
                     Console.WriteLine("3. Check if Python path is correctly set");
                     Console.WriteLine("4. Check if working directory is correct");
                     
+                    // Check runtime directory contents
+                    Console.WriteLine("Runtime directory contents:");
+                    try
+                    {
+                        var runtimeFiles = Directory.GetFileSystemEntries(runtimePath);
+                        foreach (var file in runtimeFiles)
+                        {
+                            var info = new FileInfo(file);
+                            Console.WriteLine($"  {Path.GetFileName(file)} ({(info.Exists ? info.Length : 0)} bytes)");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Error listing runtime contents: {e.Message}");
+                    }
+                    
+                    // Check if BloodPressureEstimation.dll exists and is readable
+                    var dllPath = Path.Combine(runtimePath, "BloodPressureEstimation.dll");
+                    if (File.Exists(dllPath))
+                    {
+                        var dllInfo = new FileInfo(dllPath);
+                        Console.WriteLine($"BloodPressureEstimation.dll found: {dllInfo.Length} bytes");
+                        
+                        // Try to read the DLL file
+                        try
+                        {
+                            var dllBytes = File.ReadAllBytes(dllPath);
+                            Console.WriteLine($"DLL file is readable, first 100 bytes: {BitConverter.ToString(dllBytes.Take(100).ToArray())}");
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine($"Error reading DLL file: {e.Message}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("BloodPressureEstimation.dll NOT FOUND");
+                    }
+                    
                     // Additional diagnostic: try to run a simple Python test
                     Console.WriteLine("Running additional diagnostic test...");
                     var simpleTest = @"
 import sys
+import os
 print('Python executable:', sys.executable)
 print('Python version:', sys.version)
-print('Current directory:', sys.path[0])
+print('Current directory:', os.getcwd())
+print('Python path:', sys.path)
 print('Available modules:')
 for module in ['numpy', 'cv2', 'sklearn', 'mediapipe', 'joblib', 'PIL']:
     try:
@@ -204,6 +247,15 @@ for module in ['numpy', 'cv2', 'sklearn', 'mediapipe', 'joblib', 'PIL']:
         print(f'  {module}: OK')
     except ImportError as e:
         print(f'  {module}: FAILED - {e}')
+print('Trying to import BloodPressureEstimation...')
+try:
+    import BloodPressureEstimation
+    print('BloodPressureEstimation: OK')
+    print('Module file:', BloodPressureEstimation.__file__)
+except ImportError as e:
+    print('BloodPressureEstimation: FAILED -', e)
+    import traceback
+    traceback.print_exc()
 ";
                     
                     var diagnosticStartInfo = new ProcessStartInfo

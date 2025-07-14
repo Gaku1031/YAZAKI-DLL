@@ -666,15 +666,29 @@ jobs:
               $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
               $exitCode = $testProcess.ExitCode
               
-              # Display test output
+              # Display test output with more detail
               if (Test-Path "test_output.txt") {
                 Write-Host "C# test output:" -ForegroundColor Cyan
-                Get-Content "test_output.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                $outputContent = Get-Content "test_output.txt"
+                if ($outputContent) {
+                  $outputContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                } else {
+                  Write-Host "  (No output)" -ForegroundColor Yellow
+                }
+              } else {
+                Write-Host "No test output file found" -ForegroundColor Yellow
               }
               
               if (Test-Path "test_error.txt") {
                 Write-Host "C# test errors:" -ForegroundColor Red
-                Get-Content "test_error.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+                $errorContent = Get-Content "test_error.txt"
+                if ($errorContent) {
+                  $errorContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+                } else {
+                  Write-Host "  (No errors)" -ForegroundColor Green
+                }
+              } else {
+                Write-Host "No test error file found" -ForegroundColor Yellow
               }
               
               if ($exitCode -eq 0) {

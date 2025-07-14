@@ -52,71 +52,72 @@ def create_lightweight_runtime():
             'PIL',  # Pillow（必要部分のみコピー）
         ]
 
-        # 除外するモジュール（サイズ削減のため）
-        excluded_modules = [
-            'numpy.tests',
-            'numpy.f2py',
-            'numpy.distutils',
-            'numpy.random',
-            'numpy.fft',
-            'numpy.linalg',
-            'numpy.polynomial',
-            'sklearn.tests',
-            'sklearn.datasets',
-            'sklearn.metrics',
-            'sklearn.model_selection',
-            'sklearn.preprocessing',
-            'sklearn.feature_selection',
-            'sklearn.feature_extraction',
-            'sklearn.decomposition',
-            'sklearn.manifold',
-            'sklearn.cluster',
-            'sklearn.neighbors',
-            'sklearn.svm',
-            'sklearn.tree',
-            'sklearn.neural_network',
-            'sklearn.calibration',
-            'sklearn.covariance',
-            'sklearn.cross_decomposition',
-            'sklearn.discriminant_analysis',
-            'sklearn.ensemble.bagging',
-            'sklearn.ensemble.gradient_boosting',
-            'sklearn.ensemble.voting',
-            'sklearn.ensemble.stacking',
-            'scipy.tests',
-            'scipy.io',
-            'scipy.optimize',
-            'scipy.spatial',
-            'scipy.sparse',
-            'scipy.special',
-            'scipy.stats',
-            'scipy.ndimage',
-            'scipy.interpolate',
-            'scipy.integrate',
-            'scipy.linalg',
-            'scipy.fft',
-            'mediapipe.tests',
-            'mediapipe.python',
-            'PIL.tests',
-            'PIL.ImageDraw2',
-            'PIL.ImageFilter',
-            'PIL.ImageFont',
-            'PIL.ImageGrab',
-            'PIL.ImageMath',
-            'PIL.ImageMorph',
-            'PIL.ImageOps',
-            'PIL.ImagePalette',
-            'PIL.ImagePath',
-            'PIL.ImageQt',
-            'PIL.ImageShow',
-            'PIL.ImageStat',
-            'PIL.ImageTk',
-            'PIL.ImageTransform',
-            'PIL.ImageWin',
-        ]
+        # ファイルサイズ制限（200KB以上のファイルは除外）
+        max_file_size = 200 * 1024  # 200KB
 
-        # ファイルサイズ制限（500KB以上のファイルは除外）
-        max_file_size = 512 * 1024  # 500KB
+        # 追加の除外パターン
+        additional_exclusions = [
+            '*.pyc',
+            '*.pyo',
+            '__pycache__',
+            '*.so',
+            '*.dylib',
+            '*.dll',
+            '*.exe',
+            '*.pdb',
+            '*.lib',
+            '*.a',
+            '*.o',
+            '*.obj',
+            '*.exp',
+            '*.map',
+            '*.def',
+            '*.spec',
+            '*.manifest',
+            '*.rc',
+            '*.res',
+            '*.ico',
+            '*.bmp',
+            '*.gif',
+            '*.jpg',
+            '*.jpeg',
+            '*.png',
+            '*.tiff',
+            '*.svg',
+            '*.pdf',
+            '*.doc',
+            '*.docx',
+            '*.xls',
+            '*.xlsx',
+            '*.ppt',
+            '*.pptx',
+            '*.txt',
+            '*.md',
+            '*.rst',
+            '*.html',
+            '*.htm',
+            '*.css',
+            '*.js',
+            '*.json',
+            '*.xml',
+            '*.yaml',
+            '*.yml',
+            '*.ini',
+            '*.cfg',
+            '*.conf',
+            '*.log',
+            '*.tmp',
+            '*.bak',
+            '*.old',
+            '*.orig',
+            '*.rej',
+            '*.swp',
+            '*.swo',
+            '*~',
+            '.#*',
+            '#*#',
+            '.#*#',
+        ]
 
         # 軽量ランタイムディレクトリを作成
         runtime_dir = Path("lightweight_runtime")
@@ -185,7 +186,7 @@ def create_lightweight_runtime():
                                 item_name = item.name
                                 # 除外リストに含まれるかチェック
                                 should_exclude = any(excluded in str(
-                                    item) for excluded in excluded_modules)
+                                    item) for excluded in additional_exclusions)
                                 # ファイルサイズ制限をチェック
                                 if item.is_file():
                                     file_size = item.stat().st_size
@@ -385,12 +386,25 @@ print("\\n=== All Tests Passed Successfully! ===")
 
             # サイズ内訳を表示
             print("Size breakdown:")
+            large_files = []
             for item in runtime_dir.rglob('*'):
                 if item.is_file():
                     size_mb = item.stat().st_size / (1024 * 1024)
-                    if size_mb > 1:  # 1MB以上のファイルのみ表示
-                        print(
-                            f"  {item.relative_to(runtime_dir)}: {size_mb:.2f} MB")
+                    if size_mb > 0.5:  # 500KB以上のファイルのみ表示
+                        large_files.append((item, size_mb))
+
+            # サイズ順にソート
+            large_files.sort(key=lambda x: x[1], reverse=True)
+            for item, size_mb in large_files[:20]:  # 上位20ファイルのみ表示
+                print(f"  {item.relative_to(runtime_dir)}: {size_mb:.2f} MB")
+
+            # サイズ削減の提案
+            print("\nSize reduction suggestions:")
+            print("1. Remove large data files (>1MB)")
+            print("2. Exclude test directories")
+            print("3. Remove documentation files")
+            print("4. Use minimal Python installation")
+            print("5. Consider alternative lightweight libraries")
         else:
             print(
                 f"SUCCESS: Runtime size ({runtime_size_mb:.1f} MB) is within target limit ({size_limit_mb} MB)")
