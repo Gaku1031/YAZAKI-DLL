@@ -184,6 +184,7 @@ def create_lightweight_runtime():
                 if module_path.is_dir():
                     # 除外ディレクトリをスキップ
                     def copy_with_exclusions(src, dst):
+                        nonlocal total_copied_files, total_copied_size, large_files_skipped
                         if src.is_dir():
                             dst.mkdir(exist_ok=True)
                             for item in src.iterdir():
