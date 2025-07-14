@@ -11,6 +11,16 @@ import subprocess
 from pathlib import Path
 
 
+def get_site_packages_path():
+    """site-packagesディレクトリのパスを取得"""
+    for path in sys.path:
+        if 'site-packages' in path:
+            return Path(path)
+    # 見つからない場合は、Pythonのインストールディレクトリから推測
+    python_dir = Path(sys.executable).parent
+    return python_dir / "Lib" / "site-packages"
+
+
 def create_lightweight_runtime():
     """軽量Pythonランタイムを作成"""
 
@@ -62,7 +72,8 @@ def create_lightweight_runtime():
     lib_dir.mkdir(exist_ok=True)
 
     # 必要なモジュールのみをコピー
-    site_packages = Path(sys.__path__[0]).parent / "site-packages"
+    site_packages = get_site_packages_path()
+    print(f"Site-packages path: {site_packages}")
 
     for module in required_modules:
         module_path = site_packages / module.replace('.', '/')
@@ -75,17 +86,22 @@ def create_lightweight_runtime():
                 shutil.copytree(module_path, target_path, dirs_exist_ok=True)
             else:
                 shutil.copy2(module_path, target_path)
+            print(f"Copied module: {module}")
+        else:
+            print(f"Module not found: {module} at {module_path}")
 
     # 作成したCythonモジュールをコピー
     cython_module = Path("BloodPressureEstimation.dll")
     if cython_module.exists():
         shutil.copy2(cython_module, runtime_dir /
                      "BloodPressureEstimation.dll")
+        print("Copied Cython module: BloodPressureEstimation.dll")
 
     # モデルファイルをコピー
     models_dir = runtime_dir / "models"
     if Path("models").exists():
         shutil.copytree("models", models_dir, dirs_exist_ok=True)
+        print("Copied models directory")
 
     print(f"Lightweight runtime created in: {runtime_dir}")
     print(
