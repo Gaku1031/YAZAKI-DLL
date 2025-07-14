@@ -329,6 +329,35 @@ jobs:
             $runtimeSizeMB = [math]::Round($runtimeSize.Sum / 1MB, 2)
             Write-Host "[OK] Lightweight runtime created: $runtimeSizeMB MB" -ForegroundColor Green
             
+            # Verify encodings module specifically
+            $encodingsDir = "lightweight_runtime\Lib\encodings"
+            if (Test-Path $encodingsDir) {
+              Write-Host "[OK] Encodings directory found" -ForegroundColor Green
+              $encodingsFiles = Get-ChildItem $encodingsDir -Recurse -Filter "*.py"
+              Write-Host "Encodings files count: $($encodingsFiles.Count)" -ForegroundColor Cyan
+              
+              # Check for critical encodings files
+              $criticalFiles = @("__init__.py", "utf_8.py", "ascii.py", "latin_1.py")
+              foreach ($file in $criticalFiles) {
+                $filePath = Join-Path $encodingsDir $file
+                if (Test-Path $filePath) {
+                  $size = (Get-Item $filePath).Length
+                  Write-Host "  ✓ $file exists ($size bytes)" -ForegroundColor Green
+                } else {
+                  Write-Host "  ✗ $file missing" -ForegroundColor Red
+                }
+              }
+            } else {
+              Write-Host "[ERROR] Encodings directory not found: $encodingsDir" -ForegroundColor Red
+              Write-Host "Lib directory contents:" -ForegroundColor Yellow
+              $libDir = "lightweight_runtime\Lib"
+              if (Test-Path $libDir) {
+                Get-ChildItem $libDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+              } else {
+                Write-Host "  Lib directory not found" -ForegroundColor Red
+              }
+            }
+            
             # List runtime contents
             Write-Host "Runtime contents:" -ForegroundColor Cyan
             Get-ChildItem "lightweight_runtime" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
@@ -687,7 +716,7 @@ jobs:
             $pythonExe = Join-Path $runtimeInTest "python.exe"
             if (Test-Path $pythonExe) {
               # Create a simple test script to check Python initialization
-              $simpleTestScript = 'import sys; import os; print("Python version:", sys.version); print("Python executable:", sys.executable); print("Current working directory:", os.getcwd()); print("Python path:", sys.path[:3]); import encodings; print("SUCCESS: encodings module imported"); import codecs; print("SUCCESS: codecs module imported"); print("SUCCESS: Basic Python runtime test passed")'
+              $simpleTestScript = 'import sys; import os; print("Python version:", sys.version); print("Python executable:", sys.executable); print("Current working directory:", os.getcwd()); print("Python path:", sys.path[:3]); print("Checking for encodings module..."); import encodings; print("SUCCESS: encodings module imported"); import codecs; print("SUCCESS: codecs module imported"); print("SUCCESS: Basic Python runtime test passed")'
               
               Write-Host "Created simple test script" -ForegroundColor Cyan
               
@@ -695,6 +724,22 @@ jobs:
               $env:PYTHONPATH = $runtimeInTest
               $env:PYTHONHOME = $runtimeInTest
               $env:PYTHONUNBUFFERED = "1"
+              
+              # Check if encodings directory exists in runtime
+              $encodingsDir = Join-Path $runtimeInTest "Lib\encodings"
+              if (Test-Path $encodingsDir) {
+                Write-Host "Encodings directory found: $encodingsDir" -ForegroundColor Green
+                Get-ChildItem $encodingsDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+              } else {
+                Write-Host "ERROR: Encodings directory not found: $encodingsDir" -ForegroundColor Red
+                Write-Host "Runtime Lib directory contents:" -ForegroundColor Yellow
+                $libDir = Join-Path $runtimeInTest "Lib"
+                if (Test-Path $libDir) {
+                  Get-ChildItem $libDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+                } else {
+                  Write-Host "  Lib directory not found" -ForegroundColor Red
+                }
+              }
               
               # Run simple Python test
               $pythonProcess = Start-Process -FilePath $pythonExe -ArgumentList "-c", $simpleTestScript -NoNewWindow -Wait -PassThru -RedirectStandardOutput "simple_test_output.txt" -RedirectStandardError "simple_test_error.txt" -WorkingDirectory $runtimeInTest
