@@ -504,7 +504,7 @@ def create_lightweight_runtime():
         encodings_init = runtime_dir / "Lib" / "encodings" / "__init__.py"
         if encodings_init.exists():
             print(
-                f"✓ encodings/__init__.py exists ({encodings_init.stat().st_size} bytes)")
+                f"[OK] encodings/__init__.py exists ({encodings_init.stat().st_size} bytes)")
         else:
             raise RuntimeError(
                 f"Critical: encodings/__init__.py not found at {encodings_init}")
@@ -514,7 +514,7 @@ def create_lightweight_runtime():
         if encodings_dir.exists():
             encodings_files = list(encodings_dir.rglob("*.py"))
             print(
-                f"✓ encodings directory contains {len(encodings_files)} Python files")
+                f"[OK] encodings directory contains {len(encodings_files)} Python files")
 
             # 重要なファイルの存在確認
             important_encodings = ['__init__.py',
@@ -523,9 +523,9 @@ def create_lightweight_runtime():
                 file_path = encodings_dir / important_file
                 if file_path.exists():
                     print(
-                        f"✓ {important_file} exists ({file_path.stat().st_size} bytes)")
+                        f"[OK] {important_file} exists ({file_path.stat().st_size} bytes)")
                 else:
-                    print(f"✗ {important_file} missing")
+                    print(f"[ERROR] {important_file} missing")
         else:
             raise RuntimeError(
                 f"Critical: encodings directory not found at {encodings_dir}")

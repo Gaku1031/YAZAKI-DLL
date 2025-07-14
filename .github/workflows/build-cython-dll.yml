@@ -342,9 +342,9 @@ jobs:
                 $filePath = Join-Path $encodingsDir $file
                 if (Test-Path $filePath) {
                   $size = (Get-Item $filePath).Length
-                  Write-Host "  ✓ $file exists ($size bytes)" -ForegroundColor Green
+                  Write-Host "  [OK] $file exists ($size bytes)" -ForegroundColor Green
                 } else {
-                  Write-Host "  ✗ $file missing" -ForegroundColor Red
+                  Write-Host "  [ERROR] $file missing" -ForegroundColor Red
                 }
               }
             } else {
@@ -716,7 +716,7 @@ jobs:
             $pythonExe = Join-Path $runtimeInTest "python.exe"
             if (Test-Path $pythonExe) {
               # Create a simple test script to check Python initialization
-              $simpleTestScript = 'import sys; import os; print("Python version:", sys.version); print("Python executable:", sys.executable); print("Current working directory:", os.getcwd()); print("Python path:", sys.path[:3]); print("Checking for encodings module..."); import encodings; print("SUCCESS: encodings module imported"); import codecs; print("SUCCESS: codecs module imported"); print("SUCCESS: Basic Python runtime test passed")'
+              $simpleTestScript = "import sys; import os; print('Python version:', sys.version); print('Python executable:', sys.executable); print('Current working directory:', os.getcwd()); print('Python path:', sys.path[:3]); print('Checking for encodings module...'); import encodings; print('SUCCESS: encodings module imported'); import codecs; print('SUCCESS: codecs module imported'); print('SUCCESS: Basic Python runtime test passed')"
               
               Write-Host "Created simple test script" -ForegroundColor Cyan
               
