@@ -41,15 +41,15 @@ def create_lightweight_runtime():
     print(f"Python executable: {sys.executable}")
 
     try:
-        # 必要なモジュールのリスト（最小限に削減）
+        # 必要なモジュールのリスト（依存関係を考慮）
         required_modules = [
-            'numpy.core',  # NumPyのコア部分のみ
+            'numpy',  # NumPy（コア部分のみコピー）
             'cv2',  # OpenCV
-            'sklearn.ensemble',  # RandomForestのみ
-            'scipy.signal',  # 信号処理のみ
-            'mediapipe.solutions',  # MediaPipe
+            'sklearn',  # scikit-learn（必要部分のみコピー）
+            'scipy',  # SciPy（必要部分のみコピー）
+            'mediapipe',  # MediaPipe（必要部分のみコピー）
             'joblib',  # モデル読み込み用
-            'PIL',  # Pillow
+            'PIL',  # Pillow（必要部分のみコピー）
         ]
 
         # 除外するモジュール（サイズ削減のため）
@@ -57,16 +57,66 @@ def create_lightweight_runtime():
             'numpy.tests',
             'numpy.f2py',
             'numpy.distutils',
+            'numpy.random',
+            'numpy.fft',
+            'numpy.linalg',
+            'numpy.polynomial',
             'sklearn.tests',
             'sklearn.datasets',
             'sklearn.metrics',
+            'sklearn.model_selection',
+            'sklearn.preprocessing',
+            'sklearn.feature_selection',
+            'sklearn.feature_extraction',
+            'sklearn.decomposition',
+            'sklearn.manifold',
+            'sklearn.cluster',
+            'sklearn.neighbors',
+            'sklearn.svm',
+            'sklearn.tree',
+            'sklearn.neural_network',
+            'sklearn.calibration',
+            'sklearn.covariance',
+            'sklearn.cross_decomposition',
+            'sklearn.discriminant_analysis',
+            'sklearn.ensemble.bagging',
+            'sklearn.ensemble.gradient_boosting',
+            'sklearn.ensemble.voting',
+            'sklearn.ensemble.stacking',
             'scipy.tests',
             'scipy.io',
             'scipy.optimize',
             'scipy.spatial',
+            'scipy.sparse',
+            'scipy.special',
+            'scipy.stats',
+            'scipy.ndimage',
+            'scipy.interpolate',
+            'scipy.integrate',
+            'scipy.linalg',
+            'scipy.fft',
             'mediapipe.tests',
+            'mediapipe.python',
             'PIL.tests',
+            'PIL.ImageDraw2',
+            'PIL.ImageFilter',
+            'PIL.ImageFont',
+            'PIL.ImageGrab',
+            'PIL.ImageMath',
+            'PIL.ImageMorph',
+            'PIL.ImageOps',
+            'PIL.ImagePalette',
+            'PIL.ImagePath',
+            'PIL.ImageQt',
+            'PIL.ImageShow',
+            'PIL.ImageStat',
+            'PIL.ImageTk',
+            'PIL.ImageTransform',
+            'PIL.ImageWin',
         ]
+
+        # ファイルサイズ制限（500KB以上のファイルは除外）
+        max_file_size = 512 * 1024  # 500KB
 
         # 軽量ランタイムディレクトリを作成
         runtime_dir = Path("lightweight_runtime")
@@ -136,10 +186,26 @@ def create_lightweight_runtime():
                                 # 除外リストに含まれるかチェック
                                 should_exclude = any(excluded in str(
                                     item) for excluded in excluded_modules)
-                                if not should_exclude and not item_name.startswith('__pycache__'):
+                                # ファイルサイズ制限をチェック
+                                if item.is_file():
+                                    file_size = item.stat().st_size
+                                    size_excluded = file_size > max_file_size
+                                    if size_excluded:
+                                        print(
+                                            f"Skipping large file: {item.name} ({file_size / (1024*1024):.2f} MB)")
+                                else:
+                                    size_excluded = False
+
+                                if not should_exclude and not size_excluded and not item_name.startswith('__pycache__'):
                                     copy_with_exclusions(item, dst / item_name)
                         else:
-                            shutil.copy2(src, dst)
+                            # ファイルサイズをチェック
+                            file_size = src.stat().st_size
+                            if file_size <= max_file_size:
+                                shutil.copy2(src, dst)
+                            else:
+                                print(
+                                    f"Skipping large file: {src.name} ({file_size / (1024*1024):.2f} MB)")
 
                     copy_with_exclusions(module_path, target_path)
                 else:

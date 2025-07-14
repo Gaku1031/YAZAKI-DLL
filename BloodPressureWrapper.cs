@@ -181,6 +181,57 @@ print('All imports successful')
                     
                     isInitialized = process.ExitCode == 0;
                     Console.WriteLine($"Python test exit code: {process.ExitCode}");
+                
+                if (!isInitialized)
+                {
+                    Console.WriteLine("Python import test failed. Detailed analysis:");
+                    Console.WriteLine("1. Check if all required modules are available");
+                    Console.WriteLine("2. Check if BloodPressureEstimation.dll is properly copied");
+                    Console.WriteLine("3. Check if Python path is correctly set");
+                    Console.WriteLine("4. Check if working directory is correct");
+                    
+                    // Additional diagnostic: try to run a simple Python test
+                    Console.WriteLine("Running additional diagnostic test...");
+                    var simpleTest = @"
+import sys
+print('Python executable:', sys.executable)
+print('Python version:', sys.version)
+print('Current directory:', sys.path[0])
+print('Available modules:')
+for module in ['numpy', 'cv2', 'sklearn', 'mediapipe', 'joblib', 'PIL']:
+    try:
+        __import__(module)
+        print(f'  {module}: OK')
+    except ImportError as e:
+        print(f'  {module}: FAILED - {e}')
+";
+                    
+                    var diagnosticStartInfo = new ProcessStartInfo
+                    {
+                        FileName = Path.Combine(runtimePath, "python.exe"),
+                        Arguments = $"-c \"{simpleTest.Replace("\"", "\\\"")}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        WorkingDirectory = runtimePath
+                    };
+                    
+                    using (var diagnosticProcess = Process.Start(diagnosticStartInfo))
+                    {
+                        var diagnosticOutput = diagnosticProcess.StandardOutput.ReadToEnd();
+                        var diagnosticError = diagnosticProcess.StandardError.ReadToEnd();
+                        diagnosticProcess.WaitForExit();
+                        
+                        Console.WriteLine("Diagnostic test output:");
+                        Console.WriteLine(diagnosticOutput);
+                        if (!string.IsNullOrEmpty(diagnosticError))
+                        {
+                            Console.WriteLine("Diagnostic test errors:");
+                            Console.WriteLine(diagnosticError);
+                        }
+                    }
+                }
                 }
 
                 return isInitialized;
