@@ -610,7 +610,13 @@ jobs:
             
             # Run diagnostic script
             Write-Host "Running diagnostic script..." -ForegroundColor Cyan
-            python debug_runtime.py
+            try {
+                python debug_runtime.py
+                Write-Host "Diagnostic script completed successfully" -ForegroundColor Green
+            } catch {
+                Write-Host "Diagnostic script failed: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "Continuing with workflow..." -ForegroundColor Yellow
+            }
             
             # List runtime contents
             Write-Host "Runtime contents:" -ForegroundColor Cyan

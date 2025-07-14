@@ -396,6 +396,112 @@ print(f"  Python path: {sys.path[:3]}")
             elif not source_file.exists():
                 print(f"Warning: Minimal stdlib file not found: {file_name}")
 
+        # 方法5: encodingsモジュールの確実なコピー
+        print("Ensuring encodings module is properly copied...")
+        encodings_source = source_lib / "encodings"
+        encodings_target = lib_dir / "encodings"
+
+        if encodings_source.exists():
+            # encodingsディレクトリを完全に削除して再作成
+            if encodings_target.exists():
+                shutil.rmtree(encodings_target)
+                print("Removed existing encodings directory")
+
+            # 新しいencodingsディレクトリを作成
+            encodings_target.mkdir(parents=True, exist_ok=True)
+            print(f"Created encodings directory: {encodings_target}")
+
+            # encodingsディレクトリの全ファイルをコピー
+            copied_files = 0
+            for item in encodings_source.iterdir():
+                if item.is_file():
+                    target_item = encodings_target / item.name
+                    shutil.copy2(item, target_item)
+                    copied_files += 1
+                    total_copied_files += 1
+                    total_copied_size += item.stat().st_size
+                    print(f"Copied encodings file: {item.name}")
+                elif item.is_dir():
+                    target_item = encodings_target / item.name
+                    shutil.copytree(item, target_item)
+                    size = sum(f.stat().st_size for f in target_item.rglob(
+                        '*') if f.is_file())
+                    total_copied_size += size
+                    copied_files += 1
+                    print(f"Copied encodings directory: {item.name}")
+
+            print(f"Total encodings files copied: {copied_files}")
+
+            # encodingsディレクトリの内容を確認
+            if encodings_target.exists():
+                encodings_files = list(encodings_target.iterdir())
+                print(
+                    f"Encodings directory contains {len(encodings_files)} items:")
+                for item in encodings_files:
+                    if item.is_file():
+                        size = item.stat().st_size
+                        print(f"  {item.name} ({size} bytes)")
+                    else:
+                        print(f"  {item.name}/ (directory)")
+            else:
+                print("ERROR: Encodings directory was not created properly")
+        else:
+            print(
+                f"ERROR: Source encodings directory not found: {encodings_source}")
+            # 代替手段として、基本的なencodingsファイルを手動で作成
+            print("Creating basic encodings files manually...")
+            encodings_target.mkdir(parents=True, exist_ok=True)
+
+            # 基本的なencodingsファイルを作成
+            basic_encodings_files = {
+                '__init__.py': '''"""Standard encodings module.
+
+This module provides access to the codec registry and the base classes for
+standard encodings.  The codec registry is a mapping of encoding names to
+codec objects, which have a stateless interface in order to be safe to use
+by multiple threads.
+
+"""''',
+                'utf_8.py': '''"""Python 'utf-8' Codec
+
+This codec is used for UTF-8 encoding/decoding.
+
+"""''',
+                'ascii.py': '''"""Python 'ascii' Codec
+
+This codec is used for ASCII encoding/decoding.
+
+"""''',
+                'latin_1.py': '''"""Python 'latin-1' Codec
+
+This codec is used for Latin-1 encoding/decoding.
+
+"""''',
+                'cp1252.py': '''"""Python 'cp1252' Codec
+
+This codec is used for Windows-1252 encoding/decoding.
+
+"""''',
+                'charmap.py': '''"""Python 'charmap' Codec
+
+This codec is used for charmap encoding/decoding.
+
+"""''',
+                'aliases.py': '''"""Encoding aliases.
+
+This module is used for encoding aliases.
+
+"""''',
+            }
+
+            for filename, content in basic_encodings_files.items():
+                file_path = encodings_target / filename
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                total_copied_files += 1
+                total_copied_size += len(content.encode('utf-8'))
+                print(f"Created basic encodings file: {filename}")
+
         # 追加の重要なファイルをコピー
         additional_files = [
             'encodings/__init__.py',

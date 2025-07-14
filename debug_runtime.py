@@ -27,9 +27,9 @@ def debug_runtime():
         file_path = runtime_dir / file
         if file_path.exists():
             size = file_path.stat().st_size
-            print(f"✓ {file} ({size} bytes)")
+            print(f"[OK] {file} ({size} bytes)")
         else:
-            print(f"✗ {file} (NOT FOUND)")
+            print(f"[ERROR] {file} (NOT FOUND)")
 
     # Libディレクトリの確認
     lib_dir = runtime_dir / "Lib"
@@ -53,9 +53,9 @@ def debug_runtime():
             file_path = lib_dir / file
             if file_path.exists():
                 size = file_path.stat().st_size
-                print(f"✓ {file} ({size} bytes)")
+                print(f"[OK] {file} ({size} bytes)")
             else:
-                print(f"✗ {file} (NOT FOUND)")
+                print(f"[ERROR] {file} (NOT FOUND)")
 
         # encodingsディレクトリの詳細確認
         encodings_dir = lib_dir / "encodings"
@@ -68,7 +68,7 @@ def debug_runtime():
                 else:
                     print(f"  {item.name}/ (directory)")
         else:
-            print(f"\n✗ Encodings directory not found: {encodings_dir}")
+            print(f"\n[ERROR] Encodings directory not found: {encodings_dir}")
 
     # site-packagesディレクトリの確認
     site_packages = lib_dir / "site-packages"
@@ -85,14 +85,14 @@ def debug_runtime():
                 if module_path.is_dir():
                     size = sum(f.stat().st_size for f in module_path.rglob(
                         '*') if f.is_file())
-                    print(f"✓ {module}/ ({size} bytes)")
+                    print(f"[OK] {module}/ ({size} bytes)")
                 else:
                     size = module_path.stat().st_size
-                    print(f"✓ {module} ({size} bytes)")
+                    print(f"[OK] {module} ({size} bytes)")
             else:
-                print(f"✗ {module} (NOT FOUND)")
+                print(f"[ERROR] {module} (NOT FOUND)")
     else:
-        print(f"\n✗ Site-packages directory not found: {site_packages}")
+        print(f"\n[ERROR] Site-packages directory not found: {site_packages}")
 
     # モデルディレクトリの確認
     models_dir = runtime_dir / "models"
@@ -105,7 +105,7 @@ def debug_runtime():
             else:
                 print(f"  {item.name}/ (directory)")
     else:
-        print(f"\n✗ Models directory not found: {models_dir}")
+        print(f"\n[ERROR] Models directory not found: {models_dir}")
 
     # 全体のサイズ計算
     total_size = sum(
@@ -127,17 +127,17 @@ def debug_runtime():
             ], capture_output=True, text=True, cwd=str(runtime_dir))
 
             if result.returncode == 0:
-                print("✓ Python execution successful")
+                print("[OK] Python execution successful")
                 print("Output:")
                 print(result.stdout)
             else:
-                print("✗ Python execution failed")
+                print("[ERROR] Python execution failed")
                 print("Error:")
                 print(result.stderr)
         except Exception as e:
-            print(f"✗ Python execution error: {e}")
+            print(f"[ERROR] Python execution error: {e}")
     else:
-        print("✗ Python executable not found")
+        print("[ERROR] Python executable not found")
 
 
 if __name__ == "__main__":
