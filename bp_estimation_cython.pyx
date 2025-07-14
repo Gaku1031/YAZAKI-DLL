@@ -14,6 +14,8 @@ import time
 import threading
 from datetime import datetime
 
+from libc.string cimport memcpy
+
 # Windows DLL exports for pure C functions
 # (Functions will be exported via setup.py configuration)
 cdef extern from "Python.h":
@@ -224,7 +226,6 @@ cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id
         result_str = start_blood_pressure_analysis(request_id_str, height, weight, sex, movie_path_str)
         result_bytes = result_str.encode('utf-8')
         n = min(len(result_bytes), 1023)
-        from libc.string cimport memcpy
         memcpy(result_buffer, result_bytes, n)
         result_buffer[n] = 0
         return <const char*>result_buffer
@@ -247,7 +248,6 @@ cdef public const char* GetProcessingStatus(const char* request_id):
         result_str = get_processing_status(request_id_str)
         result_bytes = result_str.encode('utf-8')
         n = min(len(result_bytes), 1023)
-        from libc.string cimport memcpy
         memcpy(result_buffer, result_bytes, n)
         result_buffer[n] = 0
         return <const char*>result_buffer
@@ -278,7 +278,6 @@ cdef public const char* GetVersionInfo():
         result_str = get_version_info()
         result_bytes = result_str.encode('utf-8')
         n = min(len(result_bytes), 1023)
-        from libc.string cimport memcpy
         memcpy(result_buffer, result_bytes, n)
         result_buffer[n] = 0
         return <const char*>result_buffer
@@ -297,7 +296,6 @@ cdef public const char* GenerateRequestId():
         result_str = generate_request_id()
         result_bytes = result_str.encode('utf-8')
         n = min(len(result_bytes), 1023)
-        from libc.string cimport memcpy
         memcpy(result_buffer, result_bytes, n)
         result_buffer[n] = 0
         return <const char*>result_buffer
