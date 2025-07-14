@@ -26,21 +26,16 @@ def create_lightweight_runtime():
 
     print("Creating lightweight Python runtime...")
 
-    # 必要なモジュールのみをリストアップ
+    # 必要なモジュールのリスト（より包括的に）
     required_modules = [
-        'numpy.core._multiarray_umath',
-        'numpy.core._multiarray_tests',
-        'numpy.linalg._umath_linalg',
+        'numpy',
         'cv2',
-        'sklearn.ensemble._forest',
-        'sklearn.tree._utils',
-        'sklearn.utils._cython_blas',
-        'mediapipe.python.solutions.face_mesh',
-        'mediapipe.python.solutions.drawing_utils',
-        'scipy.special.cython_special',
-        'joblib._parallel_backends',
-        'joblib.externals.loky.backend',
-        'BloodPressureEstimation'  # 作成したCythonモジュール
+        'sklearn',
+        'scipy',
+        'mediapipe',
+        'joblib',
+        'PIL',  # Pillow
+        'pandas',  # 必要に応じて
     ]
 
     # 軽量ランタイムディレクトリを作成
@@ -52,6 +47,7 @@ def create_lightweight_runtime():
     # Python実行ファイルをコピー
     python_exe = Path(sys.executable)
     shutil.copy2(python_exe, runtime_dir / "python.exe")
+    print(f"Copied Python executable: {python_exe}")
 
     # 必要なDLLをコピー
     python_dlls = [
@@ -66,22 +62,24 @@ def create_lightweight_runtime():
         dll_path = python_dir / dll
         if dll_path.exists():
             shutil.copy2(dll_path, runtime_dir / dll)
+            print(f"Copied DLL: {dll}")
 
     # 最小限のライブラリディレクトリを作成
     lib_dir = runtime_dir / "Lib"
     lib_dir.mkdir(exist_ok=True)
 
-    # 必要なモジュールのみをコピー
-    site_packages = get_site_packages_path()
-    print(f"Site-packages path: {site_packages}")
+    # site-packagesディレクトリを作成
+    site_packages = lib_dir / "site-packages"
+    site_packages.mkdir(exist_ok=True)
+
+    # 必要なモジュールをコピー
+    source_site_packages = get_site_packages_path()
+    print(f"Source site-packages: {source_site_packages}")
 
     for module in required_modules:
-        module_path = site_packages / module.replace('.', '/')
+        module_path = source_site_packages / module
         if module_path.exists():
-            # モジュールディレクトリを作成
-            target_path = lib_dir / module.replace('.', '/')
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-
+            target_path = site_packages / module
             if module_path.is_dir():
                 shutil.copytree(module_path, target_path, dirs_exist_ok=True)
             else:
@@ -102,6 +100,72 @@ def create_lightweight_runtime():
     if Path("models").exists():
         shutil.copytree("models", models_dir, dirs_exist_ok=True)
         print("Copied models directory")
+
+    # Pythonパッケージの初期化ファイルを作成
+    init_file = site_packages / "__init__.py"
+    if not init_file.exists():
+        init_file.touch()
+        print("Created __init__.py for site-packages")
+
+    # 各モジュールディレクトリにも__init__.pyを作成
+    for module in required_modules:
+        module_dir = site_packages / module
+        if module_dir.exists() and module_dir.is_dir():
+            init_file = module_dir / "__init__.py"
+            if not init_file.exists():
+                init_file.touch()
+
+    # テスト用のPythonスクリプトを作成
+    test_script = runtime_dir / "test_import.py"
+    test_content = '''#!/usr/bin/env python3
+import sys
+import os
+
+# Add the current directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    import BloodPressureEstimation
+    print("SUCCESS: BloodPressureEstimation module imported successfully")
+    print(f"Module location: {BloodPressureEstimation.__file__}")
+except Exception as e:
+    print(f"ERROR: Failed to import BloodPressureEstimation: {e}")
+    sys.exit(1)
+
+try:
+    import numpy as np
+    print("SUCCESS: NumPy imported successfully")
+except Exception as e:
+    print(f"ERROR: Failed to import NumPy: {e}")
+    sys.exit(1)
+
+try:
+    import cv2
+    print("SUCCESS: OpenCV imported successfully")
+except Exception as e:
+    print(f"ERROR: Failed to import OpenCV: {e}")
+    sys.exit(1)
+
+try:
+    import sklearn
+    print("SUCCESS: scikit-learn imported successfully")
+except Exception as e:
+    print(f"ERROR: Failed to import scikit-learn: {e}")
+    sys.exit(1)
+
+try:
+    import mediapipe
+    print("SUCCESS: MediaPipe imported successfully")
+except Exception as e:
+    print(f"ERROR: Failed to import MediaPipe: {e}")
+    sys.exit(1)
+
+print("All modules imported successfully!")
+'''
+
+    with open(test_script, 'w') as f:
+        f.write(test_content)
+    print("Created test import script")
 
     print(f"Lightweight runtime created in: {runtime_dir}")
     print(
