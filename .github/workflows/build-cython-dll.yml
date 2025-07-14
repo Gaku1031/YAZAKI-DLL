@@ -441,15 +441,21 @@ jobs:
           }
         shell: powershell
 
+      - name: Build and Publish C# Test Project
+        run: |
+          dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp
+        shell: powershell
+
       - name: Prepare C# Integration Package (dist_csharp)
         run: |
-          New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
+          # Copy required files to dist_csharp
           Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
           if (Test-Path "python311.dll") { Copy-Item "python311.dll" "dist_csharp\" -Force }
           if (Test-Path "dist_cython\python_deps") { Copy-Item "dist_cython\python_deps" "dist_csharp\" -Recurse -Force }
           if (Test-Path "models_compressed") { Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force }
           elseif (Test-Path "models") { Copy-Item "models" "dist_csharp\models" -Recurse -Force }
-          if (Test-Path "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe") { Copy-Item "tests\CSharpTest\bin\Release\net6.0\BloodPressureTest.exe" "dist_csharp\" -Force }
+          # Check if BloodPressureTest.exe exists
+          if (!(Test-Path "dist_csharp\BloodPressureTest.exe")) { Write-Host "BloodPressureTest.exe not found in dist_csharp"; exit 1 }
           # README generation (English only for compatibility)
           Set-Content -Path 'dist_csharp\README.txt' -Value '# BloodPressureEstimation C# Integration Package' -Encoding UTF8
           Add-Content -Path 'dist_csharp\README.txt' -Value ''
