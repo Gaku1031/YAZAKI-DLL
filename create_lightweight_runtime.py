@@ -206,6 +206,24 @@ print("All modules imported successfully!")
             raise FileNotFoundError(
                 f"Cython module not found in runtime: {dll_path}")
 
+        # 軽量ランタイムでテストを実行
+        print("Testing lightweight runtime...")
+        test_process = subprocess.run([
+            str(python_exe_path),
+            str(test_script)
+        ], capture_output=True, text=True, cwd=runtime_dir)
+
+        if test_process.returncode == 0:
+            print("Lightweight runtime test passed!")
+            print("Test output:")
+            print(test_process.stdout)
+        else:
+            print("Lightweight runtime test failed!")
+            print("Test output:")
+            print(test_process.stdout)
+            print("Test errors:")
+            print(test_process.stderr)
+
         print("Runtime verification completed successfully")
         return runtime_dir
 

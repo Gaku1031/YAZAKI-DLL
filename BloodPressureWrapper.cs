@@ -28,7 +28,20 @@ namespace BloodPressureEstimation
                 if (!Directory.Exists(runtimePath))
                 {
                     Console.WriteLine($"ERROR: Runtime directory not found: {runtimePath}");
+                    Console.WriteLine("Available directories:");
+                    foreach (var dir in Directory.GetDirectories("."))
+                    {
+                        Console.WriteLine($"  {dir}");
+                    }
                     return false;
+                }
+
+                // List runtime directory contents
+                Console.WriteLine("Runtime directory contents:");
+                foreach (var item in Directory.GetFileSystemEntries(runtimePath))
+                {
+                    var info = new FileInfo(item);
+                    Console.WriteLine($"  {Path.GetFileName(item)} ({(info.Exists ? info.Length : 0)} bytes)");
                 }
 
                 // Check if python.exe exists
@@ -47,7 +60,7 @@ namespace BloodPressureEstimation
                     return false;
                 }
 
-                // Test Python import first
+                // Test Python import first with detailed output
                 var testImportScript = $@"
 import sys
 import os
@@ -55,6 +68,10 @@ print('Python version:', sys.version)
 print('Python executable:', sys.executable)
 print('Current directory:', os.getcwd())
 print('Python path:', sys.path)
+
+# Add current directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+print('Updated Python path:', sys.path)
 
 try:
     import BloodPressureEstimation
@@ -80,19 +97,35 @@ except Exception as e:
     print('ERROR importing OpenCV:', e)
     sys.exit(1)
 
+try:
+    import sklearn
+    print('SUCCESS: scikit-learn imported')
+except Exception as e:
+    print('ERROR importing scikit-learn:', e)
+    sys.exit(1)
+
+try:
+    import mediapipe
+    print('SUCCESS: MediaPipe imported')
+except Exception as e:
+    print('ERROR importing MediaPipe:', e)
+    sys.exit(1)
+
 print('All imports successful')
 ";
 
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = pythonExe,
-                    Arguments = $"-c \"{testImportScript}\"",
+                    Arguments = $"-c \"{testImportScript.Replace("\"", "\\\"")}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true,
                     WorkingDirectory = runtimePath
                 };
+
+                Console.WriteLine($"Running Python test with: {startInfo.FileName} {startInfo.Arguments}");
 
                 using (var process = Process.Start(startInfo))
                 {
@@ -148,7 +181,7 @@ except Exception as e:
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = Path.Combine(runtimePath, "python.exe"),
-                    Arguments = $"-c \"{script}\"",
+                    Arguments = $"-c \"{script.Replace("\"", "\\\"")}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -196,7 +229,7 @@ except Exception as e:
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = Path.Combine(runtimePath, "python.exe"),
-                    Arguments = $"-c \"{script}\"",
+                    Arguments = $"-c \"{script.Replace("\"", "\\\"")}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -238,7 +271,7 @@ except Exception as e:
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = Path.Combine(runtimePath, "python.exe"),
-                    Arguments = $"-c \"{script}\"",
+                    Arguments = $"-c \"{script.Replace("\"", "\\\"")}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -280,7 +313,7 @@ except Exception as e:
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = Path.Combine(runtimePath, "python.exe"),
-                    Arguments = $"-c \"{script}\"",
+                    Arguments = $"-c \"{script.Replace("\"", "\\\"")}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,

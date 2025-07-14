@@ -327,7 +327,7 @@ jobs:
             $pythonExe = "lightweight_runtime\python.exe"
             if (Test-Path $pythonExe) {
               try {
-                $testScript = "import sys; print('Python version:', sys.version); import BloodPressureEstimation; print('SUCCESS')"
+                $testScript = 'import sys; print("Python version:", sys.version); import BloodPressureEstimation; print("SUCCESS")'
                 $testProcess = Start-Process -FilePath $pythonExe -ArgumentList "-c", $testScript -NoNewWindow -Wait -PassThru
                 if ($testProcess.ExitCode -eq 0) {
                   Write-Host "[OK] Python import test passed" -ForegroundColor Green
