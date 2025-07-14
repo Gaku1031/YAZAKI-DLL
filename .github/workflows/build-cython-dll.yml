@@ -346,7 +346,7 @@ jobs:
               Write-Host "Created test script: $testScriptPath" -ForegroundColor Cyan
               Write-Host "Test script exists: $(Test-Path $testScriptPath)" -ForegroundColor Cyan
               
-              # Set environment variables for Python
+              # Set environment variables for Python (using unique variable names)
               $env:PYTHONPATH = $runtimeInTest
               $env:PYTHONHOME = $runtimeInTest
               $env:PYTHONUNBUFFERED = "1"
@@ -369,10 +369,12 @@ jobs:
                   Write-Host "[WARNING] Python import test failed with exit code: $($testProcess.ExitCode)" -ForegroundColor Yellow
                 }
                 
-                # Clean up temporary files
-                if (Test-Path $testScriptPath) { Remove-Item $testScriptPath -Force }
-                if (Test-Path "test_output.txt") { Remove-Item "test_output.txt" -Force }
-                if (Test-Path "test_error.txt") { Remove-Item "test_error.txt" -Force }
+                              # Clean up temporary files
+              if (Test-Path $testScriptPath) { Remove-Item $testScriptPath -Force }
+              if (Test-Path "test_output.txt") { Remove-Item "test_output.txt" -Force }
+              if (Test-Path "test_error.txt") { Remove-Item "test_error.txt" -Force }
+              if (Test-Path "direct_output.txt") { Remove-Item "direct_output.txt" -Force }
+              if (Test-Path "direct_error.txt") { Remove-Item "direct_error.txt" -Force }
               } catch {
                 Write-Host "[WARNING] Python import test failed: $($_.Exception.Message)" -ForegroundColor Yellow
               }
@@ -667,8 +669,8 @@ jobs:
             
             try {
               Write-Host "Starting C# test process..." -ForegroundColor Yellow
-              $testProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
-              $exitCode = $testProcess.ExitCode
+              $csharpTestProcess = Start-Process -FilePath $testExe -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
+              $csharpExitCode = $csharpTestProcess.ExitCode
               
               # Display test output with more detail
               if (Test-Path "test_output.txt") {
@@ -685,9 +687,9 @@ jobs:
               
               if (Test-Path "test_error.txt") {
                 Write-Host "C# test errors:" -ForegroundColor Red
-                $errorContent = Get-Content "test_error.txt"
-                if ($errorContent) {
-                  $errorContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+                $testErrorContent = Get-Content "test_error.txt"
+                if ($testErrorContent) {
+                  $testErrorContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
                 } else {
                   Write-Host "  (No errors)" -ForegroundColor Green
                 }
@@ -750,23 +752,23 @@ jobs:
               $processInfo.EnvironmentVariables["PYTHONPATH"] = $runtimeInTest
               $processInfo.EnvironmentVariables["PYTHONHOME"] = $runtimeInTest
               
-              $process = New-Object System.Diagnostics.Process
-              $process.StartInfo = $processInfo
-              $process.Start() | Out-Null
-              $process.WaitForExit()
+              $pythonProcess = New-Object System.Diagnostics.Process
+              $pythonProcess.StartInfo = $processInfo
+              $pythonProcess.Start() | Out-Null
+              $pythonProcess.WaitForExit()
               
-              $output = $process.StandardOutput.ReadToEnd()
-              $error = $process.StandardError.ReadToEnd()
-              $exitCode = $process.ExitCode
+              $pythonOutput = $pythonProcess.StandardOutput.ReadToEnd()
+              $pythonErrorOutput = $pythonProcess.StandardError.ReadToEnd()
+              $pythonExitCode = $pythonProcess.ExitCode
               
-              Write-Host "Direct Python test exit code: $exitCode" -ForegroundColor Cyan
-              if ($output) {
+              Write-Host "Direct Python test exit code: $pythonExitCode" -ForegroundColor Cyan
+              if ($pythonOutput) {
                 Write-Host "Direct test output:" -ForegroundColor Cyan
-                $output -split "`n" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                $pythonOutput -split "`n" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
               }
-              if ($error) {
+              if ($pythonErrorOutput) {
                 Write-Host "Direct test errors:" -ForegroundColor Red
-                $error -split "`n" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+                $pythonErrorOutput -split "`n" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
               }
               
               # Clean up
@@ -775,10 +777,10 @@ jobs:
               Write-Host "Python executable not found in runtime!" -ForegroundColor Red
             }
               
-              if ($exitCode -eq 0) {
+              if ($csharpExitCode -eq 0) {
                 Write-Host "[OK] C# test with lightweight runtime passed" -ForegroundColor Green
               } else {
-                Write-Host "[ERROR] C# test with lightweight runtime failed with exit code: $exitCode" -ForegroundColor Red
+                Write-Host "[ERROR] C# test with lightweight runtime failed with exit code: $csharpExitCode" -ForegroundColor Red
                 exit 1
               }
               
