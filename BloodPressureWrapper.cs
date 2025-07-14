@@ -231,6 +231,23 @@ print('All imports successful')
                         Console.WriteLine("BloodPressureEstimation.dll NOT FOUND");
                     }
                     
+                    // Check if models directory exists
+                    var modelsPath = Path.Combine(runtimePath, "models");
+                    if (Directory.Exists(modelsPath))
+                    {
+                        Console.WriteLine("Models directory found:");
+                        var modelFiles = Directory.GetFiles(modelsPath);
+                        foreach (var file in modelFiles)
+                        {
+                            var info = new FileInfo(file);
+                            Console.WriteLine($"  {Path.GetFileName(file)} ({info.Length} bytes)");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Models directory NOT FOUND");
+                    }
+                    
                     // Additional diagnostic: try to run a simple Python test
                     Console.WriteLine("Running additional diagnostic test...");
                     var simpleTest = @"

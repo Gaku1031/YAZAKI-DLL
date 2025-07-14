@@ -719,6 +719,34 @@ jobs:
                 Write-Host "BloodPressureEstimation.dll NOT FOUND!" -ForegroundColor Red
               }
               
+              # Try to run a simple Python test directly
+              Write-Host "Running direct Python test..." -ForegroundColor Cyan
+              $pythonExe = Join-Path $runtimeInTest "python.exe"
+              if (Test-Path $pythonExe) {
+                $simpleTest = "import sys`nimport os`nprint('Python executable:', sys.executable)`nprint('Python version:', sys.version)`nprint('Current directory:', os.getcwd())`nprint('Python path:', sys.path)`nprint('Trying to import BloodPressureEstimation...')`ntry:`n    import BloodPressureEstimation`n    print('SUCCESS: BloodPressureEstimation imported')`n    print('Module file:', BloodPressureEstimation.__file__)`nexcept Exception as e:`n    print('ERROR importing BloodPressureEstimation:', e)`n    import traceback`n    traceback.print_exc()"
+                $testScriptPath = "direct_test.py"
+                $simpleTest | Out-File -FilePath $testScriptPath -Encoding UTF8
+                
+                $directTest = Start-Process -FilePath $pythonExe -ArgumentList $testScriptPath -NoNewWindow -Wait -PassThru -RedirectStandardOutput "direct_output.txt" -RedirectStandardError "direct_error.txt" -WorkingDirectory $runtimeInTest
+                
+                Write-Host "Direct Python test exit code: $($directTest.ExitCode)" -ForegroundColor Cyan
+                if (Test-Path "direct_output.txt") {
+                  Write-Host "Direct test output:" -ForegroundColor Cyan
+                  Get-Content "direct_output.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                }
+                if (Test-Path "direct_error.txt") {
+                  Write-Host "Direct test errors:" -ForegroundColor Red
+                  Get-Content "direct_error.txt" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+                }
+                
+                # Clean up
+                if (Test-Path $testScriptPath) { Remove-Item $testScriptPath -Force }
+                if (Test-Path "direct_output.txt") { Remove-Item "direct_output.txt" -Force }
+                if (Test-Path "direct_error.txt") { Remove-Item "direct_error.txt" -Force }
+              } else {
+                Write-Host "Python executable not found in runtime!" -ForegroundColor Red
+              }
+              
               if ($exitCode -eq 0) {
                 Write-Host "[OK] C# test with lightweight runtime passed" -ForegroundColor Green
               } else {
