@@ -407,8 +407,8 @@ jobs:
           }
 
           # Copy C# wrapper
-          if (Test-Path "bin\Release\net6.0\BloodPressureWrapper.exe") {
-            Copy-Item "bin\Release\net6.0\BloodPressureWrapper.exe" "lightweight_runtime_package\"
+          if (Test-Path "lightweight_runtime_csharp\bin\Release\net6.0\BloodPressureWrapper.exe") {
+            Copy-Item "lightweight_runtime_csharp\bin\Release\net6.0\BloodPressureWrapper.exe" "lightweight_runtime_package\"
             Write-Host "[OK] Copied C# wrapper executable to package" -ForegroundColor Green
           }
 
@@ -524,8 +524,8 @@ jobs:
         run: |
           Write-Host "Building C# wrapper and test..." -ForegroundColor Yellow
 
-          # Build the wrapper project
-          dotnet build BloodPressureWrapper.csproj --configuration Release --verbosity normal
+          # Build the wrapper project in the dedicated directory
+          dotnet build lightweight_runtime_csharp/BloodPressureWrapper.csproj --configuration Release --verbosity normal
 
           if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] C# wrapper built successfully" -ForegroundColor Green
@@ -541,7 +541,7 @@ jobs:
 
           # Copy lightweight runtime to test directory
           if (Test-Path "lightweight_runtime") {
-            Copy-Item "lightweight_runtime" "bin\Release\net6.0\" -Recurse -Force
+            Copy-Item "lightweight_runtime" "lightweight_runtime_csharp\bin\Release\net6.0\" -Recurse -Force
             Write-Host "[OK] Copied lightweight runtime to test directory" -ForegroundColor Green
           } else {
             Write-Host "[ERROR] Lightweight runtime not found" -ForegroundColor Red
@@ -550,17 +550,17 @@ jobs:
 
           # Copy sample data if available
           if (Test-Path "sample-data") {
-            Copy-Item "sample-data" "bin\Release\net6.0\" -Recurse -Force
+            Copy-Item "sample-data" "lightweight_runtime_csharp\bin\Release\net6.0\" -Recurse -Force
             Write-Host "[OK] Copied sample data" -ForegroundColor Green
           } else {
             Write-Host "[WARNING] Sample data not found - creating dummy file" -ForegroundColor Yellow
-            New-Item -ItemType Directory -Path "bin\Release\net6.0\sample-data" -Force | Out-Null
-            "Dummy video file for testing" | Out-File -FilePath "bin\Release\net6.0\sample-data\video.mp4" -Encoding UTF8
+            New-Item -ItemType Directory -Path "lightweight_runtime_csharp\bin\Release\net6.0\sample-data" -Force | Out-Null
+            "Dummy video file for testing" | Out-File -FilePath "lightweight_runtime_csharp\bin\Release\net6.0\sample-data\video.mp4" -Encoding UTF8
           }
 
           # Run the C# test
           Write-Host "Running C# test with lightweight runtime..." -ForegroundColor Yellow
-          $testExe = "bin\Release\net6.0\BloodPressureWrapper.exe"
+          $testExe = "lightweight_runtime_csharp\bin\Release\net6.0\BloodPressureWrapper.exe"
 
           if (Test-Path $testExe) {
             try {
