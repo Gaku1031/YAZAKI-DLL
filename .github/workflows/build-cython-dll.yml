@@ -367,14 +367,31 @@ jobs:
             $pythonExe = "lightweight_runtime\python.exe"
             if (Test-Path $pythonExe) {
               try {
-                              # Create a temporary test script file to avoid PowerShell escaping issues
-              $testScriptContent = "import sys`nimport os`nprint('Python version:', sys.version)`nprint('Python executable:', sys.executable)`nprint('Current directory:', os.getcwd())`nprint('Python path:', sys.path)`n`n# Load environment configuration if available`ntry:`n    import pythonrc`n    print('Loaded pythonrc configuration')`nexcept ImportError:`n    print('pythonrc not found, using default configuration')`n`n# Add current directory to Python path`ncurrent_dir = os.path.dirname(os.path.abspath(__file__))`nif current_dir not in sys.path:`n    sys.path.insert(0, current_dir)`nprint('Updated Python path:', sys.path)`n`ntry:`n    import BloodPressureEstimation`n    print('SUCCESS: BloodPressureEstimation imported successfully')`nexcept ImportError as e:`n    print('ERROR: Failed to import BloodPressureEstimation:', e)`n    sys.exit(1)`nexcept Exception as e:`n    print('ERROR: Unexpected error:', e)`n    sys.exit(1)"
+              # Create a temporary test script file to avoid PowerShell escaping issues
+              $testScriptLines = @(
+                "import sys",
+                "import os",
+                "print('Python version:', sys.version)",
+                "print('Python executable:', sys.executable)",
+                "print('Current directory:', os.getcwd())",
+                "print('Python path:', sys.path[:3])",
+                "print('Checking for encodings module...')",
+                "import encodings",
+                "print('SUCCESS: encodings module imported')",
+                "import codecs",
+                "print('SUCCESS: codecs module imported')",
+                "print('SUCCESS: Basic Python runtime test passed')"
+              )
               $testScriptPath = Join-Path $runtimeInTest "test_import_temp.py"
-              $testScriptContent | Out-File -FilePath $testScriptPath -Encoding UTF8
+              $testScriptLines | Out-File -FilePath $testScriptPath -Encoding UTF8
               
               Write-Host "Created test script: $testScriptPath" -ForegroundColor Cyan
               Write-Host "Test script exists: $(Test-Path $testScriptPath)" -ForegroundColor Cyan
               
+              # Display test script content for debugging
+              Write-Host "Test script content:" -ForegroundColor Cyan
+              Get-Content $testScriptPath | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+
               # Set environment variables for Python (using unique variable names)
               $env:PYTHONPATH = $runtimeInTest
               $env:PYTHONHOME = $runtimeInTest
@@ -715,11 +732,31 @@ jobs:
             Write-Host "Testing Python runtime first..." -ForegroundColor Cyan
             $pythonExe = Join-Path $runtimeInTest "python.exe"
             if (Test-Path $pythonExe) {
-              # Create a simple test script to check Python initialization
-              $simpleTestScript = "import sys; import os; print('Python version:', sys.version); print('Python executable:', sys.executable); print('Current working directory:', os.getcwd()); print('Python path:', sys.path[:3]); print('Checking for encodings module...'); import encodings; print('SUCCESS: encodings module imported'); import codecs; print('SUCCESS: codecs module imported'); print('SUCCESS: Basic Python runtime test passed')"
+              # Create a simple test script file to avoid PowerShell escaping issues
+              $testScriptLines = @(
+                "import sys",
+                "import os", 
+                "print('Python version:', sys.version)",
+                "print('Python executable:', sys.executable)",
+                "print('Current working directory:', os.getcwd())",
+                "print('Python path:', sys.path[:3])",
+                "print('Checking for encodings module...')",
+                "import encodings",
+                "print('SUCCESS: encodings module imported')",
+                "import codecs",
+                "print('SUCCESS: codecs module imported')",
+                "print('SUCCESS: Basic Python runtime test passed')"
+              )
+              $testScriptPath = Join-Path $runtimeInTest "test_import_temp.py"
+              $testScriptLines | Out-File -FilePath $testScriptPath -Encoding UTF8
               
-              Write-Host "Created simple test script" -ForegroundColor Cyan
+              Write-Host "Created test script: $testScriptPath" -ForegroundColor Cyan
+              Write-Host "Test script exists: $(Test-Path $testScriptPath)" -ForegroundColor Cyan
               
+              # Display test script content for debugging
+              Write-Host "Test script content:" -ForegroundColor Cyan
+              Get-Content $testScriptPath | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+
               # Set environment variables for Python
               $env:PYTHONPATH = $runtimeInTest
               $env:PYTHONHOME = $runtimeInTest
@@ -741,8 +778,8 @@ jobs:
                 }
               }
               
-              # Run simple Python test
-              $pythonProcess = Start-Process -FilePath $pythonExe -ArgumentList "-c", $simpleTestScript -NoNewWindow -Wait -PassThru -RedirectStandardOutput "simple_test_output.txt" -RedirectStandardError "simple_test_error.txt" -WorkingDirectory $runtimeInTest
+              # Run simple Python test using the script file
+              $pythonProcess = Start-Process -FilePath $pythonExe -ArgumentList $testScriptPath -NoNewWindow -Wait -PassThru -RedirectStandardOutput "simple_test_output.txt" -RedirectStandardError "simple_test_error.txt" -WorkingDirectory $runtimeInTest
               
               if (Test-Path "simple_test_output.txt") {
                 Write-Host "Simple Python test output:" -ForegroundColor Cyan
