@@ -339,8 +339,10 @@ jobs:
             Write-Host "[OK] DLL size is within acceptable limits" -ForegroundColor Green
           } elseif ($totalSizeMB -le 100) {
             Write-Host "[WARNING] DLL size is large but acceptable" -ForegroundColor Yellow
+            # Only warning, do not exit 1
           } else {
             Write-Host "[ERROR] DLL size exceeds acceptable limits" -ForegroundColor Red
+            exit 1
           }
 
           # Code obfuscation verification
