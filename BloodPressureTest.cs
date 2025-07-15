@@ -70,6 +70,8 @@ namespace BloodPressureTest
 
             try
             {
+                // Pythonランタイムを初期化
+                BloodPressureDll.Py_Initialize();
                 // 1. 環境確認
                 Console.WriteLine("1. 環境確認");
                 if (!CheckEnvironment())
