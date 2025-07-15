@@ -1775,6 +1775,14 @@ jobs:
           Write-Host "Enhanced C# test file created: BloodPressureTestEnhanced.cs" -ForegroundColor Green
 
           Pop-Location
+      
+      - name: Build C++ Wrapper DLL
+        run: |
+          cd CppWrapperDLL/build
+          cmake .. -DPYTHONHOME="C:/hostedtoolcache/windows/Python/3.11.9/x64"
+          cmake --build . --config Release
+          cp Release/CppWrapper.dll ../../dist_csharp/
+        shell: bash
 
       - name: Run C# Integration Test in dist_csharp
         shell: powershell
@@ -2292,11 +2300,3 @@ jobs:
             dist_cython/
             *.log
           retention-days: 7
-
-      - name: Build C++ Wrapper DLL
-        run: |
-          cd CppWrapperDLL/build
-          cmake .. -DPYTHONHOME="C:/hostedtoolcache/windows/Python/3.11.9/x64"
-          cmake --build . --config Release
-          cp Release/CppWrapper.dll ../../dist_csharp/
-        shell: bash
