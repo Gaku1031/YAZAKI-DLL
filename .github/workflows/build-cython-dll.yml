@@ -446,9 +446,9 @@ jobs:
           Get-ChildItem "dist_cython" -Recurse | Format-Table Name, Length, LastWriteTime
         shell: powershell
 
-      - name: Post-process dist_cython for C# DllImport
+      - name: Post-process dist_csharp for C# DllImport
         run: |
-          Write-Host "=== Comprehensive DLL Dependency Setup ===" -ForegroundColor Green
+          Write-Host "=== Comprehensive DLL Dependency Setup with Fixed Python Dependencies ===" -ForegroundColor Green
 
           # Create dist_csharp directory first
           New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
@@ -469,18 +469,18 @@ jobs:
           $pythonDllsDir = Join-Path $pythonDir "DLLs"
           $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
 
-          Write-Host "Python directory: $pythonDir"
-          Write-Host "Python DLLs directory: $pythonDllsDir"
-          Write-Host "Site packages: $sitePackages"
+          Write-Host "Python directory: $pythonDir" -ForegroundColor Cyan
+          Write-Host "Python DLLs directory: $pythonDllsDir" -ForegroundColor Cyan
+          Write-Host "Site packages: $sitePackages" -ForegroundColor Cyan
 
           # 1. Copy all important Python DLLs
-          Write-Host "Copying Python runtime DLLs..." -ForegroundColor Yellow
+          Write-Host "=== Step 1: Copying Python runtime DLLs ===" -ForegroundColor Yellow
 
           # Main Python DLL
           $pythonDllPath = "$pythonDir\python311.dll"
           if (Test-Path $pythonDllPath) {
             Copy-Item $pythonDllPath "dist_csharp\" -Force
-            Write-Host "python311.dll copied"
+            Write-Host "python311.dll copied" -ForegroundColor Green
           }
 
           # Python DLLs directory from important files
@@ -494,171 +494,204 @@ jobs:
             $sourcePath = Join-Path $pythonDllsDir $dll
             if (Test-Path $sourcePath) {
               Copy-Item $sourcePath "dist_csharp\" -Force
-              Write-Host "$dll copied"
+              Write-Host "$dll copied" -ForegroundColor Green
             } else {
-              Write-Host "$dll not found"
+              Write-Host "$dll not found" -ForegroundColor Yellow
             }
           }
 
-          # 2. Copy binary dependencies from site-packages
-          Write-Host "Copying Python package binaries..." -ForegroundColor Yellow
-
+          # 2. Create python_deps directory structure
+          Write-Host "=== Step 2: Creating Python dependencies structure ===" -ForegroundColor Yellow
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
-          # NumPy (most important) - with proper structure
-          $numpyPath = "$sitePackages\numpy"
-          if (Test-Path $numpyPath) {
-            Copy-Item $numpyPath "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "numpy copied with full directory structure"
+          # Verify site-packages directory exists
+          if (!(Test-Path $sitePackages)) {
+            Write-Host "ERROR: Site-packages directory not found: $sitePackages" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "Site-packages directory verified: $sitePackages" -ForegroundColor Green
+
+          # 3. Copy Python packages with full verification
+          Write-Host "=== Step 3: Copying Python packages with verification ===" -ForegroundColor Yellow
+
+          # Define critical packages
+          $packages = @(
+            @{ name = "numpy"; critical = $true },
+            @{ name = "cv2"; critical = $true },
+            @{ name = "sklearn"; critical = $true },
+            @{ name = "scipy"; critical = $true },
+            @{ name = "joblib"; critical = $false },
+            @{ name = "mediapipe"; critical = $false },
+            @{ name = "threadpoolctl"; critical = $false }
+          )
+
+          $missingCritical = 0
+          foreach ($pkg in $packages) {
+            $sourcePath = Join-Path $sitePackages $pkg.name
+            $destPath = "dist_csharp\python_deps\$($pkg.name)"
             
-            # Special handling for NumPy .libs directory
-            $numpyLibsPath = "$sitePackages\numpy\.libs"
-            if (Test-Path $numpyLibsPath) {
-              Copy-Item "$numpyLibsPath\*" "dist_csharp\" -Force
-              Write-Host "numpy .libs DLLs copied to root"
-            }
-          }
-
-          # OpenCV
-          $cv2Path = "$sitePackages\cv2"
-          if (Test-Path $cv2Path) {
-            Copy-Item $cv2Path "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "cv2 copied with full directory structure"
-          }
-
-          # Scikit-learn
-          $sklearnPath = "$sitePackages\sklearn"
-          if (Test-Path $sklearnPath) {
-            Copy-Item $sklearnPath "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "sklearn copied with full directory structure"
-          }
-
-          # SciPy
-          $scipyPath = "$sitePackages\scipy"
-          if (Test-Path $scipyPath) {
-            Copy-Item $scipyPath "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "scipy copied with full directory structure"
+            Write-Host "Processing package: $($pkg.name)" -ForegroundColor Cyan
+            Write-Host "  Source: $sourcePath" -ForegroundColor Gray
+            Write-Host "  Destination: $destPath" -ForegroundColor Gray
             
-            # SciPy .libs directory special handling
-            $scipyLibsPath = "$sitePackages\scipy\.libs"
-            if (Test-Path $scipyLibsPath) {
-              Copy-Item "$scipyLibsPath\*" "dist_csharp\" -Force
-              Write-Host "scipy .libs DLLs copied to root"
+            if (Test-Path $sourcePath) {
+              try {
+                # Remove destination if exists
+                if (Test-Path $destPath) {
+                  Remove-Item $destPath -Recurse -Force
+                }
+                
+                # Copy with error handling
+                Copy-Item $sourcePath $destPath -Recurse -Force -ErrorAction Stop
+                
+                # Verify copy
+                if (Test-Path $destPath) {
+                  $fileCount = (Get-ChildItem $destPath -Recurse -File).Count
+                  Write-Host "  SUCCESS: $($pkg.name) copied ($fileCount files)" -ForegroundColor Green
+                } else {
+                  Write-Host "  ERROR: $($pkg.name) copy verification failed" -ForegroundColor Red
+                  if ($pkg.critical) { $missingCritical++ }
+                }
+              } catch {
+                Write-Host "  ERROR: Failed to copy $($pkg.name): $($_.Exception.Message)" -ForegroundColor Red
+                if ($pkg.critical) { $missingCritical++ }
+              }
+            } else {
+              Write-Host "  ERROR: $($pkg.name) not found in site-packages" -ForegroundColor Red
+              if ($pkg.critical) { $missingCritical++ }
             }
           }
 
-          # Other dependencies
-          $otherDeps = @("joblib", "mediapipe", "threadpoolctl")
-          foreach ($dep in $otherDeps) {
-            $depPath = "$sitePackages\$dep"
-            if (Test-Path $depPath) {
-              Copy-Item $depPath "dist_csharp\python_deps\" -Recurse -Force
-              Write-Host "$dep copied"
+          if ($missingCritical -gt 0) {
+            Write-Host "ERROR: $missingCritical critical packages are missing!" -ForegroundColor Red
+            exit 1
+          }
+
+          # 4. Special handling for .libs directories
+          Write-Host "=== Step 4: Copying .libs directories ===" -ForegroundColor Yellow
+          
+          $libsDirs = @("numpy\.libs", "scipy\.libs")
+          foreach ($libsDir in $libsDirs) {
+            $sourcePath = "$sitePackages\$libsDir"
+            if (Test-Path $sourcePath) {
+              # Copy to both python_deps and root for maximum compatibility
+              Copy-Item "$sourcePath\*" "dist_csharp\" -Force -ErrorAction SilentlyContinue
+              Copy-Item "$sourcePath\*" "dist_csharp\python_deps\" -Force -ErrorAction SilentlyContinue
+              Write-Host "$libsDir DLLs copied to multiple locations" -ForegroundColor Green
+            } else {
+              Write-Host "$libsDir directory not found" -ForegroundColor Yellow
             }
           }
 
-          # 3. Check and copy Visual C++ Runtime DLLs
-          Write-Host "Checking Visual C++ Runtime DLLs..." -ForegroundColor Yellow
+          # 5. Copy Visual C++ Runtime DLLs
+          Write-Host "=== Step 5: Copying Visual C++ Runtime DLLs ===" -ForegroundColor Yellow
 
           $vcRuntimeDlls = @("vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll")
           foreach ($dll in $vcRuntimeDlls) {
             $systemDll = Join-Path $env:SystemRoot "System32\$dll"
             if (Test-Path $systemDll) {
               Copy-Item $systemDll "dist_csharp\" -Force
-              Write-Host "$dll copied from System32"
+              Write-Host "$dll copied from System32" -ForegroundColor Green
             } else {
-              Write-Host "$dll not found in System32"
+              Write-Host "$dll not found in System32" -ForegroundColor Yellow
             }
           }
 
-          # 4. Copy models directory
-          Write-Host "Copying models..." -ForegroundColor Yellow
+          # 6. Copy models directory
+          Write-Host "=== Step 6: Copying models ===" -ForegroundColor Yellow
           if (Test-Path "models_compressed") {
             Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force
-            Write-Host "models_compressed copied to models"
+            Write-Host "models_compressed copied to models" -ForegroundColor Green
           } elseif (Test-Path "models") {
             Copy-Item "models" "dist_csharp\models" -Recurse -Force
-            Write-Host "models directory copied"
-          }
-
-          # 5. Critical dependency verification and manual copy
-          Write-Host "Verifying and fixing critical dependencies..." -ForegroundColor Yellow
-
-          # Create the critical directories if they don't exist
-          $criticalDirs = @(
-            "dist_csharp\python_deps\numpy\core",
-            "dist_csharp\python_deps\numpy\linalg",
-            "dist_csharp\python_deps\cv2",
-            "dist_csharp\python_deps\sklearn\utils"
-          )
-
-          foreach ($dir in $criticalDirs) {
-            if (!(Test-Path $dir)) {
-              New-Item -ItemType Directory -Path $dir -Force | Out-Null
-              Write-Host "Created directory: $dir"
-            }
-          }
-
-          # Manually copy critical files with proper error handling
-          $criticalFiles = @(
-            @{
-              source = "$sitePackages\numpy\core\_multiarray_umath.pyd"
-              dest = "dist_csharp\python_deps\numpy\core\_multiarray_umath.pyd"
-            },
-            @{
-              source = "$sitePackages\numpy\linalg\_umath_linalg.pyd"
-              dest = "dist_csharp\python_deps\numpy\linalg\_umath_linalg.pyd"
-            },
-            @{
-              source = "$sitePackages\cv2\cv2.pyd"
-              dest = "dist_csharp\python_deps\cv2\cv2.pyd"
-            },
-            @{
-              source = "$sitePackages\sklearn\utils\_cython_blas.pyd"
-              dest = "dist_csharp\python_deps\sklearn\utils\_cython_blas.pyd"
-            }
-          )
-
-          foreach ($file in $criticalFiles) {
-            if (Test-Path $file.source) {
-              Copy-Item $file.source $file.dest -Force
-              $fileName = Split-Path $file.dest -Leaf
-              Write-Host "Copied critical file: $fileName" -ForegroundColor Green
-            } else {
-              $fileName = Split-Path $file.source -Leaf
-              Write-Host "WARNING: Critical file not found: $fileName" -ForegroundColor Yellow
-            }
-          }
-
-          # Final verification
-          Write-Host "Final dependency verification..." -ForegroundColor Cyan
-          $criticalPaths = @(
-            "dist_csharp\BloodPressureEstimation.dll",
-            "dist_csharp\python311.dll",
-            "dist_csharp\python_deps\numpy\core\_multiarray_umath.pyd",
-            "dist_csharp\python_deps\cv2\cv2.pyd"
-          )
-
-          $allOk = $true
-          foreach ($path in $criticalPaths) {
-            if (Test-Path $path) {
-              $size = [math]::Round((Get-Item $path).Length / 1KB, 1)
-              $fileName = Split-Path $path -Leaf
-              Write-Host "OK: $fileName ($size KB)" -ForegroundColor Green
-            } else {
-              $fileName = Split-Path $path -Leaf
-              Write-Host "MISSING: $fileName" -ForegroundColor Red
-              $allOk = $false
-            }
-          }
-
-          if (-not $allOk) {
-            Write-Host "Some critical files are missing!" -ForegroundColor Red
+            Write-Host "models directory copied" -ForegroundColor Green
           } else {
-            Write-Host "All critical dependencies verified!" -ForegroundColor Green
+            Write-Host "WARNING: No models directory found" -ForegroundColor Yellow
           }
 
-          $completeMessage = "=== DLL Dependency Setup Complete ==="
+          # 7. Critical dependency verification with detailed output
+          Write-Host "=== Step 7: Final verification of critical files ===" -ForegroundColor Yellow
+
+          $criticalFiles = @(
+            @{ path = "dist_csharp\BloodPressureEstimation.dll"; name = "Main DLL" },
+            @{ path = "dist_csharp\python311.dll"; name = "Python Runtime" },
+            @{ path = "dist_csharp\python_deps\numpy\__init__.py"; name = "NumPy Package" },
+            @{ path = "dist_csharp\python_deps\numpy\core\_multiarray_umath.pyd"; name = "NumPy Core" },
+            @{ path = "dist_csharp\python_deps\cv2\__init__.py"; name = "OpenCV Package" },
+            @{ path = "dist_csharp\python_deps\cv2\cv2.pyd"; name = "OpenCV Core" },
+            @{ path = "dist_csharp\python_deps\sklearn\__init__.py"; name = "Scikit-learn Package" },
+            @{ path = "dist_csharp\python_deps\scipy\__init__.py"; name = "SciPy Package" }
+          )
+
+          $allCriticalOk = $true
+          foreach ($file in $criticalFiles) {
+            if (Test-Path $file.path) {
+              $size = [math]::Round((Get-Item $file.path).Length / 1KB, 1)
+              Write-Host "[OK] $($file.name): $size KB" -ForegroundColor Green
+            } else {
+              Write-Host "[ERROR] $($file.name): MISSING" -ForegroundColor Red
+              $allCriticalOk = $false
+            }
+          }
+
+          if (-not $allCriticalOk) {
+            Write-Host "CRITICAL ERROR: Some essential files are missing!" -ForegroundColor Red
+            
+            # Additional diagnostics
+            Write-Host "=== Diagnostic Information ===" -ForegroundColor Yellow
+            Write-Host "Python site-packages contents:" -ForegroundColor Cyan
+            Get-ChildItem $sitePackages -Directory | Select-Object Name | Format-Table -AutoSize
+            
+            Write-Host "dist_csharp\python_deps contents:" -ForegroundColor Cyan
+            if (Test-Path "dist_csharp\python_deps") {
+              Get-ChildItem "dist_csharp\python_deps" -Directory | Select-Object Name | Format-Table -AutoSize
+            } else {
+              Write-Host "python_deps directory does not exist!" -ForegroundColor Red
+            }
+            
+            exit 1
+          } else {
+            Write-Host "SUCCESS: All critical dependencies verified!" -ForegroundColor Green
+          }
+
+          # 8. Create initialization test script
+          Write-Host "=== Step 8: Creating Python initialization test ===" -ForegroundColor Yellow
+          
+          $testScript = @'
+          import sys
+          import os
+          print("Python initialization test starting...")
+          try:
+              current_dir = os.path.dirname(os.path.abspath(__file__))
+              python_deps = os.path.join(current_dir, "python_deps")
+              if python_deps not in sys.path:
+                  sys.path.insert(0, python_deps)
+              
+              print("Testing NumPy...")
+              import numpy as np
+              print(f"NumPy {np.__version__} - OK")
+              
+              print("Testing OpenCV...")
+              import cv2
+              print(f"OpenCV {cv2.__version__} - OK")
+              
+              print("Testing scikit-learn...")
+              import sklearn
+              print(f"scikit-learn {sklearn.__version__} - OK")
+              
+              print("All critical packages imported successfully!")
+              
+          except Exception as e:
+              print(f"ERROR: {str(e)}")
+              import traceback
+              traceback.print_exc()
+          '@
+          
+          $testScript | Out-File -FilePath "dist_csharp\test_python_init.py" -Encoding UTF8
+          Write-Host "Python initialization test script created" -ForegroundColor Green
+
+          $completeMessage = "=== DLL Dependency Setup Complete with Full Verification ==="
           Write-Host $completeMessage -ForegroundColor Green
         shell: powershell
 
@@ -769,6 +802,47 @@ jobs:
           $ucrt = "$env:SystemRoot\System32\ucrtbase.dll"
           if (Test-Path $ucrt) { Copy-Item $ucrt dist_csharp -Force; Write-Host "ucrtbase.dll copied" }
           else { Write-Host "ucrtbase.dll not found" -ForegroundColor Red }
+      
+      - name: Test Python Dependencies Before C# Integration
+        shell: powershell
+        run: |
+          Push-Location "dist_csharp"
+          
+          Write-Host "=== Python Dependencies Pre-Test ===" -ForegroundColor Green
+          
+          # Set environment for Python test
+          $currentDir = Get-Location
+          $env:PYTHONHOME = $currentDir
+          $env:PYTHONPATH = "$currentDir\python_deps"
+          $env:PATH = "$currentDir;$currentDir\python_deps;$env:PATH"
+          
+          Write-Host "Testing Python initialization with dependencies..." -ForegroundColor Yellow
+          
+          try {
+            # Run the Python initialization test
+            python test_python_init.py
+            
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "[SUCCESS] Python dependencies test passed" -ForegroundColor Green
+            } else {
+              Write-Host "[ERROR] Python dependencies test failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+              
+              # Fallback manual test
+              Write-Host "Attempting manual import tests..." -ForegroundColor Yellow
+              python -c "import sys; print('Python sys module OK')"
+              python -c "import os; print('Python os module OK')"
+              python -c "import numpy; print('NumPy import OK')" 2>&1
+              python -c "import cv2; print('OpenCV import OK')" 2>&1
+              python -c "import sklearn; print('sklearn import OK')" 2>&1
+              
+              Write-Host "Manual test completed. Proceeding with C# test..." -ForegroundColor Yellow
+            }
+          } catch {
+            Write-Host "[ERROR] Python test execution failed: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "This may indicate Python environment issues" -ForegroundColor Yellow
+          }
+          
+          Pop-Location
 
       - name: Run C# Integration Test in dist_csharp
         shell: powershell
