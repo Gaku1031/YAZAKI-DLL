@@ -1357,40 +1357,41 @@ jobs:
           
           foreach ($module in $modules) {
             try {
-              $result = python -c "
+              $pythonScript = @'
               import sys
               sys.path.insert(0, 'python_deps')
               try:
                   import $module
-                  print('$module: OK')
+                  print(f'${module}: OK')
               except ImportError as e:
-                  print('$module: ImportError - ' + str(e))
+                  print(f'${module}: ImportError - ' + str(e))
               except Exception as e:
-                  print('$module: Error - ' + str(e))
-              " 2>&1
+                  print(f'${module}: Error - ' + str(e))
+              '@
+              $result = python -c "$pythonScript" 2>&1
               
               if ($result -like "*OK*") {
-                Write-Host "  $module: OK" -ForegroundColor Green
+                Write-Host "  ${module}: OK" -ForegroundColor Green
                 $workingModules += $module
                 if ($module -in $criticalModules) {
                   $criticalWorkingCount++
                 }
               } else {
-                Write-Host "  $module: FAILED - $result" -ForegroundColor Yellow
+                Write-Host "  ${module}: FAILED - $result" -ForegroundColor Yellow
                 # Save detailed error for debugging
                 $result | Out-File -FilePath "import_${module}_error.txt" -Encoding UTF8 -Force
                 
                 # Don't fail the build for non-critical modules
                 if ($module -in $criticalModules) {
-                  Write-Host "    WARNING: Critical module $module failed!" -ForegroundColor Red
+                  Write-Host "    WARNING: Critical module ${module} failed!" -ForegroundColor Red
                 } else {
-                  Write-Host "    INFO: Optional module $module failed (not critical for basic functionality)" -ForegroundColor Cyan
+                  Write-Host "    INFO: Optional module ${module} failed (not critical for basic functionality)" -ForegroundColor Cyan
                 }
               }
             } catch {
-              Write-Host "  $module: EXECUTION ERROR" -ForegroundColor Yellow
+              Write-Host "  ${module}: EXECUTION ERROR" -ForegroundColor Yellow
               if ($module -in $criticalModules) {
-                Write-Host "    WARNING: Critical module $module had execution error!" -ForegroundColor Red
+                Write-Host "    WARNING: Critical module ${module} had execution error!" -ForegroundColor Red
               }
             }
           }
