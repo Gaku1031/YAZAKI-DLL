@@ -677,11 +677,11 @@ jobs:
 
           # Verify final structure
           Write-Host "=== Final dist_csharp structure ===" -ForegroundColor Cyan
-          if (Test-Path "dist_csharp\BloodPressureEstimation.dll") { Write-Host "✓ BloodPressureEstimation.dll" -ForegroundColor Green } else { Write-Host "✗ BloodPressureEstimation.dll" -ForegroundColor Red }
-          if (Test-Path "dist_csharp\python311.dll") { Write-Host "✓ python311.dll" -ForegroundColor Green } else { Write-Host "✗ python311.dll" -ForegroundColor Red }
-          if (Test-Path "dist_csharp\BloodPressureTest.exe") { Write-Host "✓ BloodPressureTest.exe" -ForegroundColor Green } else { Write-Host "✗ BloodPressureTest.exe" -ForegroundColor Red }
-          if (Test-Path "dist_csharp\python_deps\numpy") { Write-Host "✓ python_deps\numpy" -ForegroundColor Green } else { Write-Host "✗ python_deps\numpy" -ForegroundColor Red }
-          if (Test-Path "dist_csharp\python_deps\cv2") { Write-Host "✓ python_deps\cv2" -ForegroundColor Green } else { Write-Host "✗ python_deps\cv2" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\BloodPressureEstimation.dll") { Write-Host "BloodPressureEstimation.dll" -ForegroundColor Green } else { Write-Host "BloodPressureEstimation.dll" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\python311.dll") { Write-Host "python311.dll" -ForegroundColor Green } else { Write-Host "python311.dll" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\BloodPressureTest.exe") { Write-Host "BloodPressureTest.exe" -ForegroundColor Green } else { Write-Host "BloodPressureTest.exe" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\python_deps\numpy") { Write-Host "python_deps\numpy" -ForegroundColor Green } else { Write-Host "python_deps\numpy" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\python_deps\cv2") { Write-Host "python_deps\cv2" -ForegroundColor Green } else { Write-Host "python_deps\cv2" -ForegroundColor Red }
 
           # Create README with proper PowerShell string handling
           Write-Host "Creating README file..." -ForegroundColor Yellow
