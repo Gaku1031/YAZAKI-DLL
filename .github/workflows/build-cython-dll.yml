@@ -478,7 +478,16 @@ jobs:
       - name: Run C# Integration Test in dist_csharp
         run: |
           Push-Location "dist_csharp"
+          Write-Host "=== dist_csharp directory listing ==="
+          Get-ChildItem -Recurse | Write-Host
+          if (Test-Path "python311.dll") {
+            Write-Host "python311.dll found"
+          } else {
+            Write-Host "python311.dll NOT found"
+            exit 1
+          }
           $env:PATH = "$PWD;$PWD\python_deps;$env:PATH"
+          Write-Host "PATH for test: $env:PATH"
           Write-Host "Running C# integration test in dist_csharp..."
           try {
             $cmd = "set PATH=$PWD;$PWD\python_deps;$env:PATH && BloodPressureTest.exe"
