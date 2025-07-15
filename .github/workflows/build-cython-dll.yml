@@ -1780,7 +1780,9 @@ jobs:
         run: |
           mkdir -p CppWrapperDLL/build
           cd CppWrapperDLL/build
-          cmake .. -DPYTHONHOME="C:/hostedtoolcache/windows/Python/3.11.9/x64"
+          cmake .. \
+            -DPYTHON_INCLUDE_DIR="C:/hostedtoolcache/windows/Python/3.11.9/x64/include" \
+            -DPYTHON_LIBRARY="C:/hostedtoolcache/windows/Python/3.11.9/x64/libs/python311.lib"
           cmake --build . --config Release
           cp Release/CppWrapper.dll ../../dist_csharp/
         shell: bash
