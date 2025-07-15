@@ -478,10 +478,10 @@ jobs:
       - name: Run C# Integration Test in dist_csharp
         run: |
           Push-Location "dist_csharp"
-          $env:PATH = "$PWD;$env:PATH"
+          $env:PATH = "$PWD;$PWD\python_deps;$env:PATH"
           Write-Host "Running C# integration test in dist_csharp..."
           try {
-            $cmd = "set PATH=$PWD;$env:PATH && BloodPressureTest.exe"
+            $cmd = "set PATH=$PWD;$PWD\python_deps;$env:PATH && BloodPressureTest.exe"
             $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -NoNewWindow -Wait -PassThru
             $exitCode = $process.ExitCode
             if ($exitCode -eq 0) {
