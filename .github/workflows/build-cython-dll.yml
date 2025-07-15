@@ -1326,15 +1326,15 @@ jobs:
           
           foreach ($module in $modules) {
             try {
-              $result = python -c "import $module; print('$module: OK')" 2>&1
+              $result = python -c "import $module; print('${module}: OK')" 2>&1
               if ($LASTEXITCODE -eq 0) {
-                Write-Host "  $module: OK" -ForegroundColor Green
+                Write-Host "  ${module}: OK" -ForegroundColor Green
                 $workingModules += $module
               } else {
-                Write-Host "  $module: FAILED - $result" -ForegroundColor Yellow
+                Write-Host "  ${module}: FAILED - $result" -ForegroundColor Yellow
               }
             } catch {
-              Write-Host "  $module: ERROR" -ForegroundColor Red
+              Write-Host "  ${module}: ERROR" -ForegroundColor Red
             }
           }
           
