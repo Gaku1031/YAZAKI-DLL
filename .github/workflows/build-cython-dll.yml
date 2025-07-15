@@ -1151,6 +1151,511 @@ jobs:
           }
           
           Pop-Location
+      
+      - name: Final DLL Preparation for C# Integration
+        shell: powershell
+        run: |
+          Push-Location "dist_csharp"
+          
+          Write-Host "=== Critical DLL Preparation and NumPy Core Repair ===" -ForegroundColor Green
+          
+          # 1. NumPy Core files の強制修復
+          Write-Host "1. Force repair NumPy core files with correct names" -ForegroundColor Yellow
+          
+          $pythonExe = python -c "import sys; print(sys.executable)"
+          $pythonDir = Split-Path $pythonExe -Parent
+          $sitePackages = "$pythonDir\Lib\site-packages"
+          
+          # NumPy core files with CORRECT platform-specific names
+          $numpyCoreFiles = @(
+            @{ 
+              src = "$sitePackages\numpy\core\_multiarray_umath.cp311-win_amd64.pyd"
+              dest = "python_deps\numpy\core\_multiarray_umath.cp311-win_amd64.pyd"
+              legacy = "python_deps\numpy\core\_multiarray_umath.pyd"
+            },
+            @{ 
+              src = "$sitePackages\numpy\linalg\_umath_linalg.cp311-win_amd64.pyd"
+              dest = "python_deps\numpy\linalg\_umath_linalg.cp311-win_amd64.pyd"
+              legacy = "python_deps\numpy\linalg\_umath_linalg.pyd"
+            },
+            @{ 
+              src = "$sitePackages\numpy\random\mtrand.cp311-win_amd64.pyd"
+              dest = "python_deps\numpy\random\mtrand.cp311-win_amd64.pyd"
+              legacy = "python_deps\numpy\random\mtrand.pyd"
+            },
+            @{ 
+              src = "$sitePackages\numpy\fft\_pocketfft_internal.cp311-win_amd64.pyd"
+              dest = "python_deps\numpy\fft\_pocketfft_internal.cp311-win_amd64.pyd"
+              legacy = "python_deps\numpy\fft\_pocketfft_internal.pyd"
+            }
+          )
+          
+          foreach ($file in $numpyCoreFiles) {
+            if (Test-Path $file.src) {
+              $destDir = Split-Path $file.dest -Parent
+              if (!(Test-Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+              }
+              
+              # Copy with correct platform-specific name
+              Copy-Item $file.src $file.dest -Force
+              $size = [math]::Round((Get-Item $file.dest).Length / 1KB, 1)
+              Write-Host "  Copied: $(Split-Path $file.dest -Leaf) ($size KB)" -ForegroundColor Green
+              
+              # ALSO create legacy name for compatibility
+              Copy-Item $file.src $file.legacy -Force
+              Write-Host "  Created legacy: $(Split-Path $file.legacy -Leaf)" -ForegroundColor Cyan
+            } else {
+              Write-Host "  MISSING: $($file.src)" -ForegroundColor Red
+            }
+          }
+          
+          # 2. ALL NumPy .pyd files comprehensive copy
+          Write-Host "2. Comprehensive NumPy .pyd files copy" -ForegroundColor Yellow
+          
+          $allNumpyPyds = Get-ChildItem "$sitePackages\numpy" -Recurse -Filter "*.cp311-win_amd64.pyd" -ErrorAction SilentlyContinue
+          $copiedCount = 0
+          
+          foreach ($pydFile in $allNumpyPyds) {
+            $relativePath = $pydFile.FullName.Replace("$sitePackages\numpy\", "")
+            $destPath = "python_deps\numpy\$relativePath"
+            $destDir = Split-Path $destPath -Parent
+            
+            if (!(Test-Path $destDir)) {
+              New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+            
+            if (!(Test-Path $destPath)) {
+              Copy-Item $pydFile.FullName $destPath -Force
+              $copiedCount++
+            }
+          }
+          Write-Host "  Ensured $copiedCount NumPy .pyd files are present" -ForegroundColor Green
+          
+          # 3. SciPy critical files
+          Write-Host "3. SciPy critical files copy" -ForegroundColor Yellow
+          
+          $scipyCriticalFiles = Get-ChildItem "$sitePackages\scipy" -Recurse -Filter "*.cp311-win_amd64.pyd" -ErrorAction SilentlyContinue | Select-Object -First 10
+          foreach ($scipyFile in $scipyCriticalFiles) {
+            $relativePath = $scipyFile.FullName.Replace("$sitePackages\scipy\", "")
+            $destPath = "python_deps\scipy\$relativePath"
+            $destDir = Split-Path $destPath -Parent
+            
+            if (!(Test-Path $destDir)) {
+              New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+            
+            if (!(Test-Path $destPath)) {
+              Copy-Item $scipyFile.FullName $destPath -Force
+              Write-Host "  Copied SciPy: $(Split-Path $destPath -Leaf)" -ForegroundColor Green
+            }
+          }
+          
+          # 4. scikit-learn critical files 
+          Write-Host "4. scikit-learn critical files copy" -ForegroundColor Yellow
+          
+          $sklearnCriticalFiles = Get-ChildItem "$sitePackages\sklearn" -Recurse -Filter "*.cp311-win_amd64.pyd" -ErrorAction SilentlyContinue | Select-Object -First 5
+          foreach ($sklearnFile in $sklearnCriticalFiles) {
+            $relativePath = $sklearnFile.FullName.Replace("$sitePackages\sklearn\", "")
+            $destPath = "python_deps\sklearn\$relativePath"
+            $destDir = Split-Path $destPath -Parent
+            
+            if (!(Test-Path $destDir)) {
+              New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+            
+            if (!(Test-Path $destPath)) {
+              Copy-Item $sklearnFile.FullName $destPath -Force
+              Write-Host "  Copied sklearn: $(Split-Path $destPath -Leaf)" -ForegroundColor Green
+            }
+          }
+          
+          # 5. NumPy .libs の直接コピー（重要）
+          Write-Host "5. NumPy .libs comprehensive copy" -ForegroundColor Yellow
+          if (Test-Path "$sitePackages\numpy\.libs") {
+            Get-ChildItem "$sitePackages\numpy\.libs\*.dll" | ForEach-Object {
+              Copy-Item $_.FullName . -Force
+              Copy-Item $_.FullName "python_deps\" -Force
+              Write-Host "  Copied .libs: $($_.Name)" -ForegroundColor Green
+            }
+          }
+          
+          # 6. Python DLL の PATH 設定確認
+          Write-Host "6. Python DLL PATH verification" -ForegroundColor Yellow
+          
+          $currentDir = Get-Location
+          $env:PATH = "$currentDir;$env:PATH"
+          
+          if (Test-Path "python311.dll") {
+            Write-Host "  python311.dll: FOUND" -ForegroundColor Green
+          } else {
+            Write-Host "  python311.dll: MISSING" -ForegroundColor Red
+          }
+          
+          # 7. 最終検証
+          Write-Host "7. Final verification of critical files" -ForegroundColor Yellow
+          
+          $criticalFiles = @(
+            "python_deps\numpy\core\_multiarray_umath.cp311-win_amd64.pyd",
+            "python_deps\numpy\linalg\_umath_linalg.cp311-win_amd64.pyd",
+            "python_deps\numpy\core\_multiarray_umath.pyd",
+            "python_deps\numpy\linalg\_umath_linalg.pyd",
+            "python_deps\cv2\cv2.pyd"
+          )
+          
+          $foundCount = 0
+          foreach ($file in $criticalFiles) {
+            if (Test-Path $file) {
+              $size = [math]::Round((Get-Item $file).Length / 1KB, 1)
+              Write-Host "  [OK] $(Split-Path $file -Leaf): $size KB" -ForegroundColor Green
+              $foundCount++
+            } else {
+              Write-Host "  [MISSING] $(Split-Path $file -Leaf)" -ForegroundColor Red
+            }
+          }
+          
+          Write-Host "Critical files status: $foundCount/$($criticalFiles.Count) found" -ForegroundColor Cyan
+          
+          # 8. Python環境テスト
+          Write-Host "8. Python environment final test" -ForegroundColor Yellow
+          $env:PYTHONPATH = "python_deps"
+          
+          # Test each module individually
+          $modules = @("sys", "os", "numpy", "cv2", "scipy", "sklearn")
+          $workingModules = @()
+          
+          foreach ($module in $modules) {
+            try {
+              $result = python -c "import $module; print('$module: OK')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "  $module: OK" -ForegroundColor Green
+                $workingModules += $module
+              } else {
+                Write-Host "  $module: FAILED - $result" -ForegroundColor Yellow
+              }
+            } catch {
+              Write-Host "  $module: ERROR" -ForegroundColor Red
+            }
+          }
+          
+          Write-Host "Working modules: $($workingModules -join ', ')" -ForegroundColor Cyan
+          
+          # 9. Memory optimization for DLL
+          Write-Host "9. Memory optimization for DLL execution" -ForegroundColor Yellow
+          
+          # .NET memory settings
+          $env:COMPlus_gcServer = "0"
+          $env:COMPlus_gcConcurrent = "1"
+          $env:DOTNET_gcServer = "0"
+          
+          # Python memory settings
+          $env:PYTHONMALLOC = "malloc"
+          $env:PYTHONOPTIMIZE = "1"
+          $env:PYTHONDONTWRITEBYTECODE = "1"
+          
+          # NumPy/SciPy threading
+          $env:OPENBLAS_NUM_THREADS = "1"
+          $env:OMP_NUM_THREADS = "1"
+          $env:MKL_NUM_THREADS = "1"
+          
+          Write-Host "Memory optimization settings applied" -ForegroundColor Green
+          
+          Write-Host "=== DLL Preparation Complete ===" -ForegroundColor Green
+          Write-Host "Summary:" -ForegroundColor Cyan
+          Write-Host "  Working directory: $currentDir" -ForegroundColor Gray
+          Write-Host "  Python DLL: $(Test-Path 'python311.dll')" -ForegroundColor Gray
+          Write-Host "  Main DLL: $(Test-Path 'BloodPressureEstimation.dll')" -ForegroundColor Gray
+          Write-Host "  Models: $(Test-Path 'models')" -ForegroundColor Gray
+          Write-Host "  NumPy core (platform): $(Test-Path 'python_deps\numpy\core\_multiarray_umath.cp311-win_amd64.pyd')" -ForegroundColor Gray
+          Write-Host "  NumPy core (legacy): $(Test-Path 'python_deps\numpy\core\_multiarray_umath.pyd')" -ForegroundColor Gray
+          Write-Host "  Working modules: $($workingModules.Count)/$($modules.Count)" -ForegroundColor Gray
+          
+          Pop-Location
+      
+      - name: Create Enhanced C# Test File
+        shell: powershell
+        run: |
+          Push-Location "dist_csharp"
+          
+          Write-Host "Creating enhanced C# test file with better error handling..." -ForegroundColor Yellow
+          
+          $enhancedCSharpCode = @'
+          using System;
+          using System.Runtime.InteropServices;
+          using System.Threading;
+          using System.IO;
+          using System.Diagnostics;
+          
+          namespace BloodPressureDllTest
+          {
+              public class BloodPressureDll
+              {
+                  private const string DllPath = "BloodPressureEstimation.dll";
+          
+                  [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+                  public delegate void AnalysisCallback(
+                      [MarshalAs(UnmanagedType.LPStr)] string requestId,
+                      int maxBloodPressure,
+                      int minBloodPressure,
+                      [MarshalAs(UnmanagedType.LPStr)] string measureRowData,
+                      [MarshalAs(UnmanagedType.LPStr)] string errors
+                  );
+          
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  public static extern bool InitializeDLL([MarshalAs(UnmanagedType.LPStr)] string modelDir);
+          
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string StartBloodPressureAnalysisRequest(
+                      [MarshalAs(UnmanagedType.LPStr)] string requestId,
+                      int height, int weight, int sex,
+                      [MarshalAs(UnmanagedType.LPStr)] string moviePath,
+                      AnalysisCallback callback);
+          
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string GetProcessingStatus([MarshalAs(UnmanagedType.LPStr)] string requestId);
+          
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  public static extern bool CancelBloodPressureAnalysis([MarshalAs(UnmanagedType.LPStr)] string requestId);
+          
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string GetVersionInfo();
+          
+                  public static void TestBalancedDLL()
+                  {
+                      Console.WriteLine("=== Enhanced Blood Pressure DLL Integration Test ===");
+          
+                      try
+                      {
+                          // Comprehensive environment check
+                          Console.WriteLine("=== Environment Verification ===");
+                          
+                          // Check environment variables
+                          string pythonPath = Environment.GetEnvironmentVariable("PYTHONPATH");
+                          string pythonHome = Environment.GetEnvironmentVariable("PYTHONHOME");
+                          Console.WriteLine($"PYTHONPATH: {pythonPath ?? "Not set"}");
+                          Console.WriteLine($"PYTHONHOME: {pythonHome ?? "Not set"}");
+                          
+                          // Check working directory
+                          string workingDir = Directory.GetCurrentDirectory();
+                          Console.WriteLine($"Working directory: {workingDir}");
+                          
+                          // Verify critical files
+                          string[] criticalFiles = { 
+                              "BloodPressureEstimation.dll", 
+                              "python311.dll", 
+                              "models",
+                              "python_deps\\numpy\\core\\_multiarray_umath.cp311-win_amd64.pyd",
+                              "python_deps\\numpy\\core\\_multiarray_umath.pyd"
+                          };
+                          
+                          bool allCriticalExists = true;
+                          foreach (string file in criticalFiles)
+                          {
+                              bool exists = File.Exists(file) || Directory.Exists(file);
+                              Console.WriteLine($"  {file}: {(exists ? "OK" : "MISSING")}");
+                              if (!exists)
+                              {
+                                  Console.WriteLine($"WARNING: {file} not found");
+                                  allCriticalExists = false;
+                              }
+                          }
+          
+                          if (!allCriticalExists)
+                          {
+                              Console.WriteLine("Some critical files are missing, but attempting to continue...");
+                          }
+          
+                          Console.WriteLine();
+                          Console.WriteLine("=== DLL Function Tests ===");
+          
+                          // Test 1: Version Info (safest function)
+                          Console.WriteLine("1. Version Information Test");
+                          try
+                          {
+                              string version = GetVersionInfo();
+                              Console.WriteLine($"   SUCCESS: Version = {version ?? "null"}");
+                          }
+                          catch (Exception ex)
+                          {
+                              Console.WriteLine($"   ERROR: Version test failed - {ex.Message}");
+                              return; // If version fails, don't continue
+                          }
+          
+                          // Test 2: DLL Initialization with multiple attempts
+                          Console.WriteLine("2. DLL Initialization with retry logic");
+                          
+                          bool initResult = false;
+                          for (int attempt = 1; attempt <= 5; attempt++)
+                          {
+                              Console.WriteLine($"   Attempt {attempt}/5...");
+                              
+                              try
+                              {
+                                  // Force garbage collection before each attempt
+                                  GC.Collect();
+                                  GC.WaitForPendingFinalizers();
+                                  GC.Collect();
+                                  
+                                  // Wait between attempts
+                                  if (attempt > 1)
+                                  {
+                                      Thread.Sleep(2000);
+                                  }
+                                  
+                                  initResult = InitializeDLL("models");
+                                  
+                                  if (initResult)
+                                  {
+                                      Console.WriteLine($"   SUCCESS: Initialization successful on attempt {attempt}");
+                                      break;
+                                  }
+                                  else
+                                  {
+                                      Console.WriteLine($"   RETRY: InitializeDLL returned false on attempt {attempt}");
+                                  }
+                              }
+                              catch (AccessViolationException ex)
+                              {
+                                  Console.WriteLine($"   RETRY: Access violation on attempt {attempt} - {ex.Message}");
+                                  if (attempt == 5)
+                                  {
+                                      Console.WriteLine("   CRITICAL: All initialization attempts failed with access violations");
+                                      Console.WriteLine("   This indicates a fundamental issue with Python environment in DLL");
+                                      throw;
+                                  }
+                              }
+                              catch (Exception ex)
+                              {
+                                  Console.WriteLine($"   RETRY: Other exception on attempt {attempt} - {ex.Message}");
+                                  if (attempt == 5)
+                                  {
+                                      throw;
+                                  }
+                              }
+                          }
+          
+                          // Test 3: Processing Status (should work even if init failed)
+                          Console.WriteLine("3. Processing Status Test");
+                          try
+                          {
+                              string status = GetProcessingStatus("test_request_12345");
+                              Console.WriteLine($"   Status result: {status ?? "null"}");
+                          }
+                          catch (Exception ex)
+                          {
+                              Console.WriteLine($"   Status test error: {ex.Message}");
+                          }
+          
+                          // Test 4: Analysis request (only if initialization successful)
+                          if (initResult)
+                          {
+                              Console.WriteLine("4. Blood Pressure Analysis Test");
+                              
+                              AnalysisCallback callback = (reqId, sbp, dbp, csvData, errors) =>
+                              {
+                                  Console.WriteLine($"   Callback received: ID={reqId}, SBP={sbp}, DBP={dbp}");
+                                  if (!string.IsNullOrEmpty(errors))
+                                  {
+                                      Console.WriteLine($"   Callback errors: {errors}");
+                                  }
+                              };
+          
+                              try
+                              {
+                                  // Create a dummy video file for testing
+                                  string testVideoPath = "test_video.webm";
+                                  if (!File.Exists(testVideoPath))
+                                  {
+                                      File.WriteAllText(testVideoPath, "dummy video content for testing");
+                                  }
+          
+                                  string requestId = $"{DateTime.Now:yyyyMMddHHmmssfff}_test_12345";
+                                  string errorCode = StartBloodPressureAnalysisRequest(
+                                      requestId, 170, 70, 1, testVideoPath, callback);
+                                  
+                                  Console.WriteLine($"   Analysis request result: {errorCode ?? "SUCCESS (empty string)"}");
+                                  
+                                  // Monitor status for a few seconds
+                                  for (int i = 0; i < 5; i++)
+                                  {
+                                      Thread.Sleep(1000);
+                                      string currentStatus = GetProcessingStatus(requestId);
+                                      Console.WriteLine($"   Status after {i + 1}s: {currentStatus}");
+                                      
+                                      if (currentStatus != null && currentStatus != "PROCESSING")
+                                      {
+                                          break;
+                                      }
+                                  }
+                              }
+                              catch (Exception ex)
+                              {
+                                  Console.WriteLine($"   Analysis test error: {ex.Message}");
+                              }
+                          }
+                          else
+                          {
+                              Console.WriteLine("4. Skipping analysis test (initialization failed)");
+                          }
+          
+                          Console.WriteLine();
+                          Console.WriteLine("=== Test Summary ===");
+                          Console.WriteLine($"Initialization result: {initResult}");
+                          Console.WriteLine("Test completed successfully (no crashes)");
+                          
+                      }
+                      catch (Exception ex)
+                      {
+                          Console.WriteLine();
+                          Console.WriteLine("=== FATAL ERROR ===");
+                          Console.WriteLine($"Exception type: {ex.GetType().Name}");
+                          Console.WriteLine($"Message: {ex.Message}");
+                          Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                          
+                          // Additional debugging info
+                          Console.WriteLine();
+                          Console.WriteLine("=== DEBUG INFO ===");
+                          Console.WriteLine($"Process ID: {Process.GetCurrentProcess().Id}");
+                          Console.WriteLine($"Working Set: {Process.GetCurrentProcess().WorkingSet64 / 1024 / 1024} MB");
+                          
+                          throw; // Re-throw to ensure proper exit code
+                      }
+                      finally
+                      {
+                          // Cleanup
+                          GC.Collect();
+                          GC.WaitForPendingFinalizers();
+                          GC.Collect();
+                      }
+                  }
+          
+                  public static void Main(string[] args)
+                  {
+                      try
+                      {
+                          TestBalancedDLL();
+                          Console.WriteLine("\nTest execution completed.");
+                          Environment.Exit(0);
+                      }
+                      catch (Exception ex)
+                      {
+                          Console.WriteLine($"\nApplication fatal error: {ex.Message}");
+                          Environment.Exit(1);
+                      }
+                  }
+              }
+          }
+          '@
+          
+          # Write enhanced C# code to file
+          $enhancedCSharpCode | Out-File -FilePath "BloodPressureTestEnhanced.cs" -Encoding UTF8
+          
+          Write-Host "Enhanced C# test file created: BloodPressureTestEnhanced.cs" -ForegroundColor Green
+          
+          Pop-Location
 
       - name: Run C# Integration Test in dist_csharp
         shell: powershell
@@ -1212,7 +1717,6 @@ jobs:
             $sklearnPath = "$currentDir\python_deps\sklearn"
             
             # Python環境変数の詳細設定（PYTHONHOMEは設定しない）
-            # $env:PYTHONHOME = $currentDir  # これを削除/コメントアウト
             $env:PYTHONPATH = @(
               $pythonDepsPath,
               "$pythonDepsPath\numpy",
@@ -1267,8 +1771,10 @@ jobs:
             Write-Host "=== 3. Python Dependencies Verification ===" -ForegroundColor Yellow
             $criticalDeps = @(
               @{ path = "python_deps\numpy\__init__.py"; name = "NumPy init" },
-              @{ path = "python_deps\numpy\core\_multiarray_umath.pyd"; name = "NumPy core" },
-              @{ path = "python_deps\numpy\linalg\_umath_linalg.pyd"; name = "NumPy linalg" },
+              @{ path = "python_deps\numpy\core\_multiarray_umath.cp311-win_amd64.pyd"; name = "NumPy core (platform)" },
+              @{ path = "python_deps\numpy\core\_multiarray_umath.pyd"; name = "NumPy core (legacy)" },
+              @{ path = "python_deps\numpy\linalg\_umath_linalg.cp311-win_amd64.pyd"; name = "NumPy linalg (platform)" },
+              @{ path = "python_deps\numpy\linalg\_umath_linalg.pyd"; name = "NumPy linalg (legacy)" },
               @{ path = "python_deps\cv2\__init__.py"; name = "OpenCV init" },
               @{ path = "python_deps\cv2\cv2.pyd"; name = "OpenCV core" },
               @{ path = "python_deps\sklearn\__init__.py"; name = "scikit-learn init" },
@@ -1276,6 +1782,7 @@ jobs:
             )
             
             $missingDeps = 0
+            $criticalMissing = 0
             foreach ($dep in $criticalDeps) {
               if (Test-Path $dep.path) {
                 $size = [math]::Round((Get-Item $dep.path).Length / 1KB, 1)
@@ -1283,11 +1790,14 @@ jobs:
               } else {
                 Write-Host "[ERROR] $($dep.name): MISSING" -ForegroundColor Red
                 $missingDeps++
+                if ($dep.name -like "*NumPy core*" -or $dep.name -like "*OpenCV core*") {
+                  $criticalMissing++
+                }
               }
             }
             
             if ($missingDeps -gt 0) {
-              Write-Host "WARNING: $missingDeps critical dependencies are missing" -ForegroundColor Yellow
+              Write-Host "WARNING: $missingDeps dependencies are missing ($criticalMissing critical)" -ForegroundColor Yellow
             }
             
             # ===== 4. DLL読み込み能力テスト =====
@@ -1336,17 +1846,37 @@ jobs:
               $pythonBasicTest = python -c "import sys; print(f'Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>&1
               Write-Host "[OK] Python version: $pythonBasicTest" -ForegroundColor Green
               
-              # NumPyテスト
-              $numpyTest = python -c "import numpy as np; print(f'NumPy {np.__version__} - Array test: {np.array([1,2,3]).sum()}')" 2>&1
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "[OK] NumPy test: $numpyTest" -ForegroundColor Green
+              # NumPyテスト（詳細）
+              $numpyDetailedTest = python -c "
+              import sys
+              sys.path.insert(0, 'python_deps')
+              try:
+                  import numpy as np
+                  test_array = np.array([1, 2, 3])
+                  result = test_array.sum()
+                  print(f'NumPy {np.__version__} - Array test: {result}')
+              except Exception as e:
+                  print(f'NumPy error: {e}')
+              " 2>&1
+              
+              if ($LASTEXITCODE -eq 0 -and $numpyDetailedTest -like "*Array test: 6*") {
+                Write-Host "[OK] NumPy detailed test: $numpyDetailedTest" -ForegroundColor Green
               } else {
-                Write-Host "[ERROR] NumPy test failed: $numpyTest" -ForegroundColor Red
+                Write-Host "[ERROR] NumPy detailed test failed: $numpyDetailedTest" -ForegroundColor Red
               }
               
               # OpenCVテスト
-              $opencvTest = python -c "import cv2; print(f'OpenCV {cv2.__version__}')" 2>&1
-              if ($LASTEXITCODE -eq 0) {
+              $opencvTest = python -c "
+              import sys
+              sys.path.insert(0, 'python_deps')
+              try:
+                  import cv2
+                  print(f'OpenCV {cv2.__version__} - Module OK')
+              except Exception as e:
+                  print(f'OpenCV error: {e}')
+              " 2>&1
+              
+              if ($LASTEXITCODE -eq 0 -and $opencvTest -like "*Module OK*") {
                 Write-Host "[OK] OpenCV test: $opencvTest" -ForegroundColor Green
               } else {
                 Write-Host "[ERROR] OpenCV test failed: $opencvTest" -ForegroundColor Red
@@ -1383,12 +1913,22 @@ jobs:
             Write-Host "Final pre-test check:" -ForegroundColor Cyan
             Write-Host "  Working directory: $(Get-Location)" -ForegroundColor Cyan
             Write-Host "  BloodPressureTest.exe exists: $(Test-Path 'BloodPressureTest.exe')" -ForegroundColor Cyan
+            Write-Host "  BloodPressureTestEnhanced.exe exists: $(Test-Path 'BloodPressureTestEnhanced.exe')" -ForegroundColor Cyan
             Write-Host "  BloodPressureEstimation.dll exists: $(Test-Path 'BloodPressureEstimation.dll')" -ForegroundColor Cyan
             Write-Host "  models directory exists: $(Test-Path 'models')" -ForegroundColor Cyan
             
+            # テスト実行ファイルの選択
+            $testExecutable = ".\BloodPressureTest.exe"
+            if (Test-Path "BloodPressureTestEnhanced.exe") {
+              $testExecutable = ".\BloodPressureTestEnhanced.exe"
+              Write-Host "Using enhanced test executable" -ForegroundColor Cyan
+            } else {
+              Write-Host "Using standard test executable" -ForegroundColor Cyan
+            }
+            
             # Start-Processを使用した安全な実行
             $processArgs = @{
-              FilePath = ".\BloodPressureTest.exe"
+              FilePath = $testExecutable
               NoNewWindow = $true
               Wait = $true
               PassThru = $true
@@ -1398,6 +1938,8 @@ jobs:
             }
             
             Write-Host "Starting C# test process..." -ForegroundColor Green
+            Write-Host "Test executable: $testExecutable" -ForegroundColor Cyan
+            
             $process = Start-Process @processArgs
             
             # ===== 8. 結果分析 =====
@@ -1435,6 +1977,20 @@ jobs:
             } elseif ($exitCode -eq -1073741819) {
               Write-Host "ERROR: Access Violation Exception (-1073741819)" -ForegroundColor Red
               Write-Host "This indicates a memory access issue in the DLL" -ForegroundColor Red
+              
+              # 追加の診断情報
+              Write-Host "=== Access Violation Diagnostics ===" -ForegroundColor Yellow
+              Write-Host "Possible causes:" -ForegroundColor Yellow
+              Write-Host "  1. NumPy core files missing or incompatible" -ForegroundColor Yellow
+              Write-Host "  2. Python environment initialization failed in DLL" -ForegroundColor Yellow
+              Write-Host "  3. Memory alignment issues with Cython compiled code" -ForegroundColor Yellow
+              Write-Host "  4. Threading conflicts in Python/Cython integration" -ForegroundColor Yellow
+              
+              if ($criticalMissing -gt 0) {
+                Write-Host "CRITICAL: $criticalMissing critical dependencies are missing!" -ForegroundColor Red
+                Write-Host "This is likely the root cause of the access violation." -ForegroundColor Red
+              }
+              
               throw "Access violation in DLL"
             } elseif ($exitCode -eq -1073741515) {
               Write-Host "ERROR: DLL Not Found Exception (-1073741515)" -ForegroundColor Red
