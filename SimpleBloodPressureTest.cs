@@ -5,30 +5,29 @@ using System.Threading;
 
 public class SimpleBPTest
 {
-    private const string DllPath = "BloodPressureEstimation.dll";
+    private const string DllPath = "CppWrapper.dll";
 
     // DLL関数のインポート
     [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-    public static extern bool InitializeDLL([MarshalAs(UnmanagedType.LPStr)] string modelDir);
+    public static extern int InitializeBP([MarshalAs(UnmanagedType.LPStr)] string modelDir);
 
     [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-    [return: MarshalAs(UnmanagedType.LPStr)]
-    public static extern string StartBloodPressureAnalysisRequest(
+    public static extern IntPtr StartBloodPressureAnalysisRequest(
         [MarshalAs(UnmanagedType.LPStr)] string requestId,
         int height, int weight, int sex,
-        [MarshalAs(UnmanagedType.LPStr)] string moviePath,
-        IntPtr callback);
+        [MarshalAs(UnmanagedType.LPStr)] string moviePath);
 
     [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-    [return: MarshalAs(UnmanagedType.LPStr)]
-    public static extern string GetProcessingStatus([MarshalAs(UnmanagedType.LPStr)] string requestId);
+    public static extern IntPtr GetProcessingStatus([MarshalAs(UnmanagedType.LPStr)] string requestId);
 
     [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-    public static extern bool CancelBloodPressureAnalysis([MarshalAs(UnmanagedType.LPStr)] string requestId);
+    public static extern int CancelBloodPressureAnalysis([MarshalAs(UnmanagedType.LPStr)] string requestId);
 
     [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-    [return: MarshalAs(UnmanagedType.LPStr)]
-    public static extern string GetVersionInfo();
+    public static extern IntPtr GetVersionInfo();
+
+    [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    public static extern IntPtr GenerateRequestId();
 
     public static void Main(string[] args)
     {
@@ -50,10 +49,10 @@ public class SimpleBPTest
             // 2. DLL初期化
             Console.WriteLine();
             Console.WriteLine("2. DLL初期化");
-            bool initResult = InitializeDLL("models");
+            int initResult = InitializeBP("models");
             Console.WriteLine($"初期化結果: {initResult}");
 
-            if (!initResult)
+            if (initResult == 0)
             {
                 Console.WriteLine("DLL初期化に失敗しました");
                 Console.WriteLine("Enterキーで終了...");
@@ -64,20 +63,20 @@ public class SimpleBPTest
             // 3. バージョン確認
             Console.WriteLine();
             Console.WriteLine("3. バージョン確認");
-            string version = GetVersionInfo();
+            string version = PtrToStringAndFree(GetVersionInfo());
             Console.WriteLine($"DLLバージョン: {version}");
 
             // 4. 処理状況テスト
             Console.WriteLine();
             Console.WriteLine("4. 処理状況テスト");
-            string status = GetProcessingStatus("test_request");
+            string status = PtrToStringAndFree(GetProcessingStatus("test_request"));
             Console.WriteLine($"処理状況: {status}");
 
             // 5. 血圧解析テスト（基本）
             Console.WriteLine();
             Console.WriteLine("5. 血圧解析テスト");
             
-            string requestId = GenerateRequestId();
+            string requestId = PtrToStringAndFree(GenerateRequestId());
             Console.WriteLine($"リクエストID: {requestId}");
 
             string videoPath = @"sample-data\100万画素.webm";
@@ -91,9 +90,9 @@ public class SimpleBPTest
                 return;
             }
 
-            // 解析開始（コールバックなし）
-            string errorCode = StartBloodPressureAnalysisRequest(
-                requestId, 170, 70, 1, videoPath, IntPtr.Zero);
+            // 解析開始
+            string errorCode = PtrToStringAndFree(StartBloodPressureAnalysisRequest(
+                requestId, 170, 70, 1, videoPath));
 
             if (string.IsNullOrEmpty(errorCode))
             {
@@ -104,7 +103,7 @@ public class SimpleBPTest
                 for (int i = 0; i < 30; i++)
                 {
                     Thread.Sleep(1000);
-                    status = GetProcessingStatus(requestId);
+                    status = PtrToStringAndFree(GetProcessingStatus(requestId));
                     Console.Write($"\r状況: {status} ({i + 1}s)");
                     
                     if (status == "none")
@@ -126,7 +125,7 @@ public class SimpleBPTest
         catch (DllNotFoundException ex)
         {
             Console.WriteLine($"DLLが見つかりません: {ex.Message}");
-            Console.WriteLine("BloodPressureEstimation.dll が同じディレクトリにあることを確認してください");
+            Console.WriteLine("CppWrapper.dll が同じディレクトリにあることを確認してください");
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -148,19 +147,19 @@ public class SimpleBPTest
     {
         Console.WriteLine("必要ファイル確認中...");
 
+        if (!File.Exists("CppWrapper.dll"))
+        {
+            Console.WriteLine("✗ CppWrapper.dll が見つかりません");
+            return false;
+        }
+        Console.WriteLine("✓ CppWrapper.dll");
+
         if (!File.Exists("BloodPressureEstimation.dll"))
         {
             Console.WriteLine("✗ BloodPressureEstimation.dll が見つかりません");
             return false;
         }
         Console.WriteLine("✓ BloodPressureEstimation.dll");
-
-        if (!File.Exists("bp_estimation_simple.py"))
-        {
-            Console.WriteLine("✗ bp_estimation_simple.py が見つかりません");
-            return false;
-        }
-        Console.WriteLine("✓ bp_estimation_simple.py");
 
         if (!File.Exists(@"sample-data\100万画素.webm"))
         {
@@ -172,9 +171,12 @@ public class SimpleBPTest
         return true;
     }
 
-    static string GenerateRequestId()
+    static string PtrToStringAndFree(IntPtr ptr)
     {
-        string timestamp = DateTime.Now.ToString("yyyyMMddHHmmssfff");
-        return $"{timestamp}_9000000001_0000012345";
+        if (ptr == IntPtr.Zero) return null;
+        string str = Marshal.PtrToStringAnsi(ptr);
+        // C++側で_strdupしている場合はfreeが必要
+        // Marshal.FreeHGlobal(ptr); // ただしC++側でfreeしない場合はコメントアウト
+        return str;
     }
 }
