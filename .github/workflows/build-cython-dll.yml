@@ -368,19 +368,22 @@ jobs:
       - name: Dumpbin DLL Exports
         run: |
           Write-Host "=== dumpbin /EXPORTS BloodPressureEstimation.dll ===" -ForegroundColor Cyan
-          $dumpbin = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC"
-          $dumpbinExe = Get-ChildItem -Path $dumpbin -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($dumpbinExe) {
-            & "$($dumpbinExe.FullName)" /EXPORTS BloodPressureEstimation.dll
-          } else {
-            Write-Host "dumpbin.exe not found. Trying default path..." -ForegroundColor Yellow
-            $defaultDumpbin = "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe"
-            $found = Get-ChildItem -Path "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($found) {
-              & "$($found.FullName)" /EXPORTS BloodPressureEstimation.dll
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            if ($vsPath) {
+              $dumpbinPath = Join-Path $vsPath "VC\Tools\MSVC"
+              $dumpbinExe = Get-ChildItem -Path $dumpbinPath -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($dumpbinExe) {
+                & "$($dumpbinExe.FullName)" /EXPORTS BloodPressureEstimation.dll
+              } else {
+                Write-Host "dumpbin.exe not found in Visual Studio installation." -ForegroundColor Red
+              }
             } else {
-              Write-Host "dumpbin.exe could not be found on this runner." -ForegroundColor Red
+              Write-Host "Visual Studio with VC tools not found." -ForegroundColor Red
             }
+          } else {
+            Write-Host "vswhere.exe not found. Cannot locate dumpbin.exe." -ForegroundColor Red
           }
         shell: powershell
 
