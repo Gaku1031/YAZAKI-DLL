@@ -782,95 +782,229 @@ jobs:
               public static extern IntPtr LoadLibrary(string lpFileName);
               [DllImport("kernel32.dll", SetLastError = true)]
               public static extern bool FreeLibrary(IntPtr hModule);
+              [DllImport("kernel32.dll", SetLastError = true)]
+              public static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
           }
           "@
           }
+          
           Push-Location "dist_csharp"
-          Write-Host "=== C# Integration Test with Enhanced Environment ===" -ForegroundColor Green
-          # Verify all required files exist before testing
-          Write-Host "Pre-test verification:" -ForegroundColor Yellow
-          $requiredFiles = @(
-            "BloodPressureEstimation.dll",
-            "python311.dll", 
-            "BloodPressureTest.exe",
-            "vcruntime140.dll"
-          )
-          $allFilesExist = $true
-          foreach ($file in $requiredFiles) {
-            if (Test-Path $file) {
-              $size = [math]::Round((Get-Item $file).Length / 1KB, 1)
-              Write-Host "$file ($size KB)" -ForegroundColor Green
-            } else {
-              Write-Host "$file MISSING" -ForegroundColor Red
-              $allFilesExist = $false
-            }
-          }
-          if (-not $allFilesExist) {
-            Write-Host "Required files are missing! Listing all files:" -ForegroundColor Red
-            Get-ChildItem -Filter "*.dll" | Format-Table Name, Length
-            Get-ChildItem -Filter "*.exe" | Format-Table Name, Length
-            Pop-Location
-            exit 1
-          }
-          # Set comprehensive environment variables
-          $currentDir = Get-Location
-          $pythonDepsPath = "$currentDir\python_deps"
-          $numpyLibsPath = "$currentDir\python_deps\numpy\.libs"
-          $scipyLibsPath = "$currentDir\python_deps\scipy\.libs"
-          # Enhanced PATH setup
-          $newPath = @(
-            $currentDir,
-            $pythonDepsPath,
-            $numpyLibsPath,
-            $scipyLibsPath,
-            "$pythonDepsPath\numpy\core",
-            "$pythonDepsPath\cv2",
-            $env:PATH
-          ) -join ";"
-          $env:PATH = $newPath
-          $env:PYTHONHOME = $currentDir
-          $env:PYTHONPATH = $pythonDepsPath
-          $env:PYTHONDONTWRITEBYTECODE = "1"
-          # Additional environment variables for DLL loading
-          $env:DLL_DIRECTORY = $currentDir
-          Write-Host "Environment configuration:"
-          Write-Host "  Current directory: $currentDir"
-          Write-Host "  PYTHONHOME: $env:PYTHONHOME"
-          Write-Host "  PYTHONPATH: $env:PYTHONPATH"
-          Write-Host "  PATH (first 300 chars): $($env:PATH.Substring(0, [Math]::Min(300, $env:PATH.Length)))..."
-          # Additional dependency verification
-          Write-Host "Python dependencies verification:" -ForegroundColor Yellow
-          $pythonDeps = @(
-            "python_deps\numpy\core\_multiarray_umath.pyd",
-            "python_deps\cv2\cv2.pyd",
-            "python_deps\sklearn\utils\_cython_blas.pyd"
-          )
-          foreach ($dep in $pythonDeps) {
-            if (Test-Path $dep) {
-              Write-Host "$dep" -ForegroundColor Green
-            } else {
-              Write-Host "$dep" -ForegroundColor Yellow
-            }
-          }
-          # Test DLL loading capability
-          Write-Host "Testing DLL loading capability..." -ForegroundColor Yellow
+          Write-Host "=== Enhanced C# Integration Test with Comprehensive Environment Setup ===" -ForegroundColor Green
+          
           try {
-            Add-DllTestType
-            $handle = [DllTest]::LoadLibrary("$currentDir\BloodPressureEstimation.dll")
-            if ($handle -ne [IntPtr]::Zero) {
-              Write-Host "BloodPressureEstimation.dll can be loaded" -ForegroundColor Green
-              [DllTest]::FreeLibrary($handle) | Out-Null
-            } else {
-              $lastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-              Write-Host "Failed to load BloodPressureEstimation.dll (Error: $lastError)" -ForegroundColor Red
+            # ===== 1. 事前検証 =====
+            Write-Host "=== 1. Pre-test Verification ===" -ForegroundColor Yellow
+            $requiredFiles = @(
+              "BloodPressureEstimation.dll",
+              "python311.dll", 
+              "BloodPressureTest.exe",
+              "vcruntime140.dll",
+              "msvcp140.dll"
+            )
+            
+            $allFilesExist = $true
+            foreach ($file in $requiredFiles) {
+              if (Test-Path $file) {
+                $size = [math]::Round((Get-Item $file).Length / 1KB, 1)
+                Write-Host "[OK] $file ($size KB)" -ForegroundColor Green
+              } else {
+                Write-Host "[ERROR] $file MISSING" -ForegroundColor Red
+                $allFilesExist = $false
+              }
             }
-          } catch {
-            Write-Host "DLL loading test failed: $($_.Exception.Message)" -ForegroundColor Red
-          }
-          # Run the actual test
-          Write-Host "Starting C# integration test..." -ForegroundColor Green
-          try {
-            # Use Start-Process with comprehensive error capture
+            
+            if (-not $allFilesExist) {
+              Write-Host "Required files are missing! Listing all available files:" -ForegroundColor Red
+              Get-ChildItem -Filter "*.dll" | Format-Table Name, Length
+              Get-ChildItem -Filter "*.exe" | Format-Table Name, Length
+              throw "Required files missing"
+            }
+            
+            # ===== 2. 詳細な環境設定 =====
+            Write-Host "=== 2. Comprehensive Environment Setup ===" -ForegroundColor Yellow
+            $currentDir = Get-Location
+            $pythonDepsPath = "$currentDir\python_deps"
+            $numpyLibsPath = "$currentDir\python_deps\numpy\.libs"
+            $scipyLibsPath = "$currentDir\python_deps\scipy\.libs"
+            $cv2Path = "$currentDir\python_deps\cv2"
+            $sklearnPath = "$currentDir\python_deps\sklearn"
+            
+            # Python環境変数の詳細設定
+            $env:PYTHONHOME = $currentDir
+            $env:PYTHONPATH = @(
+              $pythonDepsPath,
+              "$pythonDepsPath\numpy",
+              "$pythonDepsPath\numpy\core",
+              "$pythonDepsPath\cv2",
+              "$pythonDepsPath\sklearn",
+              "$pythonDepsPath\scipy",
+              "$pythonDepsPath\joblib",
+              "$pythonDepsPath\threadpoolctl"
+            ) -join ";"
+            
+            # Python実行環境の設定
+            $env:PYTHONDONTWRITEBYTECODE = "1"
+            $env:PYTHONIOENCODING = "utf-8"
+            $env:PYTHONOPTIMIZE = "1"
+            $env:PYTHONNOUSERSITE = "1"
+            
+            # NumPy/SciPy/OpenCV最適化設定
+            $env:OPENBLAS_NUM_THREADS = "1"
+            $env:OMP_NUM_THREADS = "1"
+            $env:MKL_NUM_THREADS = "1"
+            $env:NUMPY_EXPERIMENTAL_ARRAY_FUNCTION = "0"
+            $env:OPENCV_IO_ENABLE_JASPER = "0"
+            $env:OPENCV_IO_ENABLE_OPENEXR = "0"
+            
+            # PATH設定（優先順位重要）
+            $newPath = @(
+              $currentDir,
+              $pythonDepsPath,
+              $numpyLibsPath,
+              $scipyLibsPath,
+              "$pythonDepsPath\numpy\core",
+              $cv2Path,
+              $sklearnPath,
+              "$pythonDepsPath\mediapipe",
+              $env:PATH
+            ) -join ";"
+            $env:PATH = $newPath
+            
+            # DLL読み込み用の追加環境変数
+            $env:DLL_DIRECTORY = $currentDir
+            $env:CYTHON_TRACE = "0"
+            $env:CYTHON_TRACE_NOGIL = "0"
+            
+            Write-Host "Environment configuration completed:" -ForegroundColor Green
+            Write-Host "  Current directory: $currentDir" -ForegroundColor Cyan
+            Write-Host "  PYTHONHOME: $env:PYTHONHOME" -ForegroundColor Cyan
+            Write-Host "  PYTHONPATH (first 200 chars): $($env:PYTHONPATH.Substring(0, [Math]::Min(200, $env:PYTHONPATH.Length)))..." -ForegroundColor Cyan
+            Write-Host "  PATH (first 300 chars): $($env:PATH.Substring(0, [Math]::Min(300, $env:PATH.Length)))..." -ForegroundColor Cyan
+            
+            # ===== 3. Python依存関係の詳細検証 =====
+            Write-Host "=== 3. Python Dependencies Verification ===" -ForegroundColor Yellow
+            $criticalDeps = @(
+              @{ path = "python_deps\numpy\__init__.py"; name = "NumPy init" },
+              @{ path = "python_deps\numpy\core\_multiarray_umath.pyd"; name = "NumPy core" },
+              @{ path = "python_deps\numpy\linalg\_umath_linalg.pyd"; name = "NumPy linalg" },
+              @{ path = "python_deps\cv2\__init__.py"; name = "OpenCV init" },
+              @{ path = "python_deps\cv2\cv2.pyd"; name = "OpenCV core" },
+              @{ path = "python_deps\sklearn\__init__.py"; name = "scikit-learn init" },
+              @{ path = "python_deps\scipy\__init__.py"; name = "SciPy init" }
+            )
+            
+            $missingDeps = 0
+            foreach ($dep in $criticalDeps) {
+              if (Test-Path $dep.path) {
+                $size = [math]::Round((Get-Item $dep.path).Length / 1KB, 1)
+                Write-Host "[OK] $($dep.name): $size KB" -ForegroundColor Green
+              } else {
+                Write-Host "[ERROR] $($dep.name): MISSING" -ForegroundColor Red
+                $missingDeps++
+              }
+            }
+            
+            if ($missingDeps -gt 0) {
+              Write-Host "WARNING: $missingDeps critical dependencies are missing" -ForegroundColor Yellow
+            }
+            
+            # ===== 4. DLL読み込み能力テスト =====
+            Write-Host "=== 4. DLL Loading Capability Test ===" -ForegroundColor Yellow
+            try {
+              Add-DllTestType
+              
+              # Python DLLテスト
+              $pythonHandle = [DllTest]::LoadLibrary("$currentDir\python311.dll")
+              if ($pythonHandle -ne [IntPtr]::Zero) {
+                Write-Host "[OK] python311.dll can be loaded" -ForegroundColor Green
+                [DllTest]::FreeLibrary($pythonHandle) | Out-Null
+              } else {
+                $lastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                Write-Host "[ERROR] Failed to load python311.dll (Error: $lastError)" -ForegroundColor Red
+              }
+              
+              # メインDLLテスト
+              $mainHandle = [DllTest]::LoadLibrary("$currentDir\BloodPressureEstimation.dll")
+              if ($mainHandle -ne [IntPtr]::Zero) {
+                Write-Host "[OK] BloodPressureEstimation.dll can be loaded" -ForegroundColor Green
+                
+                # エクスポート関数の確認
+                $initFunc = [DllTest]::GetProcAddress($mainHandle, "InitializeDLL")
+                if ($initFunc -ne [IntPtr]::Zero) {
+                  Write-Host "[OK] InitializeDLL function found" -ForegroundColor Green
+                } else {
+                  Write-Host "[ERROR] InitializeDLL function not found" -ForegroundColor Red
+                }
+                
+                [DllTest]::FreeLibrary($mainHandle) | Out-Null
+              } else {
+                $lastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                Write-Host "[ERROR] Failed to load BloodPressureEstimation.dll (Error: $lastError)" -ForegroundColor Red
+                throw "Critical DLL loading failed"
+              }
+            } catch {
+              Write-Host "DLL loading test failed: $($_.Exception.Message)" -ForegroundColor Red
+              throw
+            }
+            
+            # ===== 5. Python環境テスト =====
+            Write-Host "=== 5. Python Environment Test ===" -ForegroundColor Yellow
+            try {
+              # Python基本テスト
+              $pythonBasicTest = python -c "import sys; print(f'Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>&1
+              Write-Host "[OK] Python version: $pythonBasicTest" -ForegroundColor Green
+              
+              # NumPyテスト
+              $numpyTest = python -c "import numpy as np; print(f'NumPy {np.__version__} - Array test: {np.array([1,2,3]).sum()}')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "[OK] NumPy test: $numpyTest" -ForegroundColor Green
+              } else {
+                Write-Host "[ERROR] NumPy test failed: $numpyTest" -ForegroundColor Red
+              }
+              
+              # OpenCVテスト
+              $opencvTest = python -c "import cv2; print(f'OpenCV {cv2.__version__}')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "[OK] OpenCV test: $opencvTest" -ForegroundColor Green
+              } else {
+                Write-Host "[ERROR] OpenCV test failed: $opencvTest" -ForegroundColor Red
+              }
+              
+            } catch {
+              Write-Host "Python environment test failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+            
+            # ===== 6. メモリとパフォーマンス設定 =====
+            Write-Host "=== 6. Memory and Performance Settings ===" -ForegroundColor Yellow
+            
+            # .NET Garbage Collection設定
+            $env:COMPlus_gcServer = "0"
+            $env:COMPlus_gcConcurrent = "1"
+            $env:DOTNET_gcServer = "0"
+            $env:DOTNET_gcConcurrent = "1"
+            
+            # プロセス優先度設定
+            try {
+              $currentProcess = Get-Process -Id $PID
+              $currentProcess.PriorityClass = "High"
+              Write-Host "[OK] Process priority set to High" -ForegroundColor Green
+            } catch {
+              Write-Host "[WARNING] Could not set process priority" -ForegroundColor Yellow
+            }
+            
+            Write-Host "[OK] Memory and performance settings applied" -ForegroundColor Green
+            
+            # ===== 7. C#テスト実行 =====
+            Write-Host "=== 7. C# Integration Test Execution ===" -ForegroundColor Green
+            
+            # テスト実行前の最終確認
+            Write-Host "Final pre-test check:" -ForegroundColor Cyan
+            Write-Host "  Working directory: $(Get-Location)" -ForegroundColor Cyan
+            Write-Host "  BloodPressureTest.exe exists: $(Test-Path 'BloodPressureTest.exe')" -ForegroundColor Cyan
+            Write-Host "  BloodPressureEstimation.dll exists: $(Test-Path 'BloodPressureEstimation.dll')" -ForegroundColor Cyan
+            Write-Host "  models directory exists: $(Test-Path 'models')" -ForegroundColor Cyan
+            
+            # Start-Processを使用した安全な実行
             $processArgs = @{
               FilePath = ".\BloodPressureTest.exe"
               NoNewWindow = $true
@@ -880,39 +1014,70 @@ jobs:
               RedirectStandardError = "test_error.txt"
               WorkingDirectory = $currentDir
             }
+            
+            Write-Host "Starting C# test process..." -ForegroundColor Green
             $process = Start-Process @processArgs
-            Write-Host "=== Test Output ===" -ForegroundColor Cyan
+            
+            # ===== 8. 結果分析 =====
+            Write-Host "=== 8. Test Results Analysis ===" -ForegroundColor Cyan
+            
+            # 標準出力の表示
             if (Test-Path "test_output.txt") { 
-              Get-Content "test_output.txt" | ForEach-Object { Write-Host $_ }
-            }
-            Write-Host "=== Test Errors ===" -ForegroundColor Cyan
-            if (Test-Path "test_error.txt") { 
-              $errorContent = Get-Content "test_error.txt"
-              if ($errorContent) {
-                $errorContent | ForEach-Object { Write-Host $_ -ForegroundColor Yellow }
+              $output = Get-Content "test_output.txt" -Raw
+              if ($output) {
+                Write-Host "--- Test Output ---" -ForegroundColor Cyan
+                Write-Host $output
               } else {
-                Write-Host "No errors recorded" -ForegroundColor Green
+                Write-Host "--- No standard output ---" -ForegroundColor Yellow
               }
             }
-            $exitCode = $process.ExitCode
-            Write-Host "=== Test Result ===" -ForegroundColor Cyan
-            if ($exitCode -eq 0) {
-              Write-Host "C# integration test PASSED" -ForegroundColor Green
-            } else {
-              Write-Host "C# integration test FAILED with exit code: $exitCode" -ForegroundColor Red
-              # Additional debugging information
-              Write-Host "Additional debugging information:" -ForegroundColor Yellow
-              Write-Host "Working Directory: $(Get-Location)"
-              Write-Host "Files in current directory:"
-              Get-ChildItem | Select-Object Name, Length | Format-Table
-              Pop-Location
-              exit 1
+            
+            # エラー出力の表示
+            if (Test-Path "test_error.txt") { 
+              $errorContent = Get-Content "test_error.txt" -Raw
+              if ($errorContent) {
+                Write-Host "--- Test Errors ---" -ForegroundColor Red
+                Write-Host $errorContent
+              } else {
+                Write-Host "--- No error output ---" -ForegroundColor Green
+              }
             }
+            
+            # 終了コード分析
+            $exitCode = $process.ExitCode
+            Write-Host "--- Test Result Summary ---" -ForegroundColor Cyan
+            Write-Host "Exit Code: $exitCode" -ForegroundColor $(if ($exitCode -eq 0) { "Green" } else { "Red" })
+            
+            if ($exitCode -eq 0) {
+              Write-Host "SUCCESS: C# Integration Test PASSED" -ForegroundColor Green
+            } elseif ($exitCode -eq -1073741819) {
+              Write-Host "ERROR: Access Violation Exception (-1073741819)" -ForegroundColor Red
+              Write-Host "This indicates a memory access issue in the DLL" -ForegroundColor Red
+              throw "Access violation in DLL"
+            } elseif ($exitCode -eq -1073741515) {
+              Write-Host "ERROR: DLL Not Found Exception (-1073741515)" -ForegroundColor Red
+              throw "DLL dependency missing"
+            } else {
+              Write-Host "ERROR: C# Integration Test FAILED with exit code: $exitCode" -ForegroundColor Red
+              throw "Test failed with exit code $exitCode"
+            }
+            
           } catch {
-            Write-Host "Exception during test execution: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "=== Exception Details ===" -ForegroundColor Red
+            Write-Host "Exception: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "Stack trace: $($_.Exception.StackTrace)" -ForegroundColor Red
-            Pop-Location
-            exit 1
+            
+            # 詳細なデバッグ情報
+            Write-Host "=== Debug Information ===" -ForegroundColor Yellow
+            Write-Host "Current directory: $(Get-Location)" -ForegroundColor Yellow
+            Write-Host "Environment variables:" -ForegroundColor Yellow
+            Write-Host "  PYTHONHOME: $env:PYTHONHOME" -ForegroundColor Yellow
+            Write-Host "  PYTHONPATH: $($env:PYTHONPATH.Substring(0, [Math]::Min(100, $env:PYTHONPATH.Length)))..." -ForegroundColor Yellow
+            
+            Write-Host "Files in current directory:" -ForegroundColor Yellow
+            Get-ChildItem | Select-Object Name, Length | Format-Table -AutoSize
+            
+            throw
           } finally {
             Pop-Location
           }
