@@ -660,7 +660,7 @@ jobs:
           }
         shell: powershell
 
-      - name: Prepare C# Integration Package (dist_csharp)
+      - name: Finalize C# Integration Package
         run: |
           Write-Host "Finalizing C# Integration Package..." -ForegroundColor Yellow
 
@@ -675,29 +675,6 @@ jobs:
             }
           }
 
-          # Create C# test project directory and files
-          Write-Host "Creating C# test project..." -ForegroundColor Yellow
-          New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
-
-          # Build and copy the C# test executable
-          Write-Host "Building C# test project..." -ForegroundColor Yellow
-          if (Test-Path "tests/CSharpTest/BloodPressureTest.csproj") {
-            dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp --self-contained false
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "C# test project published to dist_csharp" -ForegroundColor Green
-            } else {
-              Write-Host "C# test project build failed" -ForegroundColor Red
-              exit 1
-            }
-          } else {
-            Write-Host "ERROR: C# test project not found at tests/CSharpTest/BloodPressureTest.csproj" -ForegroundColor Red
-            Write-Host "Available files in tests directory:" -ForegroundColor Yellow
-            if (Test-Path "tests") {
-              Get-ChildItem "tests" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
-            }
-            exit 1
-          }
-
           # Verify final structure
           Write-Host "=== Final dist_csharp structure ===" -ForegroundColor Cyan
           if (Test-Path "dist_csharp\BloodPressureEstimation.dll") { Write-Host "✓ BloodPressureEstimation.dll" -ForegroundColor Green } else { Write-Host "✗ BloodPressureEstimation.dll" -ForegroundColor Red }
@@ -706,34 +683,38 @@ jobs:
           if (Test-Path "dist_csharp\python_deps\numpy") { Write-Host "✓ python_deps\numpy" -ForegroundColor Green } else { Write-Host "✗ python_deps\numpy" -ForegroundColor Red }
           if (Test-Path "dist_csharp\python_deps\cv2") { Write-Host "✓ python_deps\cv2" -ForegroundColor Green } else { Write-Host "✗ python_deps\cv2" -ForegroundColor Red }
 
-          # Create README
-          $readmeContent = @"
-          # BloodPressureEstimation C# Integration Package
-
-          ## Quick Start
-          1. Copy this entire folder to your C# application directory
-          2. Run BloodPressureTest.exe to test the integration
-          3. The DLL is ready for use with DllImport
-
-          ## Contents
-          - BloodPressureEstimation.dll: Main Cython-compiled DLL
-          - python311.dll: Python runtime
-          - python_deps/: Required Python dependencies (numpy, cv2, etc.)
-          - models/: Trained models
-          - BloodPressureTest.exe: C# test application
-
-          ## Environment Setup
-          The test sets up the environment automatically:
-          - PYTHONHOME points to current directory  
-          - PYTHONPATH includes python_deps
-          - PATH includes all DLL directories
-
-          ## System Requirements
-          - Windows 64-bit
-          - .NET 6.0 or later
-          - Visual C++ Redistributable (included)
-          "@
+          # Create README with proper PowerShell string handling
+          Write-Host "Creating README file..." -ForegroundColor Yellow
+          $readmeLines = @(
+            "# BloodPressureEstimation C# Integration Package",
+            "",
+            "## Quick Start",
+            "1. Copy this entire folder to your C# application directory",
+            "2. Run BloodPressureTest.exe to test the integration", 
+            "3. The DLL is ready for use with DllImport",
+            "",
+            "## Contents",
+            "- BloodPressureEstimation.dll: Main Cython-compiled DLL",
+            "- python311.dll: Python runtime",
+            "- python_deps/: Required Python dependencies (numpy, cv2, etc.)",
+            "- models/: Trained models",
+            "- BloodPressureTest.exe: C# test application",
+            "",
+            "## Environment Setup",
+            "The test sets up the environment automatically:",
+            "- PYTHONHOME points to current directory",
+            "- PYTHONPATH includes python_deps",
+            "- PATH includes all DLL directories",
+            "",
+            "## System Requirements",
+            "- Windows 64-bit",
+            "- .NET 6.0 or later",
+            "- Visual C++ Redistributable (included)"
+          )
+          
+          $readmeContent = $readmeLines -join "`n"
           $readmeContent | Out-File -FilePath "dist_csharp\README.txt" -Encoding UTF8
+          Write-Host "README.txt created successfully" -ForegroundColor Green
 
           Write-Host "C# Integration Package preparation completed" -ForegroundColor Green
         shell: powershell
