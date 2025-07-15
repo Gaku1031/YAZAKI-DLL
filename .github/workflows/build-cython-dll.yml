@@ -1775,9 +1775,10 @@ jobs:
           Write-Host "Enhanced C# test file created: BloodPressureTestEnhanced.cs" -ForegroundColor Green
 
           Pop-Location
-      
+
       - name: Build C++ Wrapper DLL
         run: |
+          mkdir -p CppWrapperDLL/build
           cd CppWrapperDLL/build
           cmake .. -DPYTHONHOME="C:/hostedtoolcache/windows/Python/3.11.9/x64"
           cmake --build . --config Release
