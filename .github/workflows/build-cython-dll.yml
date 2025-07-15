@@ -707,58 +707,132 @@ jobs:
             Write-Host "WARNING: No models directory found" -ForegroundColor Yellow
           }
 
-          # 7. Critical dependency verification with detailed output
-          Write-Host "=== Step 7: Final verification of critical files ===" -ForegroundColor Yellow
+          # 7. Critical dependency verification with detailed output and repair
+          Write-Host "=== Step 7: Final verification and repair of critical files ===" -ForegroundColor Yellow
 
           $criticalFiles = @(
-            @{ path = "dist_csharp\BloodPressureEstimation.dll"; name = "Main DLL" },
-            @{ path = "dist_csharp\python311.dll"; name = "Python Runtime" },
-            @{ path = "dist_csharp\python_deps\numpy\__init__.py"; name = "NumPy Package" },
-            @{ path = "dist_csharp\python_deps\numpy\core\_multiarray_umath.pyd"; name = "NumPy Core" },
-            @{ path = "dist_csharp\python_deps\cv2\__init__.py"; name = "OpenCV Package" },
-            @{ path = "dist_csharp\python_deps\cv2\cv2.pyd"; name = "OpenCV Core" },
-            @{ path = "dist_csharp\python_deps\sklearn\__init__.py"; name = "Scikit-learn Package" },
-            @{ path = "dist_csharp\python_deps\scipy\__init__.py"; name = "SciPy Package" }
+            @{ path = "dist_csharp\BloodPressureEstimation.dll"; name = "Main DLL"; source = "" },
+            @{ path = "dist_csharp\python311.dll"; name = "Python Runtime"; source = "" },
+            @{ path = "dist_csharp\python_deps\numpy\__init__.py"; name = "NumPy Package"; source = "" },
+            @{ path = "dist_csharp\python_deps\numpy\core\_multiarray_umath.pyd"; name = "NumPy Core"; source = "$sitePackages\numpy\core\_multiarray_umath.pyd" },
+            @{ path = "dist_csharp\python_deps\numpy\linalg\_umath_linalg.pyd"; name = "NumPy Linalg"; source = "$sitePackages\numpy\linalg\_umath_linalg.pyd" },
+            @{ path = "dist_csharp\python_deps\cv2\__init__.py"; name = "OpenCV Package"; source = "" },
+            @{ path = "dist_csharp\python_deps\cv2\cv2.pyd"; name = "OpenCV Core"; source = "" },
+            @{ path = "dist_csharp\python_deps\sklearn\__init__.py"; name = "Scikit-learn Package"; source = "" },
+            @{ path = "dist_csharp\python_deps\scipy\__init__.py"; name = "SciPy Package"; source = "" }
           )
 
-          $allCriticalOk = $true
+          $missingFiles = @()
           foreach ($file in $criticalFiles) {
             if (Test-Path $file.path) {
               $size = [math]::Round((Get-Item $file.path).Length / 1KB, 1)
               Write-Host "[OK] $($file.name): $size KB" -ForegroundColor Green
             } else {
               Write-Host "[ERROR] $($file.name): MISSING" -ForegroundColor Red
-              $allCriticalOk = $false
+              $missingFiles += $file
+              
+              # Try to repair missing files
+              if ($file.source -and (Test-Path $file.source)) {
+                Write-Host "Attempting to repair: $($file.name)" -ForegroundColor Yellow
+                try {
+                  # Ensure directory exists
+                  $destDir = Split-Path $file.path -Parent
+                  if (!(Test-Path $destDir)) {
+                    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                  }
+                  
+                  Copy-Item $file.source $file.path -Force
+                  if (Test-Path $file.path) {
+                    $size = [math]::Round((Get-Item $file.path).Length / 1KB, 1)
+                    Write-Host "[REPAIRED] $($file.name): $size KB" -ForegroundColor Green
+                    $missingFiles = $missingFiles | Where-Object { $_.name -ne $file.name }
+                  }
+                } catch {
+                  Write-Host "[REPAIR FAILED] $($file.name): $($_.Exception.Message)" -ForegroundColor Red
+                }
+              }
+            }
+          }
+          
+          # Additional repair attempts for critical NumPy files
+          Write-Host "=== Additional NumPy Critical Files Repair ===" -ForegroundColor Yellow
+          
+          $numpyCriticalFiles = @(
+            "_multiarray_umath.pyd",
+            "_umath_linalg.pyd",
+            "lapack_lite.pyd",
+            "mtrand.pyd"
+          )
+          
+          foreach ($criticalFile in $numpyCriticalFiles) {
+            # Search for the file in the entire numpy package
+            $searchResults = Get-ChildItem "$sitePackages\numpy" -Recurse -Filter $criticalFile -ErrorAction SilentlyContinue
+            
+            foreach ($found in $searchResults) {
+              $relativePath = $found.FullName.Replace("$sitePackages\numpy\", "")
+              $destPath = "dist_csharp\python_deps\numpy\$relativePath"
+              $destDir = Split-Path $destPath -Parent
+              
+              if (!(Test-Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+              }
+              
+              if (!(Test-Path $destPath)) {
+                Copy-Item $found.FullName $destPath -Force
+                $size = [math]::Round((Get-Item $destPath).Length / 1KB, 1)
+                Write-Host "[ADDED] NumPy critical file: $relativePath ($size KB)" -ForegroundColor Green
+              }
+            }
+          }
+          
+          # Verify NumPy structure specifically
+          Write-Host "=== NumPy Structure Verification ===" -ForegroundColor Yellow
+          $numpyDest = "dist_csharp\python_deps\numpy"
+          if (Test-Path $numpyDest) {
+            Write-Host "NumPy directory structure:" -ForegroundColor Cyan
+            Get-ChildItem $numpyDest -Directory | ForEach-Object { 
+              Write-Host "  $($_.Name)/" -ForegroundColor Gray
+              $pydFiles = Get-ChildItem $_.FullName -Filter "*.pyd"
+              if ($pydFiles) {
+                $pydFiles | ForEach-Object { Write-Host "    $($_.Name)" -ForegroundColor Green }
+              }
+            }
+            
+            # Check for critical .pyd files in numpy root
+            $numpyPydFiles = Get-ChildItem $numpyDest -Filter "*.pyd"
+            if ($numpyPydFiles) {
+              Write-Host "  Root .pyd files:" -ForegroundColor Gray
+              $numpyPydFiles | ForEach-Object { Write-Host "    $($_.Name)" -ForegroundColor Green }
             }
           }
 
-          if (-not $allCriticalOk) {
-            Write-Host "CRITICAL ERROR: Some essential files are missing!" -ForegroundColor Red
+          if ($missingFiles.Count -gt 0) {
+            Write-Host "CRITICAL ERROR: $($missingFiles.Count) essential files are still missing!" -ForegroundColor Red
             
-            # Additional diagnostics
-            Write-Host "=== Diagnostic Information ===" -ForegroundColor Yellow
-            Write-Host "Python site-packages path used: $sitePackages" -ForegroundColor Cyan
-            Write-Host "Python site-packages contents:" -ForegroundColor Cyan
-            if (Test-Path $sitePackages) {
-              Get-ChildItem $sitePackages -Directory | Select-Object Name | Format-Table -AutoSize
-            } else {
-              Write-Host "Site-packages path does not exist!" -ForegroundColor Red
+            # Enhanced diagnostics
+            Write-Host "=== Enhanced Diagnostic Information ===" -ForegroundColor Yellow
+            Write-Host "Missing files details:" -ForegroundColor Red
+            foreach ($missing in $missingFiles) {
+              Write-Host "  - $($missing.name): $($missing.path)" -ForegroundColor Red
+              if ($missing.source) {
+                Write-Host "    Source exists: $(Test-Path $missing.source)" -ForegroundColor Yellow
+              }
             }
             
-            Write-Host "dist_csharp\python_deps contents:" -ForegroundColor Cyan
-            if (Test-Path "dist_csharp\python_deps") {
-              Get-ChildItem "dist_csharp\python_deps" -Directory | Select-Object Name | Format-Table -AutoSize
-            } else {
-              Write-Host "python_deps directory does not exist!" -ForegroundColor Red
-            }
+            # Check if NumPy is actually working
+            Write-Host "Testing NumPy import from site-packages:" -ForegroundColor Yellow
+            python -c "import numpy; print('NumPy version:', numpy.__version__); print('NumPy location:', numpy.__file__); import numpy.core._multiarray_umath; print('NumPy core import successful')" 2>&1
             
-            # Show what packages are actually installed
-            Write-Host "Installed Python packages:" -ForegroundColor Cyan
-            pip list | Select-String -Pattern "(numpy|opencv|scikit|scipy|joblib|mediapipe)" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+            # List all .pyd files in NumPy
+            Write-Host "All .pyd files in source NumPy:" -ForegroundColor Yellow
+            Get-ChildItem "$sitePackages\numpy" -Recurse -Filter "*.pyd" | ForEach-Object { 
+              $relativePath = $_.FullName.Replace("$sitePackages\numpy\", "")
+              Write-Host "  $relativePath" -ForegroundColor Gray
+            }
             
             exit 1
           } else {
-            Write-Host "SUCCESS: All critical dependencies verified!" -ForegroundColor Green
+            Write-Host "SUCCESS: All critical dependencies verified and repaired!" -ForegroundColor Green
           }
 
           # 8. Create initialization test script
@@ -769,29 +843,29 @@ jobs:
           import os
           print("Python initialization test starting...")
           try:
-          current_dir = os.path.dirname(os.path.abspath(__file__))
-          python_deps = os.path.join(current_dir, "python_deps")
-          if python_deps not in sys.path:
-          sys.path.insert(0, python_deps)
-
-          print("Testing NumPy...")
-          import numpy as np
-          print(f"NumPy {np.__version__} - OK")
-
-          print("Testing OpenCV...")
-          import cv2
-          print(f"OpenCV {cv2.__version__} - OK")
-
-          print("Testing scikit-learn...")
-          import sklearn
-          print(f"scikit-learn {sklearn.__version__} - OK")
-
-          print("All critical packages imported successfully!")
-
+              current_dir = os.path.dirname(os.path.abspath(__file__))
+              python_deps = os.path.join(current_dir, "python_deps")
+              if python_deps not in sys.path:
+                  sys.path.insert(0, python_deps)
+              
+              print("Testing NumPy...")
+              import numpy as np
+              print(f"NumPy {np.__version__} - OK")
+              
+              print("Testing OpenCV...")
+              import cv2
+              print(f"OpenCV {cv2.__version__} - OK")
+              
+              print("Testing scikit-learn...")
+              import sklearn
+              print(f"scikit-learn {sklearn.__version__} - OK")
+              
+              print("All critical packages imported successfully!")
+              
           except Exception as e:
-          print(f"ERROR: {str(e)}")
-          import traceback
-          traceback.print_exc()
+              print(f"ERROR: {str(e)}")
+              import traceback
+              traceback.print_exc()
           '@
           
           $testScript | Out-File -FilePath "dist_csharp\test_python_init.py" -Encoding UTF8
