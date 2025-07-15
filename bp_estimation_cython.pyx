@@ -575,6 +575,14 @@ cdef public int InitializeDLL(const char* model_dir):
         result = initialize_models(model_dir_str)
         return 1 if result else 0
     except Exception as e:
+        # 追加: 詳細なエラーをファイルに出力
+        try:
+            with open("dll_init_error.log", "w", encoding="utf-8") as f:
+                import traceback
+                f.write("InitializeDLL exception: " + str(e) + "\\n")
+                traceback.print_exc(file=f)
+        except:
+            pass
         print(f"InitializeDLL exception: {e}")
         return 0
 
