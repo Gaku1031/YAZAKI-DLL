@@ -423,9 +423,10 @@ jobs:
           Write-Host "Copying Python runtime DLLs..." -ForegroundColor Yellow
 
           # Main Python DLL
-          if (Test-Path "$pythonDir\python311.dll") {
-            Copy-Item "$pythonDir\python311.dll" "dist_csharp\" -Force
-            Write-Host "✓ python311.dll copied"
+          $pythonDllPath = "$pythonDir\python311.dll"
+          if (Test-Path $pythonDllPath) {
+            Copy-Item $pythonDllPath "dist_csharp\" -Force
+            Write-Host "python311.dll copied"
           }
 
           # Python DLLs directory from important files
@@ -451,37 +452,43 @@ jobs:
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
           # NumPy (most important)
-          if (Test-Path "$sitePackages\numpy") {
-            Copy-Item "$sitePackages\numpy" "dist_csharp\python_deps\" -Recurse -Force
+          $numpyPath = "$sitePackages\numpy"
+          if (Test-Path $numpyPath) {
+            Copy-Item $numpyPath "dist_csharp\python_deps\" -Recurse -Force
             Write-Host "numpy copied"
             
             # Special handling for NumPy .libs directory
-            if (Test-Path "$sitePackages\numpy\.libs") {
-              Copy-Item "$sitePackages\numpy\.libs\*" "dist_csharp\" -Force
+            $numpyLibsPath = "$sitePackages\numpy\.libs"
+            if (Test-Path $numpyLibsPath) {
+              Copy-Item "$numpyLibsPath\*" "dist_csharp\" -Force
               Write-Host "numpy .libs DLLs copied to root"
             }
           }
 
           # OpenCV
-          if (Test-Path "$sitePackages\cv2") {
-            Copy-Item "$sitePackages\cv2" "dist_csharp\python_deps\" -Recurse -Force
+          $cv2Path = "$sitePackages\cv2"
+          if (Test-Path $cv2Path) {
+            Copy-Item $cv2Path "dist_csharp\python_deps\" -Recurse -Force
             Write-Host "cv2 copied"
           }
 
           # Scikit-learn
-          if (Test-Path "$sitePackages\sklearn") {
-            Copy-Item "$sitePackages\sklearn" "dist_csharp\python_deps\" -Recurse -Force
+          $sklearnPath = "$sitePackages\sklearn"
+          if (Test-Path $sklearnPath) {
+            Copy-Item $sklearnPath "dist_csharp\python_deps\" -Recurse -Force
             Write-Host "sklearn copied"
           }
 
           # SciPy
-          if (Test-Path "$sitePackages\scipy") {
-            Copy-Item "$sitePackages\scipy" "dist_csharp\python_deps\" -Recurse -Force
+          $scipyPath = "$sitePackages\scipy"
+          if (Test-Path $scipyPath) {
+            Copy-Item $scipyPath "dist_csharp\python_deps\" -Recurse -Force
             Write-Host "scipy copied"
             
             # SciPy .libs directory special handling
-            if (Test-Path "$sitePackages\scipy\.libs") {
-              Copy-Item "$sitePackages\scipy\.libs\*" "dist_csharp\" -Force
+            $scipyLibsPath = "$sitePackages\scipy\.libs"
+            if (Test-Path $scipyLibsPath) {
+              Copy-Item "$scipyLibsPath\*" "dist_csharp\" -Force
               Write-Host "scipy .libs DLLs copied to root"
             }
           }
@@ -489,8 +496,9 @@ jobs:
           # Other dependencies
           $otherDeps = @("joblib", "mediapipe", "threadpoolctl")
           foreach ($dep in $otherDeps) {
-            if (Test-Path "$sitePackages\$dep") {
-              Copy-Item "$sitePackages\$dep" "dist_csharp\python_deps\" -Recurse -Force
+            $depPath = "$sitePackages\$dep"
+            if (Test-Path $depPath) {
+              Copy-Item $depPath "dist_csharp\python_deps\" -Recurse -Force
               Write-Host "$dep copied"
             }
           }
@@ -544,7 +552,8 @@ jobs:
           Write-Host "Final dist_csharp structure:" -ForegroundColor Cyan
           Get-ChildItem "dist_csharp" -Recurse | Where-Object { $_.Extension -in @('.dll', '.pyd', '.exe') } | Format-Table Name, Length, Directory
 
-          Write-Host "=== DLL Dependency Setup Complete ===" -ForegroundColor Green
+          $completeMessage = "=== DLL Dependency Setup Complete ==="
+          Write-Host $completeMessage -ForegroundColor Green
         shell: powershell
 
       - name: Copy DLL for C# Test Build
