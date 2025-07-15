@@ -694,7 +694,7 @@ jobs:
 
           # Build and publish C# test project directly to dist_csharp
           Write-Host "Building and publishing C# test project to dist_csharp..." -ForegroundColor Yellow
-          dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp --self-contained false
+          dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp --self-contained false -r win-x64
 
           if ($LASTEXITCODE -eq 0) {
             Write-Host "C# test project published successfully to dist_csharp" -ForegroundColor Green
