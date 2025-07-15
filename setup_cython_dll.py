@@ -18,6 +18,7 @@ extensions = [
         libraries=["python311"],  # Link with Python library
         define_macros=[("MS_WIN64", None)],  # Windows 64-bit
         extra_compile_args=["/O2", "/MD", "/TC"],  # Compile as C
+        language="c",  # Cとしてビルド
         extra_link_args=[
             "/DLL",
             "/EXPORT:InitializeDLL",
