@@ -2291,5 +2291,4 @@ jobs:
             build/
             dist_cython/
             *.log
-            dll_init_error.log
           retention-days: 7
