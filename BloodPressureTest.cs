@@ -107,29 +107,29 @@ namespace BloodPressureTest
             // DLL確認
             if (!File.Exists("BloodPressureEstimation.dll"))
             {
-                Console.WriteLine("  ✗ BloodPressureEstimation.dll が見つかりません");
+                Console.WriteLine("  BloodPressureEstimation.dll が見つかりません");
                 Console.WriteLine("    build\\dist\\ からDLLをコピーしてください");
                 return false;
             }
-            Console.WriteLine("  ✓ BloodPressureEstimation.dll 確認");
+            Console.WriteLine("  BloodPressureEstimation.dll 確認");
 
             // Pythonモジュール確認
             if (!File.Exists("bp_estimation_simple.py"))
             {
-                Console.WriteLine("  ✗ bp_estimation_simple.py が見つかりません");
+                Console.WriteLine("  bp_estimation_simple.py が見つかりません");
                 Console.WriteLine("    Pythonモジュールをコピーしてください");
                 return false;
             }
-            Console.WriteLine("  ✓ bp_estimation_simple.py 確認");
+            Console.WriteLine("  bp_estimation_simple.py 確認");
 
             // サンプル動画確認
             string sampleVideo = @"sample-data\\100万画素.webm";
             if (!File.Exists(sampleVideo))
             {
-                Console.WriteLine($"  ✗ サンプル動画が見つかりません: {sampleVideo}");
+                Console.WriteLine($"  サンプル動画が見つかりません: {sampleVideo}");
                 return false;
             }
-            Console.WriteLine($"  ✓ サンプル動画確認: {sampleVideo}");
+            Console.WriteLine($"  サンプル動画確認: {sampleVideo}");
 
             return true;
         }
@@ -143,7 +143,7 @@ namespace BloodPressureTest
                 
                 if (result)
                 {
-                    Console.WriteLine("  ✓ DLL初期化成功");
+                    Console.WriteLine("  DLL初期化成功");
                     
                     string version = BloodPressureDll.GetVersionInfo();
                     Console.WriteLine($"  バージョン: {version}");
@@ -151,13 +151,13 @@ namespace BloodPressureTest
                 }
                 else
                 {
-                    Console.WriteLine("  ✗ DLL初期化失敗");
+                    Console.WriteLine("  DLL初期化失敗");
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ✗ DLL初期化エラー: {ex.Message}");
+                Console.WriteLine($"  DLL初期化エラー: {ex.Message}");
                 return false;
             }
         }
@@ -211,7 +211,7 @@ namespace BloodPressureTest
                 // コールバック関数定義
                 BloodPressureDll.AnalysisCallback callback = (reqId, sbp, dbp, csvData, errors) =>
                 {
-                    Console.WriteLine($"  📊 解析完了コールバック:");
+                    Console.WriteLine($"  解析完了コールバック:");
                     Console.WriteLine($"    リクエストID: {reqId}");
                     Console.WriteLine($"    最高血圧: {sbp} mmHg");
                     Console.WriteLine($"    最低血圧: {dbp} mmHg");
@@ -237,20 +237,20 @@ namespace BloodPressureTest
                 };
 
                 // 血圧解析開始
-                Console.WriteLine("  🚀 血圧解析開始...");
+                Console.WriteLine("  血圧解析開始...");
                 string errorCode = BloodPressureDll.StartBloodPressureAnalysisRequest(
                     requestId, height, weight, sex, videoPath, callback);
 
                 if (!string.IsNullOrEmpty(errorCode))
                 {
-                    Console.WriteLine($"  ✗ 解析開始エラー: {errorCode}");
+                    Console.WriteLine($"  解析開始エラー: {errorCode}");
                     return;
                 }
 
-                Console.WriteLine("  ✓ 解析リクエスト送信成功");
+                Console.WriteLine("  解析リクエスト送信成功");
 
                 // 処理状況監視
-                Console.WriteLine("  ⏳ 解析処理中...");
+                Console.WriteLine("  解析処理中...");
                 MonitorProgress(requestId);
 
                 // 結果表示
@@ -258,7 +258,7 @@ namespace BloodPressureTest
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ✗ テストエラー: {ex.Message}");
+                Console.WriteLine($"  テストエラー: {ex.Message}");
             }
         }
 
@@ -285,7 +285,7 @@ namespace BloodPressureTest
 
             if (elapsed >= timeout)
             {
-                Console.WriteLine("  ⚠️ タイムアウト - 解析を中断します");
+                Console.WriteLine("  タイムアウト - 解析を中断します");
                 BloodPressureDll.CancelBloodPressureAnalysis(requestId);
             }
         }
@@ -294,16 +294,16 @@ namespace BloodPressureTest
         {
             if (currentTest == null)
             {
-                Console.WriteLine("  ✗ テスト結果なし");
+                Console.WriteLine("  テスト結果なし");
                 return;
             }
 
-            Console.WriteLine($"  📋 テスト結果:");
+            Console.WriteLine($"  テスト結果:");
             Console.WriteLine($"    処理時間: {(currentTest.EndTime - currentTest.StartTime).TotalSeconds:F1}秒");
             
             if (currentTest.Success)
             {
-                Console.WriteLine($"    ✓ 成功");
+                Console.WriteLine($"    成功");
                 Console.WriteLine($"    最高血圧: {currentTest.SystolicBP} mmHg");
                 Console.WriteLine($"    最低血圧: {currentTest.DiastolicBP} mmHg");
                 
@@ -325,7 +325,7 @@ namespace BloodPressureTest
             }
             else
             {
-                Console.WriteLine($"    ✗ 失敗");
+                Console.WriteLine($"    失敗");
                 if (!string.IsNullOrEmpty(currentTest.ErrorCode))
                 {
                     Console.WriteLine($"    エラーコード: {currentTest.ErrorCode}");
