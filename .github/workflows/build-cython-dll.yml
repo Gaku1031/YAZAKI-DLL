@@ -446,6 +446,7 @@ jobs:
           Get-ChildItem "dist_cython" -Recurse | Format-Table Name, Length, LastWriteTime
         shell: powershell
 
+      
       - name: Post-process dist_csharp for C# DllImport
         run: |
           Write-Host "=== Comprehensive DLL Dependency Setup with Fixed Python Dependencies ===" -ForegroundColor Green
@@ -463,11 +464,69 @@ jobs:
             exit 1
           }
 
-          # Get Python execution environment path
+          # Get Python execution environment path with correct site-packages detection
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
           $pythonDllsDir = Join-Path $pythonDir "DLLs"
-          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
+          
+          # Try multiple methods to find site-packages
+          Write-Host "Detecting site-packages directory..." -ForegroundColor Cyan
+          
+          # Method 1: Standard site-packages detection
+          $sitePackagesMethod1 = python -c "import site; print(site.getsitepackages()[0])" 2>$null
+          
+          # Method 2: Using sys.path
+          $sitePackagesMethod2 = python -c "import sys; import os; paths = [p for p in sys.path if 'site-packages' in p and os.path.exists(p)]; print(paths[0] if paths else '')" 2>$null
+          
+          # Method 3: Manual construction
+          $sitePackagesMethod3 = Join-Path $pythonDir "Lib\site-packages"
+          
+          # Method 4: Check installed packages location
+          $sitePackagesMethod4 = python -c "import numpy; import os; print(os.path.dirname(numpy.__file__).split('numpy')[0].rstrip(os.sep))" 2>$null
+          
+          Write-Host "Site-packages detection methods:" -ForegroundColor Gray
+          Write-Host "  Method 1 (site.getsitepackages): $sitePackagesMethod1" -ForegroundColor Gray
+          Write-Host "  Method 2 (sys.path search): $sitePackagesMethod2" -ForegroundColor Gray
+          Write-Host "  Method 3 (manual): $sitePackagesMethod3" -ForegroundColor Gray
+          Write-Host "  Method 4 (numpy location): $sitePackagesMethod4" -ForegroundColor Gray
+          
+          # Choose the correct site-packages directory
+          $sitePackages = $null
+          $candidates = @($sitePackagesMethod1, $sitePackagesMethod2, $sitePackagesMethod3, $sitePackagesMethod4)
+          
+          foreach ($candidate in $candidates) {
+            if ($candidate -and (Test-Path $candidate) -and (Test-Path "$candidate\numpy")) {
+              $sitePackages = $candidate
+              Write-Host "Selected site-packages: $sitePackages (contains numpy)" -ForegroundColor Green
+              break
+            } elseif ($candidate -and (Test-Path $candidate)) {
+              Write-Host "Candidate exists but no numpy: $candidate" -ForegroundColor Yellow
+              # List contents to debug
+              Write-Host "Contents of $candidate" -ForegroundColor Gray
+              Get-ChildItem $candidate -Directory | Select-Object -First 10 | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+            }
+          }
+          
+          if (-not $sitePackages) {
+            Write-Host "ERROR: Could not find valid site-packages directory!" -ForegroundColor Red
+            Write-Host "Attempting to find packages manually..." -ForegroundColor Yellow
+            
+            # Try to find where packages are actually installed
+            $numpyLocation = python -c "try: import numpy; print(numpy.__file__); except: print('numpy not found')" 2>$null
+            $cv2Location = python -c "try: import cv2; print(cv2.__file__); except: print('cv2 not found')" 2>$null
+            
+            Write-Host "Package locations:" -ForegroundColor Yellow
+            Write-Host "  NumPy: $numpyLocation" -ForegroundColor Yellow
+            Write-Host "  OpenCV: $cv2Location" -ForegroundColor Yellow
+            
+            if ($numpyLocation -and $numpyLocation -ne "numpy not found") {
+              $sitePackages = Split-Path (Split-Path $numpyLocation -Parent) -Parent
+              Write-Host "Derived site-packages from numpy location: $sitePackages" -ForegroundColor Yellow
+            } else {
+              Write-Host "CRITICAL: Cannot find Python packages!" -ForegroundColor Red
+              exit 1
+            }
+          }
 
           Write-Host "Python directory: $pythonDir" -ForegroundColor Cyan
           Write-Host "Python DLLs directory: $pythonDllsDir" -ForegroundColor Cyan
@@ -504,9 +563,36 @@ jobs:
           Write-Host "=== Step 2: Creating Python dependencies structure ===" -ForegroundColor Yellow
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
-          # Verify site-packages directory exists
+          # Verify site-packages directory exists and contains packages
           if (!(Test-Path $sitePackages)) {
             Write-Host "ERROR: Site-packages directory not found: $sitePackages" -ForegroundColor Red
+            exit 1
+          }
+          
+          # Check if critical packages exist in site-packages
+          $criticalPackageCheck = @("numpy", "cv2", "sklearn", "scipy")
+          $foundPackages = @()
+          $missingPackages = @()
+          
+          foreach ($pkg in $criticalPackageCheck) {
+            $pkgPath = Join-Path $sitePackages $pkg
+            if (Test-Path $pkgPath) {
+              $foundPackages += $pkg
+              Write-Host "Found package: $pkg" -ForegroundColor Green
+            } else {
+              $missingPackages += $pkg
+              Write-Host "Missing package: $pkg" -ForegroundColor Red
+            }
+          }
+          
+          if ($missingPackages.Count -gt 0) {
+            Write-Host "ERROR: Critical packages missing from site-packages!" -ForegroundColor Red
+            Write-Host "Missing: $($missingPackages -join ', ')" -ForegroundColor Red
+            Write-Host "Found: $($foundPackages -join ', ')" -ForegroundColor Green
+            
+            Write-Host "Available packages in site-packages:" -ForegroundColor Yellow
+            Get-ChildItem $sitePackages -Directory | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+            
             exit 1
           }
 
@@ -568,7 +654,7 @@ jobs:
             exit 1
           }
 
-          # 4. Special handling for .libs directories
+          # 4. Special handling for .libs directories with fallback
           Write-Host "=== Step 4: Copying .libs directories ===" -ForegroundColor Yellow
           
           $libsDirs = @("numpy\.libs", "scipy\.libs")
@@ -576,11 +662,22 @@ jobs:
             $sourcePath = "$sitePackages\$libsDir"
             if (Test-Path $sourcePath) {
               # Copy to both python_deps and root for maximum compatibility
-              Copy-Item "$sourcePath\*" "dist_csharp\" -Force -ErrorAction SilentlyContinue
-              Copy-Item "$sourcePath\*" "dist_csharp\python_deps\" -Force -ErrorAction SilentlyContinue
-              Write-Host "$libsDir DLLs copied to multiple locations" -ForegroundColor Green
+              try {
+                Copy-Item "$sourcePath\*" "dist_csharp\" -Force -ErrorAction Stop
+                Copy-Item "$sourcePath\*" "dist_csharp\python_deps\" -Force -ErrorAction Stop
+                Write-Host "$libsDir DLLs copied to multiple locations" -ForegroundColor Green
+              } catch {
+                Write-Host "Warning: Could not copy some files from $libsDir" -ForegroundColor Yellow
+              }
             } else {
-              Write-Host "$libsDir directory not found" -ForegroundColor Yellow
+              Write-Host "$libsDir directory not found at $sourcePath" -ForegroundColor Yellow
+              
+              # Try alternative locations
+              $alternativePath = "$sitePackages\$($libsDir.Split('\')[0])\$($libsDir.Split('\')[1])"
+              if (Test-Path $alternativePath) {
+                Copy-Item "$alternativePath\*" "dist_csharp\" -Force -ErrorAction SilentlyContinue
+                Write-Host "$libsDir found at alternative location and copied" -ForegroundColor Green
+              }
             }
           }
 
@@ -640,8 +737,13 @@ jobs:
             
             # Additional diagnostics
             Write-Host "=== Diagnostic Information ===" -ForegroundColor Yellow
+            Write-Host "Python site-packages path used: $sitePackages" -ForegroundColor Cyan
             Write-Host "Python site-packages contents:" -ForegroundColor Cyan
-            Get-ChildItem $sitePackages -Directory | Select-Object Name | Format-Table -AutoSize
+            if (Test-Path $sitePackages) {
+              Get-ChildItem $sitePackages -Directory | Select-Object Name | Format-Table -AutoSize
+            } else {
+              Write-Host "Site-packages path does not exist!" -ForegroundColor Red
+            }
             
             Write-Host "dist_csharp\python_deps contents:" -ForegroundColor Cyan
             if (Test-Path "dist_csharp\python_deps") {
@@ -649,6 +751,10 @@ jobs:
             } else {
               Write-Host "python_deps directory does not exist!" -ForegroundColor Red
             }
+            
+            # Show what packages are actually installed
+            Write-Host "Installed Python packages:" -ForegroundColor Cyan
+            pip list | Select-String -Pattern "(numpy|opencv|scikit|scipy|joblib|mediapipe)" | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
             
             exit 1
           } else {
@@ -663,29 +769,29 @@ jobs:
           import os
           print("Python initialization test starting...")
           try:
-              current_dir = os.path.dirname(os.path.abspath(__file__))
-              python_deps = os.path.join(current_dir, "python_deps")
-              if python_deps not in sys.path:
-                  sys.path.insert(0, python_deps)
-              
-              print("Testing NumPy...")
-              import numpy as np
-              print(f"NumPy {np.__version__} - OK")
-              
-              print("Testing OpenCV...")
-              import cv2
-              print(f"OpenCV {cv2.__version__} - OK")
-              
-              print("Testing scikit-learn...")
-              import sklearn
-              print(f"scikit-learn {sklearn.__version__} - OK")
-              
-              print("All critical packages imported successfully!")
-              
+          current_dir = os.path.dirname(os.path.abspath(__file__))
+          python_deps = os.path.join(current_dir, "python_deps")
+          if python_deps not in sys.path:
+          sys.path.insert(0, python_deps)
+
+          print("Testing NumPy...")
+          import numpy as np
+          print(f"NumPy {np.__version__} - OK")
+
+          print("Testing OpenCV...")
+          import cv2
+          print(f"OpenCV {cv2.__version__} - OK")
+
+          print("Testing scikit-learn...")
+          import sklearn
+          print(f"scikit-learn {sklearn.__version__} - OK")
+
+          print("All critical packages imported successfully!")
+
           except Exception as e:
-              print(f"ERROR: {str(e)}")
-              import traceback
-              traceback.print_exc()
+          print(f"ERROR: {str(e)}")
+          import traceback
+          traceback.print_exc()
           '@
           
           $testScript | Out-File -FilePath "dist_csharp\test_python_init.py" -Encoding UTF8
