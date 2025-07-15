@@ -409,6 +409,16 @@ jobs:
           # Create dist_csharp directory first
           New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
 
+          # CRITICAL: First copy the main BloodPressureEstimation.dll
+          if (Test-Path "BloodPressureEstimation.dll") {
+            Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
+            Write-Host "BloodPressureEstimation.dll copied" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: BloodPressureEstimation.dll not found in root directory!" -ForegroundColor Red
+            Get-ChildItem -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.Name)" }
+            exit 1
+          }
+
           # Get Python execution environment path
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
@@ -451,11 +461,11 @@ jobs:
 
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
-          # NumPy (most important)
+          # NumPy (most important) - with proper structure
           $numpyPath = "$sitePackages\numpy"
           if (Test-Path $numpyPath) {
             Copy-Item $numpyPath "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "numpy copied"
+            Write-Host "numpy copied with full directory structure"
             
             # Special handling for NumPy .libs directory
             $numpyLibsPath = "$sitePackages\numpy\.libs"
@@ -469,21 +479,21 @@ jobs:
           $cv2Path = "$sitePackages\cv2"
           if (Test-Path $cv2Path) {
             Copy-Item $cv2Path "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "cv2 copied"
+            Write-Host "cv2 copied with full directory structure"
           }
 
           # Scikit-learn
           $sklearnPath = "$sitePackages\sklearn"
           if (Test-Path $sklearnPath) {
             Copy-Item $sklearnPath "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "sklearn copied"
+            Write-Host "sklearn copied with full directory structure"
           }
 
           # SciPy
           $scipyPath = "$sitePackages\scipy"
           if (Test-Path $scipyPath) {
             Copy-Item $scipyPath "dist_csharp\python_deps\" -Recurse -Force
-            Write-Host "scipy copied"
+            Write-Host "scipy copied with full directory structure"
             
             # SciPy .libs directory special handling
             $scipyLibsPath = "$sitePackages\scipy\.libs"
@@ -508,7 +518,6 @@ jobs:
 
           $vcRuntimeDlls = @("vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll")
           foreach ($dll in $vcRuntimeDlls) {
-            # Search from system directory
             $systemDll = Join-Path $env:SystemRoot "System32\$dll"
             if (Test-Path $systemDll) {
               Copy-Item $systemDll "dist_csharp\" -Force
@@ -518,136 +527,215 @@ jobs:
             }
           }
 
-          # 4. Verify dependency chain completeness
-          Write-Host "Verifying dependency chain..." -ForegroundColor Yellow
+          # 4. Copy models directory
+          Write-Host "Copying models..." -ForegroundColor Yellow
+          if (Test-Path "models_compressed") {
+            Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force
+            Write-Host "models_compressed copied to models"
+          } elseif (Test-Path "models") {
+            Copy-Item "models" "dist_csharp\models" -Recurse -Force
+            Write-Host "models directory copied"
+          }
 
-          # Check for critical files
+          # 5. Critical dependency verification and manual copy
+          Write-Host "Verifying and fixing critical dependencies..." -ForegroundColor Yellow
+
+          # Create the critical directories if they don't exist
+          $criticalDirs = @(
+            "dist_csharp\python_deps\numpy\core",
+            "dist_csharp\python_deps\numpy\linalg",
+            "dist_csharp\python_deps\cv2",
+            "dist_csharp\python_deps\sklearn\utils"
+          )
+          
+          foreach ($dir in $criticalDirs) {
+            if (!(Test-Path $dir)) {
+              New-Item -ItemType Directory -Path $dir -Force | Out-Null
+              Write-Host "Created directory: $dir"
+            }
+          }
+
+          # Manually copy critical files with proper error handling
           $criticalFiles = @(
-            "BloodPressureEstimation.dll",
-            "python311.dll",
-            "python_deps\numpy\core\_multiarray_umath.pyd",
-            "python_deps\numpy\linalg\_umath_linalg.pyd"
+            @{
+              source = "$sitePackages\numpy\core\_multiarray_umath.pyd"
+              dest = "dist_csharp\python_deps\numpy\core\_multiarray_umath.pyd"
+            },
+            @{
+              source = "$sitePackages\numpy\linalg\_umath_linalg.pyd"
+              dest = "dist_csharp\python_deps\numpy\linalg\_umath_linalg.pyd"
+            },
+            @{
+              source = "$sitePackages\cv2\cv2.pyd"
+              dest = "dist_csharp\python_deps\cv2\cv2.pyd"
+            },
+            @{
+              source = "$sitePackages\sklearn\utils\_cython_blas.pyd"
+              dest = "dist_csharp\python_deps\sklearn\utils\_cython_blas.pyd"
+            }
           )
 
-          $allCriticalFound = $true
           foreach ($file in $criticalFiles) {
-            $fullPath = "dist_csharp\$file"
-            if (Test-Path $fullPath) {
-              $size = [math]::Round((Get-Item $fullPath).Length / 1KB, 1)
-              $sizeText = $size.ToString() + " KB"
-              $msg = "$file ($sizeText)"
-              Write-Host $msg
+            if (Test-Path $file.source) {
+              Copy-Item $file.source $file.dest -Force
+              $fileName = Split-Path $file.dest -Leaf
+              Write-Host "Copied critical file: $fileName" -ForegroundColor Green
             } else {
-              $msg = "$file MISSING"
-              Write-Host $msg
-              $allCriticalFound = $false
+              $fileName = Split-Path $file.source -Leaf
+              Write-Host "WARNING: Critical file not found: $fileName" -ForegroundColor Yellow
             }
           }
 
-          if (-not $allCriticalFound) {
-            Write-Host "Critical files missing - build may fail" -ForegroundColor Red
-          }
-
-          # --- Copy critical dependencies (MISSING workaround) ---
-          Write-Host "[Additional] Copy critical dependencies (MISSING workaround)" -ForegroundColor Yellow
-          $criticalFiles = @(
-            @{src = "$sitePackages\\numpy\\core\\_multiarray_umath.pyd"; dst = "dist_csharp\\python_deps\\numpy\\core\\_multiarray_umath.pyd"},
-            @{src = "$sitePackages\\numpy\\linalg\\_umath_linalg.pyd"; dst = "dist_csharp\\python_deps\\numpy\\linalg\\_umath_linalg.pyd"},
-            @{src = "$sitePackages\\cv2\\cv2.pyd"; dst = "dist_csharp\\python_deps\\cv2\\cv2.pyd"},
-            @{src = "$sitePackages\\sklearn\\utils\\_cython_blas.pyd"; dst = "dist_csharp\\python_deps\\sklearn\\utils\\_cython_blas.pyd"}
+          # Final verification
+          Write-Host "Final dependency verification..." -ForegroundColor Cyan
+          $criticalPaths = @(
+            "dist_csharp\BloodPressureEstimation.dll",
+            "dist_csharp\python311.dll",
+            "dist_csharp\python_deps\numpy\core\_multiarray_umath.pyd",
+            "dist_csharp\python_deps\cv2\cv2.pyd"
           )
-          foreach ($f in $criticalFiles) {
-            $src = $f.src
-            $dst = $f.dst
-            $dstDir = Split-Path $dst -Parent
-            if (!(Test-Path $dstDir)) { New-Item -ItemType Directory -Path $dstDir -Force | Out-Null }
-            if (Test-Path $src) {
-              Copy-Item $src $dst -Force
-              Write-Host "[OK] Copying: $src -> $dst" -ForegroundColor Green
+
+          $allOk = $true
+          foreach ($path in $criticalPaths) {
+            if (Test-Path $path) {
+              $size = [math]::Round((Get-Item $path).Length / 1KB, 1)
+              $fileName = Split-Path $path -Leaf
+              Write-Host "OK: $fileName ($size KB)" -ForegroundColor Green
             } else {
-              Write-Host "[WARNING] Required file not found: $src" -ForegroundColor Red
+              $fileName = Split-Path $path -Leaf
+              Write-Host "MISSING: $fileName" -ForegroundColor Red
+              $allOk = $false
             }
           }
 
-          # 5. Output debug information
-          Write-Host "Final dist_csharp structure:" -ForegroundColor Cyan
-          Get-ChildItem "dist_csharp" -Recurse | Where-Object { $_.Extension -in @('.dll', '.pyd', '.exe') } | Format-Table Name, Length, Directory
+          if (-not $allOk) {
+            Write-Host "Some critical files are missing!" -ForegroundColor Red
+          } else {
+            Write-Host "All critical dependencies verified!" -ForegroundColor Green
+          }
 
           $completeMessage = "=== DLL Dependency Setup Complete ==="
           Write-Host $completeMessage -ForegroundColor Green
         shell: powershell
-
-      - name: Copy DLL for C# Test Build
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "6.0.x"
+      
+      - name: Create C# Test Project and Build
         run: |
-          Copy-Item "BloodPressureEstimation.dll" "tests\CSharpTest\" -Force
-        shell: powershell
-
-      - name: Build and Publish C# Test Project
-        run: |
-          dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp
+          Write-Host "Creating and building C# test project..." -ForegroundColor Yellow
+          
+          # Ensure tests directory exists
+          New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
+          
+          # Check if C# project files exist
+          if (!(Test-Path "tests\CSharpTest\BloodPressureTest.csproj")) {
+            Write-Host "ERROR: C# test project not found!" -ForegroundColor Red
+            Write-Host "Looking for files in tests directory..." -ForegroundColor Yellow
+            if (Test-Path "tests") {
+              Get-ChildItem "tests" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+            } else {
+              Write-Host "tests directory does not exist!" -ForegroundColor Red
+            }
+            exit 1
+          }
+          
+          # Copy main DLL to test directory for building
+          if (Test-Path "BloodPressureEstimation.dll") {
+            Copy-Item "BloodPressureEstimation.dll" "tests\CSharpTest\" -Force
+            Write-Host "BloodPressureEstimation.dll copied to test directory"
+          }
+          
+          # Build and publish C# test project directly to dist_csharp
+          Write-Host "Building and publishing C# test project to dist_csharp..." -ForegroundColor Yellow
+          dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp --self-contained false
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "C# test project published successfully to dist_csharp" -ForegroundColor Green
+          } else {
+            Write-Host "C# test project publish failed" -ForegroundColor Red
+            exit 1
+          }
         shell: powershell
 
       - name: Prepare C# Integration Package (dist_csharp)
         run: |
-          # Copy required files to dist_csharp
-          Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
-          # Copy python311.dll from the correct location
-          $pythonDir = "C:\hostedtoolcache\windows\Python\3.11.9\x64"
-          if (Test-Path "$pythonDir\python311.dll") {
-            Copy-Item "$pythonDir\python311.dll" "dist_csharp\" -Force
-            Write-Host "Copied python311.dll from $pythonDir"
-          } elseif (Test-Path "$pythonDir\DLLs\python311.dll") {
-            Copy-Item "$pythonDir\DLLs\python311.dll" "dist_csharp\" -Force
-            Write-Host "Copied python311.dll from $pythonDir\DLLs"
+          Write-Host "Finalizing C# Integration Package..." -ForegroundColor Yellow
+
+          # Ensure BloodPressureEstimation.dll is in dist_csharp
+          if (!(Test-Path "dist_csharp\BloodPressureEstimation.dll")) {
+            if (Test-Path "BloodPressureEstimation.dll") {
+              Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
+              Write-Host "BloodPressureEstimation.dll copied to dist_csharp"
+            } else {
+              Write-Host "ERROR: BloodPressureEstimation.dll not found!"
+              exit 1
+            }
+          }
+
+          # Create C# test project directory and files
+          Write-Host "Creating C# test project..." -ForegroundColor Yellow
+          New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
+
+          # Build and copy the C# test executable
+          Write-Host "Building C# test project..." -ForegroundColor Yellow
+          if (Test-Path "tests/CSharpTest/BloodPressureTest.csproj") {
+            dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp --self-contained false
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "C# test project published to dist_csharp" -ForegroundColor Green
+            } else {
+              Write-Host "C# test project build failed" -ForegroundColor Red
+              exit 1
+            }
           } else {
-            Write-Host "python311.dll not found in expected locations"
+            Write-Host "ERROR: C# test project not found at tests/CSharpTest/BloodPressureTest.csproj" -ForegroundColor Red
+            Write-Host "Available files in tests directory:" -ForegroundColor Yellow
+            if (Test-Path "tests") {
+              Get-ChildItem "tests" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+            }
             exit 1
           }
-          # Copy python_deps to dist_csharp
-          if (Test-Path "dist_cython\python_deps") {
-            Write-Host "Copying python_deps from dist_cython..."
-            Copy-Item "dist_cython\python_deps" "dist_csharp\" -Recurse -Force
-            Write-Host "python_deps copied successfully"
-          } else {
-            Write-Host "dist_cython\python_deps not found, copying from Python site-packages..."
-            # Pythonのsite-packagesから直接コピー
-            $sitePackages = "C:\hostedtoolcache\windows\Python\3.11.9\x64\Lib\site-packages"
-            $deps = @("numpy", "cv2", "sklearn", "scipy", "joblib", "mediapipe")
-            foreach ($dep in $deps) {
-              if (Test-Path "$sitePackages\$dep") {
-                Copy-Item "$sitePackages\$dep" "dist_csharp\python_deps\" -Recurse -Force -ErrorAction SilentlyContinue
-                Write-Host "Copied $dep from site-packages"
-              } else {
-                Write-Host "Warning: $dep not found in site-packages"
-              }
-            }
-          }
-          if (Test-Path "models_compressed") { Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force }
-          elseif (Test-Path "models") { Copy-Item "models" "dist_csharp\models" -Recurse -Force }
-          # Check if BloodPressureTest.exe exists
-          if (!(Test-Path "dist_csharp\BloodPressureTest.exe")) { Write-Host "BloodPressureTest.exe not found in dist_csharp"; exit 1 }
-          # Check for critical dependencies
-          Write-Host "=== Checking critical dependencies ==="
-          $criticalDlls = @("numpy\core\_multiarray_umath.pyd", "cv2.pyd", "sklearn\utils\_cython_blas.pyd")
-          foreach ($dll in $criticalDlls) {
-            if (Test-Path "dist_csharp\python_deps\$dll") {
-              Write-Host "Found: $dll"
-            } else {
-              Write-Host "MISSING: $dll"
-            }
-          }
-          # README generation (English only for compatibility)
-          Set-Content -Path 'dist_csharp\README.txt' -Value '# BloodPressureEstimation C# Integration Package' -Encoding UTF8
-          Add-Content -Path 'dist_csharp\README.txt' -Value ''
-          Add-Content -Path 'dist_csharp\README.txt' -Value 'Copy this folder as-is to your C# application directory.'
-          Add-Content -Path 'dist_csharp\README.txt' -Value ''
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- BloodPressureEstimation.dll: Cython-built DLL'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- python311.dll: Python runtime DLL'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- python_deps/: Required Python dependencies'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- models/: Trained models'
-          Add-Content -Path 'dist_csharp\README.txt' -Value '- BloodPressureTest.exe: C# test executable'
-          Add-Content -Path 'dist_csharp\README.txt' -Value ''
-          Add-Content -Path 'dist_csharp\README.txt' -Value 'See README_DLL.md for C# usage examples and details.'
+
+          # Verify final structure
+          Write-Host "=== Final dist_csharp structure ===" -ForegroundColor Cyan
+          if (Test-Path "dist_csharp\BloodPressureEstimation.dll") { Write-Host "✓ BloodPressureEstimation.dll" -ForegroundColor Green } else { Write-Host "✗ BloodPressureEstimation.dll" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\python311.dll") { Write-Host "✓ python311.dll" -ForegroundColor Green } else { Write-Host "✗ python311.dll" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\BloodPressureTest.exe") { Write-Host "✓ BloodPressureTest.exe" -ForegroundColor Green } else { Write-Host "✗ BloodPressureTest.exe" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\python_deps\numpy") { Write-Host "✓ python_deps\numpy" -ForegroundColor Green } else { Write-Host "✗ python_deps\numpy" -ForegroundColor Red }
+          if (Test-Path "dist_csharp\python_deps\cv2") { Write-Host "✓ python_deps\cv2" -ForegroundColor Green } else { Write-Host "✗ python_deps\cv2" -ForegroundColor Red }
+
+          # Create README
+          $readmeContent = @"
+          # BloodPressureEstimation C# Integration Package
+
+          ## Quick Start
+          1. Copy this entire folder to your C# application directory
+          2. Run BloodPressureTest.exe to test the integration
+          3. The DLL is ready for use with DllImport
+
+          ## Contents
+          - BloodPressureEstimation.dll: Main Cython-compiled DLL
+          - python311.dll: Python runtime
+          - python_deps/: Required Python dependencies (numpy, cv2, etc.)
+          - models/: Trained models
+          - BloodPressureTest.exe: C# test application
+
+          ## Environment Setup
+          The test sets up the environment automatically:
+          - PYTHONHOME points to current directory  
+          - PYTHONPATH includes python_deps
+          - PATH includes all DLL directories
+
+          ## System Requirements
+          - Windows 64-bit
+          - .NET 6.0 or later
+          - Visual C++ Redistributable (included)
+          "@
+          $readmeContent | Out-File -FilePath "dist_csharp\README.txt" -Encoding UTF8
+
+          Write-Host "C# Integration Package preparation completed" -ForegroundColor Green
         shell: powershell
 
       - name: Run C# Integration Test in dist_csharp
@@ -656,72 +744,159 @@ jobs:
 
           Write-Host "=== C# Integration Test with Enhanced Environment ===" -ForegroundColor Green
 
-          # Set environment variables
-          $currentDir = Get-Location
-          $env:PATH = "$currentDir;$currentDir\python_deps;$currentDir\python_deps\numpy\.libs;$currentDir\python_deps\scipy\.libs;$env:PATH"
-          $env:PYTHONHOME = $currentDir
-          $env:PYTHONPATH = "$currentDir\python_deps"
-          $env:PYTHONDONTWRITEBYTECODE = "1"
-
-          Write-Host "Environment configuration:"
-          Write-Host "  Current directory: $currentDir"
-          Write-Host "  PATH (first 200 chars): $($env:PATH.Substring(0, [Math]::Min(200, $env:PATH.Length)))..."
-          Write-Host "  PYTHONHOME: $env:PYTHONHOME"
-          Write-Host "  PYTHONPATH: $env:PYTHONPATH"
-
-          # Final dependency verification
-          Write-Host "Final dependency verification:" -ForegroundColor Yellow
-
-          $requiredDlls = @(
+          # Verify all required files exist before testing
+          Write-Host "Pre-test verification:" -ForegroundColor Yellow
+          $requiredFiles = @(
             "BloodPressureEstimation.dll",
             "python311.dll", 
+            "BloodPressureTest.exe",
             "vcruntime140.dll"
           )
 
-          $dependencyOk = $true
-          foreach ($dll in $requiredDlls) {
-            if (Test-Path $dll) {
-              Write-Host "$dll"
+          $allFilesExist = $true
+          foreach ($file in $requiredFiles) {
+            if (Test-Path $file) {
+              $size = [math]::Round((Get-Item $file).Length / 1KB, 1)
+              Write-Host "✓ $file ($size KB)" -ForegroundColor Green
             } else {
-              Write-Host "$dll MISSING"
-              $dependencyOk = $false
+              Write-Host "✗ $file MISSING" -ForegroundColor Red
+              $allFilesExist = $false
             }
           }
 
-          if (-not $dependencyOk) {
-            Write-Host "Required DLLs missing - test will likely fail" -ForegroundColor Red
+          if (-not $allFilesExist) {
+            Write-Host "Required files are missing! Listing all files:" -ForegroundColor Red
             Get-ChildItem -Filter "*.dll" | Format-Table Name, Length
+            Get-ChildItem -Filter "*.exe" | Format-Table Name, Length
+            Pop-Location
             exit 1
           }
 
-          # Detailed dependency analysis (if available)
-          if (Get-Command dumpbin -ErrorAction SilentlyContinue) {
-            Write-Host "DLL dependencies:" -ForegroundColor Cyan
-            dumpbin /dependents BloodPressureEstimation.dll
-          } else {
-            Write-Host "dumpbin not available - skipping dependency analysis"
+          # Set comprehensive environment variables
+          $currentDir = Get-Location
+          $pythonDepsPath = "$currentDir\python_deps"
+          $numpyLibsPath = "$currentDir\python_deps\numpy\.libs"
+          $scipyLibsPath = "$currentDir\python_deps\scipy\.libs"
+
+          # Enhanced PATH setup
+          $newPath = @(
+            $currentDir,
+            $pythonDepsPath,
+            $numpyLibsPath,
+            $scipyLibsPath,
+            "$pythonDepsPath\numpy\core",
+            "$pythonDepsPath\cv2",
+            $env:PATH
+          ) -join ";"
+
+          $env:PATH = $newPath
+          $env:PYTHONHOME = $currentDir
+          $env:PYTHONPATH = $pythonDepsPath
+          $env:PYTHONDONTWRITEBYTECODE = "1"
+          
+          # Additional environment variables for DLL loading
+          $env:DLL_DIRECTORY = $currentDir
+
+          Write-Host "Environment configuration:"
+          Write-Host "  Current directory: $currentDir"
+          Write-Host "  PYTHONHOME: $env:PYTHONHOME"
+          Write-Host "  PYTHONPATH: $env:PYTHONPATH"
+          Write-Host "  PATH (first 300 chars): $($env:PATH.Substring(0, [Math]::Min(300, $env:PATH.Length)))..."
+
+          # Additional dependency verification
+          Write-Host "Python dependencies verification:" -ForegroundColor Yellow
+          $pythonDeps = @(
+            "python_deps\numpy\core\_multiarray_umath.pyd",
+            "python_deps\cv2\cv2.pyd",
+            "python_deps\sklearn\utils\_cython_blas.pyd"
+          )
+
+          foreach ($dep in $pythonDeps) {
+            if (Test-Path $dep) {
+              Write-Host "✓ $dep" -ForegroundColor Green
+            } else {
+              Write-Host "✗ $dep" -ForegroundColor Yellow
+            }
           }
 
-          # Run test
+          # Test DLL loading capability
+          Write-Host "Testing DLL loading capability..." -ForegroundColor Yellow
+          try {
+            Add-Type @"
+            using System;
+            using System.Runtime.InteropServices;
+
+            public class DllTest {
+                [DllImport("kernel32.dll", SetLastError = true)]
+                public static extern IntPtr LoadLibrary(string lpFileName);
+                
+                [DllImport("kernel32.dll", SetLastError = true)]
+                public static extern bool FreeLibrary(IntPtr hModule);
+            }
+            "@
+            $handle = [DllTest]::LoadLibrary("$currentDir\BloodPressureEstimation.dll")
+            if ($handle -ne [IntPtr]::Zero) {
+              Write-Host "✓ BloodPressureEstimation.dll can be loaded" -ForegroundColor Green
+              [DllTest]::FreeLibrary($handle) | Out-Null
+            } else {
+              $lastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+              Write-Host "✗ Failed to load BloodPressureEstimation.dll (Error: $lastError)" -ForegroundColor Red
+            }
+          } catch {
+            Write-Host "✗ DLL loading test failed: $($_.Exception.Message)" -ForegroundColor Red
+          }
+
+          # Run the actual test
           Write-Host "Starting C# integration test..." -ForegroundColor Green
           try {
-            $process = Start-Process -FilePath "BloodPressureTest.exe" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
+            # Use Start-Process with comprehensive error capture
+            $processArgs = @{
+              FilePath = ".\BloodPressureTest.exe"
+              NoNewWindow = $true
+              Wait = $true
+              PassThru = $true
+              RedirectStandardOutput = "test_output.txt"
+              RedirectStandardError = "test_error.txt"
+              WorkingDirectory = $currentDir
+            }
             
-            Write-Host "Test output:"
-            if (Test-Path "test_output.txt") { Get-Content "test_output.txt" }
+            $process = Start-Process @processArgs
             
-            Write-Host "Test errors:"
-            if (Test-Path "test_error.txt") { Get-Content "test_error.txt" }
+            Write-Host "=== Test Output ===" -ForegroundColor Cyan
+            if (Test-Path "test_output.txt") { 
+              Get-Content "test_output.txt" | ForEach-Object { Write-Host $_ }
+            }
+            
+            Write-Host "=== Test Errors ===" -ForegroundColor Cyan
+            if (Test-Path "test_error.txt") { 
+              $errorContent = Get-Content "test_error.txt"
+              if ($errorContent) {
+                $errorContent | ForEach-Object { Write-Host $_ -ForegroundColor Yellow }
+              } else {
+                Write-Host "No errors recorded" -ForegroundColor Green
+              }
+            }
             
             $exitCode = $process.ExitCode
+            Write-Host "=== Test Result ===" -ForegroundColor Cyan
             if ($exitCode -eq 0) {
-              Write-Host "[SUCCESS] C# integration test passed" -ForegroundColor Green
+              Write-Host "✓ C# integration test PASSED" -ForegroundColor Green
             } else {
-              Write-Host "[FAILURE] C# integration test failed with exit code: $exitCode" -ForegroundColor Red
+              Write-Host "✗ C# integration test FAILED with exit code: $exitCode" -ForegroundColor Red
+              
+              # Additional debugging information
+              Write-Host "Additional debugging information:" -ForegroundColor Yellow
+              Write-Host "Working Directory: $(Get-Location)"
+              Write-Host "Files in current directory:"
+              Get-ChildItem | Select-Object Name, Length | Format-Table
+              
+              Pop-Location
               exit 1
             }
           } catch {
-            Write-Host "[ERROR] Exception during test execution: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "✗ Exception during test execution: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Stack trace: $($_.Exception.StackTrace)" -ForegroundColor Red
+            Pop-Location
             exit 1
           } finally {
             Pop-Location
@@ -785,142 +960,6 @@ jobs:
           name: BloodPressureEstimation-CSharp-Package-${{ github.sha }}
           path: dist_csharp/
           retention-days: 30
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: "6.0.x"
-
-      - name: Create C# Test Project
-        run: |
-          Write-Host "Creating C# test project..." -ForegroundColor Yellow
-          New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
-          Write-Host "C# test project directory created" -ForegroundColor Green
-        shell: powershell
-
-      - name: Copy Cython DLL and dependencies for testing
-        run: |
-          Write-Host "Setting up test environment..." -ForegroundColor Yellow
-
-          # Copy pure Windows DLL
-          Write-Host "Checking for built files..." -ForegroundColor Yellow
-          Get-ChildItem -Filter "BloodPressureEstimation*" | ForEach-Object { Write-Host "Found: $($_.Name)" -ForegroundColor Cyan }
-
-          $dllFiles = @("BloodPressureEstimation*.dll")
-          $copiedFiles = @()
-
-          foreach ($pattern in $dllFiles) {
-            $files = Get-ChildItem -Filter $pattern
-            if ($files) {
-              foreach ($file in $files) {
-                Write-Host "Processing file: $($file.Name)" -ForegroundColor Yellow
-                Copy-Item $file "tests\CSharpTest\"
-                $copiedFiles += $file.Name
-                Write-Host "[OK] Copied pure Windows DLL $($file.Name) to test directory" -ForegroundColor Green
-              }
-            } else {
-              Write-Host "[WARNING] No pure Windows DLL found matching pattern: $pattern" -ForegroundColor Yellow
-            }
-          }
-
-          Write-Host "Files in tests\CSharpTest\:" -ForegroundColor Yellow
-          Get-ChildItem "tests\CSharpTest\" -Filter "BloodPressureEstimation*" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
-
-          # Update C# project file to reference the actual DLL file
-          $actualDllFile = Get-ChildItem "tests\CSharpTest\" -Filter "BloodPressureEstimation*.dll" | Select-Object -First 1
-          if ($actualDllFile) {
-            Write-Host "Found DLL file: $($actualDllFile.Name)" -ForegroundColor Green
-            # Update the .csproj file to reference the actual file
-            $csprojContent = Get-Content "tests\CSharpTest\BloodPressureTest.csproj" -Raw
-            $csprojContent = $csprojContent -replace 'BloodPressureEstimation\.dll', $actualDllFile.Name
-            Set-Content "tests\CSharpTest\BloodPressureTest.csproj" $csprojContent -Encoding UTF8
-            Write-Host "Updated .csproj to reference: $($actualDllFile.Name)" -ForegroundColor Green
-          } else {
-            Write-Host "[ERROR] No DLL file found in tests\CSharpTest\" -ForegroundColor Red
-            exit 1
-          }
-
-          # Copy models (prioritize compressed models)
-          if (Test-Path "models_compressed") {
-            Copy-Item "models_compressed" "tests\CSharpTest\models" -Recurse -Force
-            Write-Host "[OK] Copied compressed models directory" -ForegroundColor Green
-          } elseif (Test-Path "models") {
-            Copy-Item "models" "tests\CSharpTest\" -Recurse -Force
-            Write-Host "[OK] Copied models directory" -ForegroundColor Green
-          } else {
-            Write-Host "[WARNING] Models directory not found" -ForegroundColor Yellow
-          }
-
-          # Copy sample data
-          if (Test-Path "sample-data") {
-            Copy-Item "sample-data" "tests\CSharpTest\" -Recurse -Force
-            Write-Host "[OK] Copied sample data" -ForegroundColor Green
-          } else {
-            Write-Host "[WARNING] Sample data directory not found" -ForegroundColor Yellow
-          }
-
-          # Copy Python dependencies for C# test
-          Write-Host "Copying Python dependencies for C# test..." -ForegroundColor Yellow
-          $pythonDeps = @("numpy", "scipy", "scikit-learn", "opencv-python-headless", "mediapipe")
-          foreach ($dep in $pythonDeps) {
-            try {
-              $depPath = python -c "import $dep; print($dep.__file__)" 2>$null
-              if ($depPath) {
-                $depDir = Split-Path $depPath -Parent
-                Copy-Item $depDir "tests\CSharpTest\python_deps\" -Recurse -Force -ErrorAction SilentlyContinue
-                Write-Host "[OK] Copied $dep dependencies" -ForegroundColor Green
-              }
-            } catch {
-              Write-Host "[WARNING] Could not copy $dep dependencies" -ForegroundColor Yellow
-            }
-          }
-
-          Write-Host "[OK] Test environment setup completed" -ForegroundColor Green
-        shell: powershell
-
-      - name: Build C# Test Project
-        run: |
-          Write-Host "Building C# test project..." -ForegroundColor Yellow
-
-          if (Test-Path "tests/CSharpTest/BloodPressureTest.csproj") {
-            dotnet build tests/CSharpTest/BloodPressureTest.csproj --configuration Release --verbosity normal
-            
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "[OK] C# test project built successfully" -ForegroundColor Green
-            } else {
-              Write-Host "[ERROR] C# test project build failed" -ForegroundColor Red
-              exit 1
-            }
-          } else {
-            Write-Host "[WARNING] C# test project not found - skipping C# tests" -ForegroundColor Yellow
-          }
-        shell: powershell
-
-      - name: Setup Python Environment for C# Tests
-        run: |
-          Write-Host "Setting up Python environment for C# tests..." -ForegroundColor Yellow
-
-          # Set PYTHONPATH to include the test directory
-          $env:PYTHONPATH = "tests\CSharpTest;$env:PYTHONPATH"
-          Write-Host "PYTHONPATH set to: $env:PYTHONPATH" -ForegroundColor Cyan
-
-          # Verify Python can find the Cython modules
-          Write-Host "Verifying Python can find Cython modules..." -ForegroundColor Yellow
-          python -c "import sys; print('Python path:'); [print(p) for p in sys.path]" 2>$null
-
-          # Test import
-          Write-Host "Checking for Python modules in tests\CSharpTest\:" -ForegroundColor Yellow
-          Get-ChildItem "tests\CSharpTest\" -Filter "*.pyd" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
-          Get-ChildItem "tests\CSharpTest\" -Filter "*.dll" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
-
-          # Since we're creating a Windows DLL for C# integration, not a Python module,
-          # we'll skip the Python import test and focus on C# integration
-          Write-Host "[INFO] Windows DLL created for C# integration - skipping Python import test" -ForegroundColor Cyan
-          Write-Host "[INFO] The DLL is designed for DllImport from C#, not Python import" -ForegroundColor Cyan
-
-      - name: Run C# Integration Tests
-        if: false
-        run: echo "Skipping old DLL-only integration test."
 
       - name: Create Obfuscation Report
         run: |
