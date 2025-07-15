@@ -387,6 +387,28 @@ jobs:
           }
         shell: powershell
 
+      - name: Dumpbin DLL Dependents
+        run: |
+          Write-Host "=== dumpbin /DEPENDENTS BloodPressureEstimation.dll ===" -ForegroundColor Cyan
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            if ($vsPath) {
+              $dumpbinPath = Join-Path $vsPath "VC\Tools\MSVC"
+              $dumpbinExe = Get-ChildItem -Path $dumpbinPath -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($dumpbinExe) {
+                & "$($dumpbinExe.FullName)" /DEPENDENTS BloodPressureEstimation.dll
+              } else {
+                Write-Host "dumpbin.exe not found in Visual Studio installation." -ForegroundColor Red
+              }
+            } else {
+              Write-Host "Visual Studio with VC tools not found." -ForegroundColor Red
+            }
+          } else {
+            Write-Host "vswhere.exe not found. Cannot locate dumpbin.exe." -ForegroundColor Red
+          }
+        shell: powershell
+
       - name: Create Cython Distribution Package
         run: |
           Write-Host "Creating Cython distribution package..." -ForegroundColor Yellow
