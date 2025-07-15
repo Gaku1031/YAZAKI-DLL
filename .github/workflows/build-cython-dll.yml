@@ -526,10 +526,11 @@ jobs:
             $fullPath = "dist_csharp\$file"
             if (Test-Path $fullPath) {
               $size = [math]::Round((Get-Item $fullPath).Length / 1KB, 1)
-              $msg = "{0} ({1} KB)" -f $file, $size
+              $sizeText = $size.ToString() + " KB"
+              $msg = "$file ($sizeText)"
               Write-Host $msg
             } else {
-              $msg = "{0} MISSING" -f $file
+              $msg = "$file MISSING"
               Write-Host $msg
               $allCriticalFound = $false
             }
@@ -541,8 +542,7 @@ jobs:
 
           # 5. Output debug information
           Write-Host "Final dist_csharp structure:" -ForegroundColor Cyan
-          Get-ChildItem "dist_csharp" -Recurse | Where-Object { $_.Extension -in @('.dll', '.pyd', '.exe') } | 
-            Format-Table Name, @{Name='Size(KB)'; Expression={[math]::Round($_.Length/1KB,1)}}, Directory
+          Get-ChildItem "dist_csharp" -Recurse | Where-Object { $_.Extension -in @('.dll', '.pyd', '.exe') } | Format-Table Name, Length, Directory
 
           Write-Host "=== DLL Dependency Setup Complete ===" -ForegroundColor Green
         shell: powershell
