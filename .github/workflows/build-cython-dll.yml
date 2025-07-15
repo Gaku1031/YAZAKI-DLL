@@ -719,11 +719,22 @@ jobs:
         shell: powershell
 
       - name: Run C# Integration Test in dist_csharp
+        shell: powershell
         run: |
+          function Add-DllTestType {
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public class DllTest {
+              [DllImport("kernel32.dll", SetLastError = true)]
+              public static extern IntPtr LoadLibrary(string lpFileName);
+              [DllImport("kernel32.dll", SetLastError = true)]
+              public static extern bool FreeLibrary(IntPtr hModule);
+          }
+          "@
+          }
           Push-Location "dist_csharp"
-      
           Write-Host "=== C# Integration Test with Enhanced Environment ===" -ForegroundColor Green
-      
           # Verify all required files exist before testing
           Write-Host "Pre-test verification:" -ForegroundColor Yellow
           $requiredFiles = @(
@@ -732,7 +743,6 @@ jobs:
             "BloodPressureTest.exe",
             "vcruntime140.dll"
           )
-      
           $allFilesExist = $true
           foreach ($file in $requiredFiles) {
             if (Test-Path $file) {
@@ -743,7 +753,6 @@ jobs:
               $allFilesExist = $false
             }
           }
-      
           if (-not $allFilesExist) {
             Write-Host "Required files are missing! Listing all files:" -ForegroundColor Red
             Get-ChildItem -Filter "*.dll" | Format-Table Name, Length
@@ -751,13 +760,11 @@ jobs:
             Pop-Location
             exit 1
           }
-      
           # Set comprehensive environment variables
           $currentDir = Get-Location
           $pythonDepsPath = "$currentDir\python_deps"
           $numpyLibsPath = "$currentDir\python_deps\numpy\.libs"
           $scipyLibsPath = "$currentDir\python_deps\scipy\.libs"
-      
           # Enhanced PATH setup
           $newPath = @(
             $currentDir,
@@ -768,21 +775,17 @@ jobs:
             "$pythonDepsPath\cv2",
             $env:PATH
           ) -join ";"
-      
           $env:PATH = $newPath
           $env:PYTHONHOME = $currentDir
           $env:PYTHONPATH = $pythonDepsPath
           $env:PYTHONDONTWRITEBYTECODE = "1"
-      
           # Additional environment variables for DLL loading
           $env:DLL_DIRECTORY = $currentDir
-      
           Write-Host "Environment configuration:"
           Write-Host "  Current directory: $currentDir"
           Write-Host "  PYTHONHOME: $env:PYTHONHOME"
           Write-Host "  PYTHONPATH: $env:PYTHONPATH"
           Write-Host "  PATH (first 300 chars): $($env:PATH.Substring(0, [Math]::Min(300, $env:PATH.Length)))..."
-      
           # Additional dependency verification
           Write-Host "Python dependencies verification:" -ForegroundColor Yellow
           $pythonDeps = @(
@@ -790,7 +793,6 @@ jobs:
             "python_deps\cv2\cv2.pyd",
             "python_deps\sklearn\utils\_cython_blas.pyd"
           )
-      
           foreach ($dep in $pythonDeps) {
             if (Test-Path $dep) {
               Write-Host "$dep" -ForegroundColor Green
@@ -798,22 +800,10 @@ jobs:
               Write-Host "$dep" -ForegroundColor Yellow
             }
           }
-      
           # Test DLL loading capability
           Write-Host "Testing DLL loading capability..." -ForegroundColor Yellow
           try {
-            Add-Type @"
-            using System;
-            using System.Runtime.InteropServices;
-            
-            public class DllTest {
-                [DllImport("kernel32.dll", SetLastError = true)]
-                public static extern IntPtr LoadLibrary(string lpFileName);
-                
-                [DllImport("kernel32.dll", SetLastError = true)]
-                public static extern bool FreeLibrary(IntPtr hModule);
-            }
-            "@
+            Add-DllTestType
             $handle = [DllTest]::LoadLibrary("$currentDir\BloodPressureEstimation.dll")
             if ($handle -ne [IntPtr]::Zero) {
               Write-Host "BloodPressureEstimation.dll can be loaded" -ForegroundColor Green
@@ -825,7 +815,6 @@ jobs:
           } catch {
             Write-Host "DLL loading test failed: $($_.Exception.Message)" -ForegroundColor Red
           }
-      
           # Run the actual test
           Write-Host "Starting C# integration test..." -ForegroundColor Green
           try {
@@ -839,14 +828,11 @@ jobs:
               RedirectStandardError = "test_error.txt"
               WorkingDirectory = $currentDir
             }
-            
             $process = Start-Process @processArgs
-            
             Write-Host "=== Test Output ===" -ForegroundColor Cyan
             if (Test-Path "test_output.txt") { 
               Get-Content "test_output.txt" | ForEach-Object { Write-Host $_ }
             }
-            
             Write-Host "=== Test Errors ===" -ForegroundColor Cyan
             if (Test-Path "test_error.txt") { 
               $errorContent = Get-Content "test_error.txt"
@@ -856,20 +842,17 @@ jobs:
                 Write-Host "No errors recorded" -ForegroundColor Green
               }
             }
-            
             $exitCode = $process.ExitCode
             Write-Host "=== Test Result ===" -ForegroundColor Cyan
             if ($exitCode -eq 0) {
               Write-Host "C# integration test PASSED" -ForegroundColor Green
             } else {
               Write-Host "C# integration test FAILED with exit code: $exitCode" -ForegroundColor Red
-              
               # Additional debugging information
               Write-Host "Additional debugging information:" -ForegroundColor Yellow
               Write-Host "Working Directory: $(Get-Location)"
               Write-Host "Files in current directory:"
               Get-ChildItem | Select-Object Name, Length | Format-Table
-              
               Pop-Location
               exit 1
             }
@@ -881,7 +864,6 @@ jobs:
           } finally {
             Pop-Location
           }
-        shell: powershell
 
       - name: Advanced DLL Diagnostics
         if: failure()
