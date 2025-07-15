@@ -467,11 +467,29 @@ jobs:
             Write-Host "python311.dll not found in expected locations"
             exit 1
           }
-          if (Test-Path "dist_cython\python_deps") { Copy-Item "dist_cython\python_deps" "dist_csharp\" -Recurse -Force }
+          # Copy python_deps to dist_csharp
+          if (Test-Path "dist_cython\python_deps") {
+            Write-Host "Copying python_deps from dist_cython..."
+            Copy-Item "dist_cython\python_deps" "dist_csharp\" -Recurse -Force
+            Write-Host "python_deps copied successfully"
+          } else {
+            Write-Host "dist_cython\python_deps not found"
+            exit 1
+          }
           if (Test-Path "models_compressed") { Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force }
           elseif (Test-Path "models") { Copy-Item "models" "dist_csharp\models" -Recurse -Force }
           # Check if BloodPressureTest.exe exists
           if (!(Test-Path "dist_csharp\BloodPressureTest.exe")) { Write-Host "BloodPressureTest.exe not found in dist_csharp"; exit 1 }
+          # Check for critical dependencies
+          Write-Host "=== Checking critical dependencies ==="
+          $criticalDlls = @("numpy\core\_multiarray_umath.pyd", "cv2.pyd", "sklearn\utils\_cython_blas.pyd")
+          foreach ($dll in $criticalDlls) {
+            if (Test-Path "dist_csharp\python_deps\$dll") {
+              Write-Host "Found: $dll"
+            } else {
+              Write-Host "MISSING: $dll"
+            }
+          }
           # README generation (English only for compatibility)
           Set-Content -Path 'dist_csharp\README.txt' -Value '# BloodPressureEstimation C# Integration Package' -Encoding UTF8
           Add-Content -Path 'dist_csharp\README.txt' -Value ''
