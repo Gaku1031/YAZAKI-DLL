@@ -737,9 +737,9 @@ jobs:
           foreach ($file in $requiredFiles) {
             if (Test-Path $file) {
               $size = [math]::Round((Get-Item $file).Length / 1KB, 1)
-              Write-Host "✓ $file ($size KB)" -ForegroundColor Green
+              Write-Host "$file ($size KB)" -ForegroundColor Green
             } else {
-              Write-Host "✗ $file MISSING" -ForegroundColor Red
+              Write-Host "$file MISSING" -ForegroundColor Red
               $allFilesExist = $false
             }
           }
@@ -793,9 +793,9 @@ jobs:
 
           foreach ($dep in $pythonDeps) {
             if (Test-Path $dep) {
-              Write-Host "✓ $dep" -ForegroundColor Green
+              Write-Host "$dep" -ForegroundColor Green
             } else {
-              Write-Host "✗ $dep" -ForegroundColor Yellow
+              Write-Host "$dep" -ForegroundColor Yellow
             }
           }
 
@@ -816,14 +816,14 @@ jobs:
             "@
             $handle = [DllTest]::LoadLibrary("$currentDir\BloodPressureEstimation.dll")
             if ($handle -ne [IntPtr]::Zero) {
-              Write-Host "✓ BloodPressureEstimation.dll can be loaded" -ForegroundColor Green
+              Write-Host "BloodPressureEstimation.dll can be loaded" -ForegroundColor Green
               [DllTest]::FreeLibrary($handle) | Out-Null
             } else {
               $lastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-              Write-Host "✗ Failed to load BloodPressureEstimation.dll (Error: $lastError)" -ForegroundColor Red
+              Write-Host "Failed to load BloodPressureEstimation.dll (Error: $lastError)" -ForegroundColor Red
             }
           } catch {
-            Write-Host "✗ DLL loading test failed: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "DLL loading test failed: $($_.Exception.Message)" -ForegroundColor Red
           }
 
           # Run the actual test
@@ -860,9 +860,9 @@ jobs:
             $exitCode = $process.ExitCode
             Write-Host "=== Test Result ===" -ForegroundColor Cyan
             if ($exitCode -eq 0) {
-              Write-Host "✓ C# integration test PASSED" -ForegroundColor Green
+              Write-Host "C# integration test PASSED" -ForegroundColor Green
             } else {
-              Write-Host "✗ C# integration test FAILED with exit code: $exitCode" -ForegroundColor Red
+              Write-Host "C# integration test FAILED with exit code: $exitCode" -ForegroundColor Red
               
               # Additional debugging information
               Write-Host "Additional debugging information:" -ForegroundColor Yellow
@@ -874,7 +874,7 @@ jobs:
               exit 1
             }
           } catch {
-            Write-Host "✗ Exception during test execution: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Exception during test execution: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "Stack trace: $($_.Exception.StackTrace)" -ForegroundColor Red
             Pop-Location
             exit 1
