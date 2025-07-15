@@ -547,7 +547,7 @@ jobs:
             "dist_csharp\python_deps\cv2",
             "dist_csharp\python_deps\sklearn\utils"
           )
-          
+
           foreach ($dir in $criticalDirs) {
             if (!(Test-Path $dir)) {
               New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -617,19 +617,19 @@ jobs:
           $completeMessage = "=== DLL Dependency Setup Complete ==="
           Write-Host $completeMessage -ForegroundColor Green
         shell: powershell
-      
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: "6.0.x"
-      
+
       - name: Create C# Test Project and Build
         run: |
           Write-Host "Creating and building C# test project..." -ForegroundColor Yellow
-          
+
           # Ensure tests directory exists
           New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
-          
+
           # Check if C# project files exist
           if (!(Test-Path "tests\CSharpTest\BloodPressureTest.csproj")) {
             Write-Host "ERROR: C# test project not found!" -ForegroundColor Red
@@ -641,17 +641,17 @@ jobs:
             }
             exit 1
           }
-          
+
           # Copy main DLL to test directory for building
           if (Test-Path "BloodPressureEstimation.dll") {
             Copy-Item "BloodPressureEstimation.dll" "tests\CSharpTest\" -Force
             Write-Host "BloodPressureEstimation.dll copied to test directory"
           }
-          
+
           # Build and publish C# test project directly to dist_csharp
           Write-Host "Building and publishing C# test project to dist_csharp..." -ForegroundColor Yellow
           dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp --self-contained false
-          
+
           if ($LASTEXITCODE -eq 0) {
             Write-Host "C# test project published successfully to dist_csharp" -ForegroundColor Green
           } else {
@@ -690,7 +690,7 @@ jobs:
             "",
             "## Quick Start",
             "1. Copy this entire folder to your C# application directory",
-            "2. Run BloodPressureTest.exe to test the integration", 
+            "2. Run BloodPressureTest.exe to test the integration",
             "3. The DLL is ready for use with DllImport",
             "",
             "## Contents",
@@ -711,7 +711,6 @@ jobs:
             "- .NET 6.0 or later",
             "- Visual C++ Redistributable (included)"
           )
-          
           $readmeContent = $readmeLines -join "`n"
           $readmeContent | Out-File -FilePath "dist_csharp\README.txt" -Encoding UTF8
           Write-Host "README.txt created successfully" -ForegroundColor Green
@@ -774,7 +773,7 @@ jobs:
           $env:PYTHONHOME = $currentDir
           $env:PYTHONPATH = $pythonDepsPath
           $env:PYTHONDONTWRITEBYTECODE = "1"
-          
+
           # Additional environment variables for DLL loading
           $env:DLL_DIRECTORY = $currentDir
 
