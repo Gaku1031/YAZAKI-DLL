@@ -189,13 +189,7 @@ cdef char result_buffer[1024]
 
 # Pure C wrapper functions for DLL export
 cdef public int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved):
-    global python_initialized
-    if ul_reason_for_call == 1:  # DLL_PROCESS_ATTACH
-        if not python_initialized:
-            python_initialized = True
-    elif ul_reason_for_call == 0:  # DLL_PROCESS_DETACH
-        if python_initialized:
-            python_initialized = False
+    # DllMainでは何もしない
     return 1
 
 cdef public int InitializeDLL(const char* model_dir):
