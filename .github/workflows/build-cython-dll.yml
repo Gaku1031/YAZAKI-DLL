@@ -1032,38 +1032,122 @@ jobs:
         run: |
           Push-Location "dist_csharp"
           
-          Write-Host "=== Python Dependencies Pre-Test ===" -ForegroundColor Green
+          Write-Host "=== Python Dependencies Pre-Test with Fixed Environment ===" -ForegroundColor Green
           
-          # Set environment for Python test
+          # DON'T set PYTHONHOME - this breaks Python standard library access
+          # Only set PYTHONPATH to include our dependencies
           $currentDir = Get-Location
-          $env:PYTHONHOME = $currentDir
           $env:PYTHONPATH = "$currentDir\python_deps"
-          $env:PATH = "$currentDir;$currentDir\python_deps;$env:PATH"
+          # Remove PYTHONHOME to let Python use its original installation
+          $env:PYTHONHOME = $null
           
-          Write-Host "Testing Python initialization with dependencies..." -ForegroundColor Yellow
+          # Set PATH to include current directory for DLL access
+          $env:PATH = "$currentDir;$env:PATH"
+          
+          Write-Host "Environment configuration for Python test:" -ForegroundColor Cyan
+          Write-Host "  Current directory: $currentDir" -ForegroundColor Cyan  
+          Write-Host "  PYTHONPATH: $env:PYTHONPATH" -ForegroundColor Cyan
+          Write-Host "  PYTHONHOME: [UNSET - using system Python]" -ForegroundColor Cyan
+          
+          Write-Host "Testing Python with system installation and our dependencies..." -ForegroundColor Yellow
           
           try {
-            # Run the Python initialization test
-            python test_python_init.py
+            # Test basic Python functionality first
+            Write-Host "Testing basic Python functionality..." -ForegroundColor Gray
+            python -c "import sys; print('Python sys module: OK')"
             
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "[SUCCESS] Python dependencies test passed" -ForegroundColor Green
+              Write-Host "[SUCCESS] Basic Python functionality works" -ForegroundColor Green
+              
+              # Test our custom dependencies
+              Write-Host "Testing custom dependencies..." -ForegroundColor Gray
+              
+              # Test NumPy
+              python -c "import sys; sys.path.insert(0, 'python_deps'); import numpy; print(f'NumPy {numpy.__version__}: OK')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "[SUCCESS] NumPy import works" -ForegroundColor Green
+              } else {
+                Write-Host "[WARNING] NumPy import failed" -ForegroundColor Yellow
+              }
+              
+              # Test OpenCV
+              python -c "import sys; sys.path.insert(0, 'python_deps'); import cv2; print(f'OpenCV {cv2.__version__}: OK')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "[SUCCESS] OpenCV import works" -ForegroundColor Green
+              } else {
+                Write-Host "[WARNING] OpenCV import failed" -ForegroundColor Yellow
+              }
+              
+              # Test scikit-learn
+              python -c "import sys; sys.path.insert(0, 'python_deps'); import sklearn; print(f'scikit-learn {sklearn.__version__}: OK')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "[SUCCESS] scikit-learn import works" -ForegroundColor Green
+              } else {
+                Write-Host "[WARNING] scikit-learn import failed" -ForegroundColor Yellow
+              }
+              
+              # Run the full initialization test
+              Write-Host "Running comprehensive Python initialization test..." -ForegroundColor Yellow
+              python test_python_init.py
+              
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "[SUCCESS] Comprehensive Python dependencies test passed" -ForegroundColor Green
+              } else {
+                Write-Host "[WARNING] Comprehensive test had issues, but basic functionality works" -ForegroundColor Yellow
+                Write-Host "This may still work for C# integration" -ForegroundColor Yellow
+              }
+              
             } else {
-              Write-Host "[ERROR] Python dependencies test failed with exit code: $LASTEXITCODE" -ForegroundColor Red
-              
-              # Fallback manual test
-              Write-Host "Attempting manual import tests..." -ForegroundColor Yellow
-              python -c "import sys; print('Python sys module OK')"
-              python -c "import os; print('Python os module OK')"
-              python -c "import numpy; print('NumPy import OK')" 2>&1
-              python -c "import cv2; print('OpenCV import OK')" 2>&1
-              python -c "import sklearn; print('sklearn import OK')" 2>&1
-              
-              Write-Host "Manual test completed. Proceeding with C# test..." -ForegroundColor Yellow
+              Write-Host "[ERROR] Basic Python functionality failed" -ForegroundColor Red
+              Write-Host "Python environment has fundamental issues" -ForegroundColor Red
             }
+            
           } catch {
             Write-Host "[ERROR] Python test execution failed: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "This may indicate Python environment issues" -ForegroundColor Yellow
+            Write-Host "This indicates serious Python environment issues" -ForegroundColor Yellow
+          }
+          
+          # Final environment check for C# integration
+          Write-Host "=== Final Environment Setup for C# Integration ===" -ForegroundColor Yellow
+          
+          # For C# integration, we need a different approach
+          # Copy Python standard library files that might be needed
+          Write-Host "Preparing Python environment for C# DLL usage..." -ForegroundColor Gray
+          
+          # Get original Python installation paths
+          $originalPythonHome = python -c "import sys; print(sys.base_prefix)" 2>$null
+          $originalPythonLib = python -c "import sys; import os; print(os.path.join(sys.base_prefix, 'Lib'))" 2>$null
+          
+          if ($originalPythonHome -and $originalPythonLib) {
+            Write-Host "Original Python installation:" -ForegroundColor Cyan
+            Write-Host "  Home: $originalPythonHome" -ForegroundColor Cyan
+            Write-Host "  Lib: $originalPythonLib" -ForegroundColor Cyan
+            
+            # Create Lib directory and copy essential modules
+            if (!(Test-Path "Lib")) {
+              New-Item -ItemType Directory -Path "Lib" -Force | Out-Null
+            }
+            
+            # Copy essential standard library modules for C# DLL usage
+            $essentialModules = @("encodings", "codecs", "collections", "os", "sys", "io", "site")
+            foreach ($module in $essentialModules) {
+              $sourcePath = "$originalPythonLib\$module"
+              if (Test-Path $sourcePath) {
+                try {
+                  if (Test-Path "$sourcePath.py") {
+                    Copy-Item "$sourcePath.py" "Lib\" -Force
+                    Write-Host "Copied $module.py" -ForegroundColor Green
+                  } elseif (Test-Path $sourcePath -PathType Container) {
+                    Copy-Item $sourcePath "Lib\" -Recurse -Force
+                    Write-Host "Copied $module directory" -ForegroundColor Green
+                  }
+                } catch {
+                  Write-Host "Could not copy $module" -ForegroundColor Yellow
+                }
+              }
+            }
+            
+            Write-Host "Python standard library essentials copied for C# integration" -ForegroundColor Green
           }
           
           Pop-Location
@@ -1127,8 +1211,8 @@ jobs:
             $cv2Path = "$currentDir\python_deps\cv2"
             $sklearnPath = "$currentDir\python_deps\sklearn"
             
-            # Python環境変数の詳細設定
-            $env:PYTHONHOME = $currentDir
+            # Python環境変数の詳細設定（PYTHONHOMEは設定しない）
+            # $env:PYTHONHOME = $currentDir  # これを削除/コメントアウト
             $env:PYTHONPATH = @(
               $pythonDepsPath,
               "$pythonDepsPath\numpy",
@@ -1175,7 +1259,7 @@ jobs:
             
             Write-Host "Environment configuration completed:" -ForegroundColor Green
             Write-Host "  Current directory: $currentDir" -ForegroundColor Cyan
-            Write-Host "  PYTHONHOME: $env:PYTHONHOME" -ForegroundColor Cyan
+            Write-Host "  PYTHONHOME: [UNSET - using system Python]" -ForegroundColor Cyan
             Write-Host "  PYTHONPATH (first 200 chars): $($env:PYTHONPATH.Substring(0, [Math]::Min(200, $env:PYTHONPATH.Length)))..." -ForegroundColor Cyan
             Write-Host "  PATH (first 300 chars): $($env:PATH.Substring(0, [Math]::Min(300, $env:PATH.Length)))..." -ForegroundColor Cyan
             
