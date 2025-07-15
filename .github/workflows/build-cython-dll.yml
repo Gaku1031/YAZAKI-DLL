@@ -473,8 +473,18 @@ jobs:
             Copy-Item "dist_cython\python_deps" "dist_csharp\" -Recurse -Force
             Write-Host "python_deps copied successfully"
           } else {
-            Write-Host "dist_cython\python_deps not found"
-            exit 1
+            Write-Host "dist_cython\python_deps not found, copying from Python site-packages..."
+            # Pythonのsite-packagesから直接コピー
+            $sitePackages = "C:\hostedtoolcache\windows\Python\3.11.9\x64\Lib\site-packages"
+            $deps = @("numpy", "cv2", "sklearn", "scipy", "joblib", "mediapipe")
+            foreach ($dep in $deps) {
+              if (Test-Path "$sitePackages\$dep") {
+                Copy-Item "$sitePackages\$dep" "dist_csharp\python_deps\" -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "Copied $dep from site-packages"
+              } else {
+                Write-Host "Warning: $dep not found in site-packages"
+              }
+            }
           }
           if (Test-Path "models_compressed") { Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force }
           elseif (Test-Path "models") { Copy-Item "models" "dist_csharp\models" -Recurse -Force }
