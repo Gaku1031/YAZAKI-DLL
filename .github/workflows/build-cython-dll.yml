@@ -686,29 +686,29 @@ jobs:
           # Create README with proper PowerShell string handling
           Write-Host "Creating README file..." -ForegroundColor Yellow
           $readmeLines = @(
-            "# BloodPressureEstimation C# Integration Package",
-            "",
-            "## Quick Start",
-            "1. Copy this entire folder to your C# application directory",
-            "2. Run BloodPressureTest.exe to test the integration",
-            "3. The DLL is ready for use with DllImport",
-            "",
-            "## Contents",
-            "- BloodPressureEstimation.dll: Main Cython-compiled DLL",
-            "- python311.dll: Python runtime",
-            "- python_deps/: Required Python dependencies (numpy, cv2, etc.)",
-            "- models/: Trained models",
-            "- BloodPressureTest.exe: C# test application",
-            "",
-            "## Environment Setup",
-            "The test sets up the environment automatically:",
-            "- PYTHONHOME points to current directory",
-            "- PYTHONPATH includes python_deps",
-            "- PATH includes all DLL directories",
-            "",
-            "## System Requirements",
-            "- Windows 64-bit",
-            "- .NET 6.0 or later",
+            "# BloodPressureEstimation C# Integration Package"
+            ""
+            "## Quick Start"
+            "1. Copy this entire folder to your C# application directory"
+            "2. Run BloodPressureTest.exe to test the integration"
+            "3. The DLL is ready for use with DllImport"
+            ""
+            "## Contents"
+            "- BloodPressureEstimation.dll: Main Cython-compiled DLL"
+            "- python311.dll: Python runtime"
+            "- python_deps/: Required Python dependencies (numpy, cv2, etc.)"
+            "- models/: Trained models"
+            "- BloodPressureTest.exe: C# test application"
+            ""
+            "## Environment Setup"
+            "The test sets up the environment automatically:"
+            "- PYTHONHOME points to current directory"
+            "- PYTHONPATH includes python_deps"
+            "- PATH includes all DLL directories"
+            ""
+            "## System Requirements"
+            "- Windows 64-bit"
+            "- .NET 6.0 or later"
             "- Visual C++ Redistributable (included)"
           )
           $readmeContent = $readmeLines -join "`n"
