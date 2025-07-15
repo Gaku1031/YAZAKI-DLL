@@ -1270,6 +1270,27 @@ jobs:
             }
           }
           
+          # --- scipy/sklearn完全コピーの強化 ---
+          Write-Host "=== Ensuring full copy of scipy and sklearn ===" -ForegroundColor Yellow
+          $scipySrc = Join-Path $sitePackages "scipy"
+          $scipyDst = "python_deps\scipy"
+          if (Test-Path $scipySrc) {
+            if (Test-Path $scipyDst) { Remove-Item $scipyDst -Recurse -Force }
+            Copy-Item $scipySrc $scipyDst -Recurse -Force
+            Write-Host "  [OK] Full scipy copied" -ForegroundColor Green
+          } else {
+            Write-Host "  [ERROR] scipy not found in site-packages!" -ForegroundColor Red
+          }
+          $sklearnSrc = Join-Path $sitePackages "sklearn"
+          $sklearnDst = "python_deps\sklearn"
+          if (Test-Path $sklearnSrc) {
+            if (Test-Path $sklearnDst) { Remove-Item $sklearnDst -Recurse -Force }
+            Copy-Item $sklearnSrc $sklearnDst -Recurse -Force
+            Write-Host "  [OK] Full sklearn copied" -ForegroundColor Green
+          } else {
+            Write-Host "  [ERROR] sklearn not found in site-packages!" -ForegroundColor Red
+          }
+          
           # 5. NumPy .libs の直接コピー（重要）
           Write-Host "5. NumPy .libs comprehensive copy" -ForegroundColor Yellow
           if (Test-Path "$sitePackages\numpy\.libs") {
