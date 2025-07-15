@@ -571,8 +571,8 @@ cdef public int DllMain(void* hModule, unsigned long ul_reason_for_call, void* l
         return 1
 
 cdef public int InitializeDLL(const char* model_dir):
+    cdef str model_dir_str
     with gil:
-        cdef str model_dir_str
         try:
             if model_dir:
                 model_dir_str = model_dir.decode('utf-8')
@@ -585,10 +585,12 @@ cdef public int InitializeDLL(const char* model_dir):
             return 0
 
 cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path):
+    cdef str request_id_str
+    cdef str movie_path_str
+    cdef str result_str
+    cdef bytes result_bytes
+    cdef int n
     with gil:
-        cdef str request_id_str, movie_path_str, result_str
-        cdef bytes result_bytes
-        cdef int n
         try:
             request_id_str = request_id.decode('utf-8') if request_id else ""
             movie_path_str = movie_path.decode('utf-8') if movie_path else ""
@@ -607,10 +609,11 @@ cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id
             return <const char*>result_buffer
 
 cdef public const char* GetProcessingStatus(const char* request_id):
+    cdef str request_id_str
+    cdef str result_str
+    cdef bytes result_bytes
+    cdef int n
     with gil:
-        cdef str request_id_str, result_str
-        cdef bytes result_bytes
-        cdef int n
         try:
             request_id_str = request_id.decode('utf-8') if request_id else ""
             result_str = get_processing_status(request_id_str)
@@ -628,8 +631,8 @@ cdef public const char* GetProcessingStatus(const char* request_id):
             return <const char*>result_buffer
 
 cdef public int CancelBloodPressureAnalysis(const char* request_id):
+    cdef str request_id_str
     with gil:
-        cdef str request_id_str
         try:
             request_id_str = request_id.decode('utf-8') if request_id else ""
             result = cancel_blood_pressure_analysis(request_id_str)
@@ -639,10 +642,10 @@ cdef public int CancelBloodPressureAnalysis(const char* request_id):
             return 0
 
 cdef public const char* GetVersionInfo():
+    cdef str result_str
+    cdef bytes result_bytes
+    cdef int n
     with gil:
-        cdef str result_str
-        cdef bytes result_bytes
-        cdef int n
         try:
             result_str = get_version_info()
             result_bytes = result_str.encode('utf-8')
@@ -659,10 +662,10 @@ cdef public const char* GetVersionInfo():
             return <const char*>result_buffer
 
 cdef public const char* GenerateRequestId():
+    cdef str result_str
+    cdef bytes result_bytes
+    cdef int n
     with gil:
-        cdef str result_str
-        cdef bytes result_bytes
-        cdef int n
         try:
             result_str = generate_request_id()
             result_bytes = result_str.encode('utf-8')
