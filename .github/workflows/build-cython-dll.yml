@@ -405,33 +405,36 @@ jobs:
       - name: Post-process dist_cython for C# DllImport
         run: |
           Write-Host "=== Comprehensive DLL Dependency Setup ===" -ForegroundColor Green
-
+      
+          # Create dist_csharp directory first
+          New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
+      
           # Get Python execution environment path
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
           $pythonDllsDir = Join-Path $pythonDir "DLLs"
           $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
-
+      
           Write-Host "Python directory: $pythonDir"
           Write-Host "Python DLLs directory: $pythonDllsDir"
           Write-Host "Site packages: $sitePackages"
-
+      
           # 1. Copy all important Python DLLs
           Write-Host "Copying Python runtime DLLs..." -ForegroundColor Yellow
-
+      
           # Main Python DLL
           if (Test-Path "$pythonDir\python311.dll") {
             Copy-Item "$pythonDir\python311.dll" "dist_csharp\" -Force
             Write-Host "✓ python311.dll copied"
           }
-
+      
           # Python DLLs directory from important files
           $pythonDlls = @(
             "_ctypes.pyd", "_socket.pyd", "select.pyd", "_ssl.pyd", 
             "_hashlib.pyd", "_sqlite3.pyd", "_lzma.pyd", "_bz2.pyd",
             "unicodedata.pyd", "_decimal.pyd", "_multiprocessing.pyd"
           )
-
+      
           foreach ($dll in $pythonDlls) {
             $sourcePath = Join-Path $pythonDllsDir $dll
             if (Test-Path $sourcePath) {
@@ -441,12 +444,12 @@ jobs:
               Write-Host "$dll not found"
             }
           }
-
+      
           # 2. Copy binary dependencies from site-packages
           Write-Host "Copying Python package binaries..." -ForegroundColor Yellow
-
+      
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
-
+      
           # NumPy (most important)
           if (Test-Path "$sitePackages\numpy") {
             Copy-Item "$sitePackages\numpy" "dist_csharp\python_deps\" -Recurse -Force
@@ -458,31 +461,31 @@ jobs:
               Write-Host "numpy .libs DLLs copied to root"
             }
           }
-
+      
           # OpenCV
           if (Test-Path "$sitePackages\cv2") {
             Copy-Item "$sitePackages\cv2" "dist_csharp\python_deps\" -Recurse -Force
             Write-Host "cv2 copied"
           }
-
+      
           # Scikit-learn
           if (Test-Path "$sitePackages\sklearn") {
             Copy-Item "$sitePackages\sklearn" "dist_csharp\python_deps\" -Recurse -Force
             Write-Host "sklearn copied"
           }
-
-          # SciPy（重要）
+      
+          # SciPy
           if (Test-Path "$sitePackages\scipy") {
             Copy-Item "$sitePackages\scipy" "dist_csharp\python_deps\" -Recurse -Force
             Write-Host "scipy copied"
             
-            # SciPy .libsディレクトリの特別処理
+            # SciPy .libs directory special handling
             if (Test-Path "$sitePackages\scipy\.libs") {
               Copy-Item "$sitePackages\scipy\.libs\*" "dist_csharp\" -Force
               Write-Host "scipy .libs DLLs copied to root"
             }
           }
-
+      
           # Other dependencies
           $otherDeps = @("joblib", "mediapipe", "threadpoolctl")
           foreach ($dep in $otherDeps) {
@@ -491,10 +494,10 @@ jobs:
               Write-Host "$dep copied"
             }
           }
-
+      
           # 3. Check and copy Visual C++ Runtime DLLs
           Write-Host "Checking Visual C++ Runtime DLLs..." -ForegroundColor Yellow
-
+      
           $vcRuntimeDlls = @("vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll")
           foreach ($dll in $vcRuntimeDlls) {
             # Search from system directory
@@ -506,10 +509,10 @@ jobs:
               Write-Host "$dll not found in System32"
             }
           }
-
+      
           # 4. Verify dependency chain completeness
           Write-Host "Verifying dependency chain..." -ForegroundColor Yellow
-
+      
           # Check for critical files
           $criticalFiles = @(
             "BloodPressureEstimation.dll",
@@ -517,28 +520,28 @@ jobs:
             "python_deps\numpy\core\_multiarray_umath.pyd",
             "python_deps\numpy\linalg\_umath_linalg.pyd"
           )
-
+      
           $allCriticalFound = $true
           foreach ($file in $criticalFiles) {
             $fullPath = "dist_csharp\$file"
             if (Test-Path $fullPath) {
               $size = [math]::Round((Get-Item $fullPath).Length / 1KB, 1)
-              Write-Host $file "($size KB)"
+              Write-Host "$file ($size KB)"
             } else {
               Write-Host "$file MISSING"
               $allCriticalFound = $false
             }
           }
-
+      
           if (-not $allCriticalFound) {
             Write-Host "Critical files missing - build may fail" -ForegroundColor Red
           }
-
+      
           # 5. Output debug information
           Write-Host "Final dist_csharp structure:" -ForegroundColor Cyan
           Get-ChildItem "dist_csharp" -Recurse | Where-Object { $_.Extension -in @('.dll', '.pyd', '.exe') } | 
             Format-Table Name, @{Name='Size(KB)'; Expression={[math]::Round($_.Length/1KB,1)}}, Directory
-
+      
           Write-Host "=== DLL Dependency Setup Complete ===" -ForegroundColor Green
         shell: powershell
 
@@ -698,33 +701,50 @@ jobs:
         run: |
           Write-Host "=== Advanced DLL Diagnostics ===" -ForegroundColor Red
 
-          Push-Location "dist_csharp"
-
-          # Check Windows Event Log
-          Write-Host "Checking Windows Event Log for DLL errors..."
-          Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue | 
-            Where-Object { $_.Message -like "*dll*" -or $_.Message -like "*BloodPressure*" } |
-            Format-Table TimeCreated, Id, LevelDisplayName, Message
-
-          # Check dependency with available tools
-          if (Get-Command where.exe -ErrorAction SilentlyContinue) {
-            Write-Host "System DLL locations:"
-            $result = where.exe python311.dll 2>$null
-            if ($LASTEXITCODE -ne 0) { Write-Host "python311.dll not in system PATH" }
-            $result = where.exe vcruntime140.dll 2>$null
-            if ($LASTEXITCODE -ne 0) { Write-Host "vcruntime140.dll not in system PATH" }
+          # Check if dist_csharp exists, if not try dist_cython
+          if (Test-Path "dist_csharp") {
+            Push-Location "dist_csharp"
+          } elseif (Test-Path "dist_cython") {
+            Write-Host "dist_csharp not found, using dist_cython instead" -ForegroundColor Yellow
+            Push-Location "dist_cython"
+          } else {
+            Write-Host "Neither dist_csharp nor dist_cython found - creating dist_csharp" -ForegroundColor Yellow
+            New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
+            Push-Location "dist_csharp"
           }
 
-          # Simple dependency check with PowerShell
-          Write-Host "PowerShell-based dependency check:"
           try {
-            [System.Reflection.Assembly]::LoadFile("$PWD\BloodPressureEstimation.dll")
-            Write-Host "DLL can be loaded by .NET"
-          } catch {
-            Write-Host "DLL cannot be loaded by .NET: $($_.Exception.Message)"
-          }
+            # Check Windows Event Log
+            Write-Host "Checking Windows Event Log for DLL errors..."
+            Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue | 
+              Where-Object { $_.Message -like "*dll*" -or $_.Message -like "*BloodPressure*" } |
+              Format-Table TimeCreated, Id, LevelDisplayName, Message
 
-          Pop-Location
+            # Check dependency with available tools
+            if (Get-Command where.exe -ErrorAction SilentlyContinue) {
+              Write-Host "System DLL locations:"
+              $result = where.exe python311.dll 2>$null
+              if ($LASTEXITCODE -ne 0) { Write-Host "python311.dll not in system PATH" }
+              $result = where.exe vcruntime140.dll 2>$null
+              if ($LASTEXITCODE -ne 0) { Write-Host "vcruntime140.dll not in system PATH" }
+            }
+
+            # Simple dependency check with PowerShell
+            Write-Host "PowerShell-based dependency check:"
+            $dllPath = Get-ChildItem -Filter "BloodPressureEstimation*.dll" | Select-Object -First 1
+            if ($dllPath) {
+              try {
+                [System.Reflection.Assembly]::LoadFile($dllPath.FullName)
+                Write-Host "DLL can be loaded by .NET"
+              } catch {
+                Write-Host "DLL cannot be loaded by .NET: $($_.Exception.Message)"
+              }
+            } else {
+              Write-Host "No BloodPressureEstimation DLL found"
+            }
+          } finally {
+            Pop-Location
+          }
         shell: powershell
 
       - name: Upload C# Integration Package
