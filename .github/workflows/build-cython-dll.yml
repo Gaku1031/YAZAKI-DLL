@@ -365,7 +365,6 @@ jobs:
           }
 
           Write-Host "[OK] Cython DLL verification completed" -ForegroundColor Green
-        shell: powershell
 
       - name: Dumpbin DLL Exports
         run: |
@@ -448,7 +447,6 @@ jobs:
           Get-ChildItem "dist_cython" -Recurse | Format-Table Name, Length, LastWriteTime
         shell: powershell
 
-      
       - name: Post-process dist_csharp for C# DllImport
         run: |
           Write-Host "=== Comprehensive DLL Dependency Setup with Fixed Python Dependencies ===" -ForegroundColor Green
@@ -470,32 +468,32 @@ jobs:
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
           $pythonDllsDir = Join-Path $pythonDir "DLLs"
-          
+
           # Try multiple methods to find site-packages
           Write-Host "Detecting site-packages directory..." -ForegroundColor Cyan
-          
+
           # Method 1: Standard site-packages detection
           $sitePackagesMethod1 = python -c "import site; print(site.getsitepackages()[0])" 2>$null
-          
+
           # Method 2: Using sys.path
           $sitePackagesMethod2 = python -c "import sys; import os; paths = [p for p in sys.path if 'site-packages' in p and os.path.exists(p)]; print(paths[0] if paths else '')" 2>$null
-          
+
           # Method 3: Manual construction
           $sitePackagesMethod3 = Join-Path $pythonDir "Lib\site-packages"
-          
+
           # Method 4: Check installed packages location
           $sitePackagesMethod4 = python -c "import numpy; import os; print(os.path.dirname(numpy.__file__).split('numpy')[0].rstrip(os.sep))" 2>$null
-          
+
           Write-Host "Site-packages detection methods:" -ForegroundColor Gray
           Write-Host "  Method 1 (site.getsitepackages): $sitePackagesMethod1" -ForegroundColor Gray
           Write-Host "  Method 2 (sys.path search): $sitePackagesMethod2" -ForegroundColor Gray
           Write-Host "  Method 3 (manual): $sitePackagesMethod3" -ForegroundColor Gray
           Write-Host "  Method 4 (numpy location): $sitePackagesMethod4" -ForegroundColor Gray
-          
+
           # Choose the correct site-packages directory
           $sitePackages = $null
           $candidates = @($sitePackagesMethod1, $sitePackagesMethod2, $sitePackagesMethod3, $sitePackagesMethod4)
-          
+
           foreach ($candidate in $candidates) {
             if ($candidate -and (Test-Path $candidate) -and (Test-Path "$candidate\numpy")) {
               $sitePackages = $candidate
@@ -508,7 +506,7 @@ jobs:
               Get-ChildItem $candidate -Directory | Select-Object -First 10 | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
             }
           }
-          
+
           if (-not $sitePackages) {
             Write-Host "ERROR: Could not find valid site-packages directory!" -ForegroundColor Red
             Write-Host "Attempting to find packages manually..." -ForegroundColor Yellow
@@ -570,12 +568,12 @@ jobs:
             Write-Host "ERROR: Site-packages directory not found: $sitePackages" -ForegroundColor Red
             exit 1
           }
-          
+
           # Check if critical packages exist in site-packages
           $criticalPackageCheck = @("numpy", "cv2", "sklearn", "scipy")
           $foundPackages = @()
           $missingPackages = @()
-          
+
           foreach ($pkg in $criticalPackageCheck) {
             $pkgPath = Join-Path $sitePackages $pkg
             if (Test-Path $pkgPath) {
@@ -586,7 +584,7 @@ jobs:
               Write-Host "Missing package: $pkg" -ForegroundColor Red
             }
           }
-          
+
           if ($missingPackages.Count -gt 0) {
             Write-Host "ERROR: Critical packages missing from site-packages!" -ForegroundColor Red
             Write-Host "Missing: $($missingPackages -join ', ')" -ForegroundColor Red
@@ -658,7 +656,7 @@ jobs:
 
           # 4. Special handling for .libs directories with fallback
           Write-Host "=== Step 4: Copying .libs directories ===" -ForegroundColor Yellow
-          
+
           $libsDirs = @("numpy\.libs", "scipy\.libs")
           foreach ($libsDir in $libsDirs) {
             $sourcePath = "$sitePackages\$libsDir"
@@ -755,17 +753,17 @@ jobs:
               }
             }
           }
-          
+
           # Additional repair attempts for critical NumPy files
           Write-Host "=== Additional NumPy Critical Files Repair ===" -ForegroundColor Yellow
-          
+
           $numpyCriticalFiles = @(
             "_multiarray_umath.cp311-win_amd64.pyd",
             "_umath_linalg.cp311-win_amd64.pyd",
             "lapack_lite.cp311-win_amd64.pyd",
             "mtrand.cp311-win_amd64.pyd"
           )
-          
+
           foreach ($criticalFile in $numpyCriticalFiles) {
             # Search for the file in the entire numpy package
             $searchResults = Get-ChildItem "$sitePackages\numpy" -Recurse -Filter $criticalFile -ErrorAction SilentlyContinue
@@ -789,11 +787,11 @@ jobs:
               }
             }
           }
-          
+
           # Also ensure all .cp311-win_amd64.pyd files are copied
           Write-Host "=== Ensuring all Python 3.11 extension files are copied ===" -ForegroundColor Yellow
           $allPydFiles = Get-ChildItem "$sitePackages\numpy" -Recurse -Filter "*.cp311-win_amd64.pyd" -ErrorAction SilentlyContinue
-          
+
           $copiedCount = 0
           foreach ($pydFile in $allPydFiles) {
             $relativePath = $pydFile.FullName.Replace("$sitePackages\numpy\", "")
@@ -809,9 +807,9 @@ jobs:
               $copiedCount++
             }
           }
-          
+
           Write-Host "[INFO] Ensured $copiedCount additional .pyd files are copied" -ForegroundColor Cyan
-          
+
           # Verify NumPy structure specifically
           Write-Host "=== NumPy Structure Verification ===" -ForegroundColor Yellow
           $numpyDest = "dist_csharp\python_deps\numpy"
@@ -864,7 +862,7 @@ jobs:
 
           # 8. Create initialization test script with improved imports
           Write-Host "=== Step 8: Creating enhanced Python initialization test ===" -ForegroundColor Yellow
-          
+
           $testScript = @'
           import sys
           import os
@@ -913,7 +911,7 @@ jobs:
               traceback.print_exc()
               sys.exit(1)
           '@
-          
+
           $testScript | Out-File -FilePath "dist_csharp\test_python_init.py" -Encoding UTF8
           Write-Host "Enhanced Python initialization test script created" -ForegroundColor Green
 
@@ -1028,31 +1026,31 @@ jobs:
           $ucrt = "$env:SystemRoot\System32\ucrtbase.dll"
           if (Test-Path $ucrt) { Copy-Item $ucrt dist_csharp -Force; Write-Host "ucrtbase.dll copied" }
           else { Write-Host "ucrtbase.dll not found" -ForegroundColor Red }
-      
+
       - name: Test Python Dependencies Before C# Integration
         shell: powershell
         run: |
           Push-Location "dist_csharp"
-          
+
           Write-Host "=== Python Dependencies Pre-Test with Fixed Environment ===" -ForegroundColor Green
-          
+
           # DON'T set PYTHONHOME - this breaks Python standard library access
           # Only set PYTHONPATH to include our dependencies
           $currentDir = Get-Location
           $env:PYTHONPATH = "$currentDir\python_deps"
           # Remove PYTHONHOME to let Python use its original installation
           $env:PYTHONHOME = $null
-          
+
           # Set PATH to include current directory for DLL access
           $env:PATH = "$currentDir;$env:PATH"
-          
+
           Write-Host "Environment configuration for Python test:" -ForegroundColor Cyan
           Write-Host "  Current directory: $currentDir" -ForegroundColor Cyan  
           Write-Host "  PYTHONPATH: $env:PYTHONPATH" -ForegroundColor Cyan
           Write-Host "  PYTHONHOME: [UNSET - using system Python]" -ForegroundColor Cyan
-          
+
           Write-Host "Testing Python with system installation and our dependencies..." -ForegroundColor Yellow
-          
+
           try {
             # Test basic Python functionality first
             Write-Host "Testing basic Python functionality..." -ForegroundColor Gray
@@ -1108,18 +1106,18 @@ jobs:
             Write-Host "[ERROR] Python test execution failed: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "This indicates serious Python environment issues" -ForegroundColor Yellow
           }
-          
+
           # Final environment check for C# integration
           Write-Host "=== Final Environment Setup for C# Integration ===" -ForegroundColor Yellow
-          
+
           # For C# integration, we need a different approach
           # Copy Python standard library files that might be needed
           Write-Host "Preparing Python environment for C# DLL usage..." -ForegroundColor Gray
-          
+
           # Get original Python installation paths
           $originalPythonHome = python -c "import sys; print(sys.base_prefix)" 2>$null
           $originalPythonLib = python -c "import sys; import os; print(os.path.join(sys.base_prefix, 'Lib'))" 2>$null
-          
+
           if ($originalPythonHome -and $originalPythonLib) {
             Write-Host "Original Python installation:" -ForegroundColor Cyan
             Write-Host "  Home: $originalPythonHome" -ForegroundColor Cyan
@@ -1151,7 +1149,7 @@ jobs:
             
             Write-Host "Python standard library essentials copied for C# integration" -ForegroundColor Green
           }
-          
+
           Pop-Location
 
       - name: Run C# Integration Test in dist_csharp
@@ -1171,10 +1169,10 @@ jobs:
           }
           "@
           }
-          
+
           Push-Location "dist_csharp"
           Write-Host "=== Enhanced C# Integration Test with Comprehensive Environment Setup ===" -ForegroundColor Green
-          
+
           try {
             # ===== 1. 事前検証 =====
             Write-Host "=== 1. Pre-test Verification ===" -ForegroundColor Yellow
