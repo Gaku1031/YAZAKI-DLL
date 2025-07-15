@@ -14,10 +14,6 @@ from typing import Dict, List, Tuple, Optional, Callable
 
 from libc.string cimport memcpy
 
-# Windows DLL exports for pure C functions
-cdef extern from "Python.h":
-    void Py_Initialize()
-    void Py_Finalize()
 
 # Global variables for DLL state
 models = {}
@@ -567,22 +563,20 @@ cdef char result_buffer[1024]
 
 # C wrapper functions for DLL export
 cdef public int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved):
-    with gil:
-        return 1
+    return 1
 
 cdef public int InitializeDLL(const char* model_dir):
     cdef str model_dir_str
-    with gil:
-        try:
-            if model_dir:
-                model_dir_str = model_dir.decode('utf-8')
-            else:
-                model_dir_str = "models"
-            result = initialize_models(model_dir_str)
-            return 1 if result else 0
-        except Exception as e:
-            print(f"InitializeDLL exception: {e}")
-            return 0
+    try:
+        if model_dir:
+            model_dir_str = model_dir.decode('utf-8')
+        else:
+            model_dir_str = "models"
+        result = initialize_models(model_dir_str)
+        return 1 if result else 0
+    except Exception as e:
+        print(f"InitializeDLL exception: {e}")
+        return 0
 
 cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path):
     cdef str request_id_str
@@ -590,93 +584,88 @@ cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id
     cdef str result_str
     cdef bytes result_bytes
     cdef int n
-    with gil:
-        try:
-            request_id_str = request_id.decode('utf-8') if request_id else ""
-            movie_path_str = movie_path.decode('utf-8') if movie_path else ""
-            result_str = start_blood_pressure_analysis(request_id_str, height, weight, sex, movie_path_str)
-            result_bytes = result_str.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
-        except Exception as e:
-            error_msg = f"ERROR: Exception in full analysis - {str(e)}"
-            result_bytes = error_msg.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
+    try:
+        request_id_str = request_id.decode('utf-8') if request_id else ""
+        movie_path_str = movie_path.decode('utf-8') if movie_path else ""
+        result_str = start_blood_pressure_analysis(request_id_str, height, weight, sex, movie_path_str)
+        result_bytes = result_str.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
+    except Exception as e:
+        error_msg = f"ERROR: Exception in full analysis - {str(e)}"
+        result_bytes = error_msg.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
 
 cdef public const char* GetProcessingStatus(const char* request_id):
     cdef str request_id_str
     cdef str result_str
     cdef bytes result_bytes
     cdef int n
-    with gil:
-        try:
-            request_id_str = request_id.decode('utf-8') if request_id else ""
-            result_str = get_processing_status(request_id_str)
-            result_bytes = result_str.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
-        except Exception as e:
-            error_msg = f"ERROR: Exception in status check - {str(e)}"
-            result_bytes = error_msg.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
+    try:
+        request_id_str = request_id.decode('utf-8') if request_id else ""
+        result_str = get_processing_status(request_id_str)
+        result_bytes = result_str.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
+    except Exception as e:
+        error_msg = f"ERROR: Exception in status check - {str(e)}"
+        result_bytes = error_msg.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
 
 cdef public int CancelBloodPressureAnalysis(const char* request_id):
     cdef str request_id_str
-    with gil:
-        try:
-            request_id_str = request_id.decode('utf-8') if request_id else ""
-            result = cancel_blood_pressure_analysis(request_id_str)
-            return 1 if result else 0
-        except Exception as e:
-            print(f"CancelBloodPressureAnalysis exception: {e}")
-            return 0
+    try:
+        request_id_str = request_id.decode('utf-8') if request_id else ""
+        result = cancel_blood_pressure_analysis(request_id_str)
+        return 1 if result else 0
+    except Exception as e:
+        print(f"CancelBloodPressureAnalysis exception: {e}")
+        return 0
 
 cdef public const char* GetVersionInfo():
     cdef str result_str
     cdef bytes result_bytes
     cdef int n
-    with gil:
-        try:
-            result_str = get_version_info()
-            result_bytes = result_str.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
-        except Exception as e:
-            error_msg = f"BloodPressureEstimation v1.0.0 (Error: {str(e)})"
-            result_bytes = error_msg.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
+    try:
+        result_str = get_version_info()
+        result_bytes = result_str.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
+    except Exception as e:
+        error_msg = f"BloodPressureEstimation v1.0.0 (Error: {str(e)})"
+        result_bytes = error_msg.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
 
 cdef public const char* GenerateRequestId():
     cdef str result_str
     cdef bytes result_bytes
     cdef int n
-    with gil:
-        try:
-            result_str = generate_request_id()
-            result_bytes = result_str.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
-        except Exception as e:
-            error_msg = "ERROR: Could not generate request ID"
-            result_bytes = error_msg.encode('utf-8')
-            n = min(len(result_bytes), 1023)
-            memcpy(result_buffer, <const char*>result_bytes, n)
-            result_buffer[n] = 0
-            return <const char*>result_buffer
+    try:
+        result_str = generate_request_id()
+        result_bytes = result_str.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
+    except Exception as e:
+        error_msg = "ERROR: Could not generate request ID"
+        result_bytes = error_msg.encode('utf-8')
+        n = min(len(result_bytes), 1023)
+        memcpy(result_buffer, <const char*>result_bytes, n)
+        result_buffer[n] = 0
+        return <const char*>result_buffer
