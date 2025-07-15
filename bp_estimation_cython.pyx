@@ -188,30 +188,6 @@ def get_current_time():
 cdef char result_buffer[1024]
 
 # Pure C wrapper functions for DLL export
-cdef extern from *:
-    """
-    #ifdef __cplusplus
-    extern "C" {
-    #endif
-    int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved);
-    int InitializeDLL(const char* model_dir);
-    const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path);
-    const char* GetProcessingStatus(const char* request_id);
-    int CancelBloodPressureAnalysis(const char* request_id);
-    const char* GetVersionInfo();
-    const char* GenerateRequestId();
-    #ifdef __cplusplus
-    }
-    #endif
-    """
-    int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved)
-    int InitializeDLL(const char* model_dir)
-    const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path)
-    const char* GetProcessingStatus(const char* request_id)
-    int CancelBloodPressureAnalysis(const char* request_id)
-    const char* GetVersionInfo()
-    const char* GenerateRequestId()
-
 cdef public int DllMain(void* hModule, unsigned long ul_reason_for_call, void* lpReserved):
     global python_initialized
     if ul_reason_for_call == 1:  # DLL_PROCESS_ATTACH
