@@ -455,7 +455,18 @@ jobs:
         run: |
           # Copy required files to dist_csharp
           Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
-          if (Test-Path "python311.dll") { Copy-Item "python311.dll" "dist_csharp\" -Force }
+          # python311.dllを正確な場所からコピー
+          $pythonDir = "C:\hostedtoolcache\windows\Python\3.11.9\x64"
+          if (Test-Path "$pythonDir\python311.dll") {
+            Copy-Item "$pythonDir\python311.dll" "dist_csharp\" -Force
+            Write-Host "Copied python311.dll from $pythonDir"
+          } elseif (Test-Path "$pythonDir\DLLs\python311.dll") {
+            Copy-Item "$pythonDir\DLLs\python311.dll" "dist_csharp\" -Force
+            Write-Host "Copied python311.dll from $pythonDir\DLLs"
+          } else {
+            Write-Host "python311.dll not found in expected locations"
+            exit 1
+          }
           if (Test-Path "dist_cython\python_deps") { Copy-Item "dist_cython\python_deps" "dist_csharp\" -Recurse -Force }
           if (Test-Path "models_compressed") { Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force }
           elseif (Test-Path "models") { Copy-Item "models" "dist_csharp\models" -Recurse -Force }
