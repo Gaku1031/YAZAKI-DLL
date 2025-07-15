@@ -767,11 +767,8 @@ jobs:
         run: |
           Write-Host "Copying Universal CRT DLLs..." -ForegroundColor Yellow
           $ucrt = "$env:SystemRoot\System32\ucrtbase.dll"
-          $apims = "$env:SystemRoot\System32\api-ms-win-crt-runtime-l1-1-0.dll"
           if (Test-Path $ucrt) { Copy-Item $ucrt dist_csharp -Force; Write-Host "ucrtbase.dll copied" }
           else { Write-Host "ucrtbase.dll not found" -ForegroundColor Red }
-          if (Test-Path $apims) { Copy-Item $apims dist_csharp -Force; Write-Host "api-ms-win-crt-runtime-l1-1-0.dll copied" }
-          else { Write-Host "api-ms-win-crt-runtime-l1-1-0.dll not found" -ForegroundColor Red }
 
       - name: Run C# Integration Test in dist_csharp
         shell: powershell
