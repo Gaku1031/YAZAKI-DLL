@@ -196,7 +196,7 @@ cdef public int InitializeDLL(const char* model_dir):
     cdef str model_dir_str
     try:
         if model_dir:
-            model_dir_str = model_dir.decode('utf-8')
+            model_dir_str = model_dir.decode('mbcs')
         else:
             model_dir_str = ""
         ret_val = 1 if initialize_models(model_dir_str) else 0
@@ -210,11 +210,11 @@ cdef public const char* StartBloodPressureAnalysisRequest(const char* request_id
     cdef int n
     try:
         if request_id:
-            request_id_str = request_id.decode('utf-8')
+            request_id_str = request_id.decode('mbcs')
         else:
             request_id_str = ""
         if movie_path:
-            movie_path_str = movie_path.decode('utf-8')
+            movie_path_str = movie_path.decode('mbcs')
         else:
             movie_path_str = ""
         result_str = start_blood_pressure_analysis(request_id_str, height, weight, sex, movie_path_str)
@@ -236,7 +236,7 @@ cdef public const char* GetProcessingStatus(const char* request_id):
     cdef int n
     try:
         if request_id:
-            request_id_str = request_id.decode('utf-8')
+            request_id_str = request_id.decode('mbcs')
         else:
             request_id_str = ""
         result_str = get_processing_status(request_id_str)
@@ -256,7 +256,7 @@ cdef public int CancelBloodPressureAnalysis(const char* request_id):
     cdef str request_id_str
     try:
         if request_id:
-            request_id_str = request_id.decode('utf-8')
+            request_id_str = request_id.decode('mbcs')
         else:
             request_id_str = ""
         ret_val = 1 if cancel_blood_pressure_analysis(request_id_str) else 0
