@@ -1,78 +1,141 @@
 // CppWrapperDLL.cpp
 #include "BloodPressureWrapper.h"
+#include <Python.h>
 #include <windows.h>
 #include <string>
 #include <mutex>
 
-static std::mutex dllMutex;
-static HMODULE hCythonDll = nullptr;
+static std::mutex pyMutex;
+static bool pythonInitialized = false;
+static PyObject* pModule = nullptr;
 
-// Cython DLL関数ポインタ型
-using fnInitializeDLL = int(*)(const char*);
-using fnStartBloodPressureAnalysisRequest = const char*(*)(const char*, int, int, int, const char*);
-using fnGetProcessingStatus = const char*(*)(const char*);
-using fnCancelBloodPressureAnalysis = int(*)(const char*);
-using fnGetVersionInfo = const char* (*)();
-using fnGenerateRequestId = const char* (*)();
-
-static fnInitializeDLL pInitializeDLL = nullptr;
-static fnStartBloodPressureAnalysisRequest pStartRequest = nullptr;
-static fnGetProcessingStatus pGetStatus = nullptr;
-static fnCancelBloodPressureAnalysis pCancel = nullptr;
-static fnGetVersionInfo pGetVersion = nullptr;
-static fnGenerateRequestId pGenReqId = nullptr;
-
-static bool LoadCythonDll() {
-    if (hCythonDll) return true;
-    hCythonDll = LoadLibraryA("BloodPressureEstimation.dll");
-    if (!hCythonDll) return false;
-    pInitializeDLL = (fnInitializeDLL)GetProcAddress(hCythonDll, "InitializeDLL");
-    pStartRequest = (fnStartBloodPressureAnalysisRequest)GetProcAddress(hCythonDll, "StartBloodPressureAnalysisRequest");
-    pGetStatus = (fnGetProcessingStatus)GetProcAddress(hCythonDll, "GetProcessingStatus");
-    pCancel = (fnCancelBloodPressureAnalysis)GetProcAddress(hCythonDll, "CancelBloodPressureAnalysis");
-    pGetVersion = (fnGetVersionInfo)GetProcAddress(hCythonDll, "GetVersionInfo");
-    pGenReqId = (fnGenerateRequestId)GetProcAddress(hCythonDll, "GenerateRequestId");
-    return pInitializeDLL && pStartRequest && pGetStatus && pCancel && pGetVersion && pGenReqId;
-}
-
+// PythonランタイムとCython DLLの初期化
 extern "C" __declspec(dllexport)
 int InitializeBP(const char* model_dir) {
-    std::lock_guard<std::mutex> lock(dllMutex);
-    if (!LoadCythonDll()) return 0;
-    return pInitializeDLL ? pInitializeDLL(model_dir) : 0;
+    std::lock_guard<std::mutex> lock(pyMutex);
+    if (!pythonInitialized) {
+        Py_Initialize();
+        pythonInitialized = true;
+    }
+    // GIL確保
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    // sys.pathにカレントディレクトリとpython_depsを追加
+    PyRun_SimpleString("import sys; sys.path.insert(0, './python_deps'); sys.path.insert(0, './')");
+    // Cython拡張モジュール（pyd）をimport
+    if (pModule) {
+        Py_DECREF(pModule);
+        pModule = nullptr;
+    }
+    pModule = PyImport_ImportModule("BloodPressureEstimation");
+    int result = 0;
+    if (pModule) {
+        PyObject* pFunc = PyObject_GetAttrString(pModule, "InitializeDLL");
+        if (pFunc && PyCallable_Check(pFunc)) {
+            PyObject* pArgs = Py_BuildValue("(s)", model_dir);
+            PyObject* pResult = PyObject_CallObject(pFunc, pArgs);
+            if (pResult) {
+                result = PyLong_AsLong(pResult);
+                Py_DECREF(pResult);
+            } else {
+                PyErr_Print();
+            }
+            Py_DECREF(pArgs);
+            Py_DECREF(pFunc);
+        } else {
+            PyErr_Print();
+            Py_XDECREF(pFunc);
+        }
+    } else {
+        PyErr_Print();
+    }
+    PyGILState_Release(gstate);
+    return result;
+}
+
+static std::string CallStringFunc(const char* funcName, const char* fmt = nullptr, ...) {
+    std::lock_guard<std::mutex> lock(pyMutex);
+    if (!pythonInitialized || !pModule) return "ERROR: Not initialized";
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    std::string result = "";
+    PyObject* pFunc = PyObject_GetAttrString(pModule, funcName);
+    if (pFunc && PyCallable_Check(pFunc)) {
+        PyObject* pArgs = nullptr;
+        if (fmt) {
+            va_list args;
+            va_start(args, fmt);
+            pArgs = Py_VaBuildValue(fmt, args);
+            va_end(args);
+        }
+        PyObject* pResult = PyObject_CallObject(pFunc, pArgs);
+        if (pResult) {
+            result = PyUnicode_AsUTF8(pResult);
+            Py_DECREF(pResult);
+        } else {
+            PyErr_Print();
+            result = "ERROR: Exception in ";
+            result += funcName;
+        }
+        if (pArgs) Py_DECREF(pArgs);
+        Py_DECREF(pFunc);
+    } else {
+        PyErr_Print();
+        result = "ERROR: Not initialized";
+        Py_XDECREF(pFunc);
+    }
+    PyGILState_Release(gstate);
+    return result;
 }
 
 extern "C" __declspec(dllexport)
 const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path) {
-    std::lock_guard<std::mutex> lock(dllMutex);
-    if (!LoadCythonDll() || !pStartRequest) return "ERROR: DLL not loaded";
-    return pStartRequest(request_id, height, weight, sex, movie_path);
+    static thread_local std::string ret;
+    ret = CallStringFunc("StartBloodPressureAnalysisRequest", "siiis", request_id, height, weight, sex, movie_path);
+    return ret.c_str();
 }
 
 extern "C" __declspec(dllexport)
 const char* GetProcessingStatus(const char* request_id) {
-    std::lock_guard<std::mutex> lock(dllMutex);
-    if (!LoadCythonDll() || !pGetStatus) return "ERROR: DLL not loaded";
-    return pGetStatus(request_id);
+    static thread_local std::string ret;
+    ret = CallStringFunc("GetProcessingStatus", "s", request_id);
+    return ret.c_str();
 }
 
 extern "C" __declspec(dllexport)
 int CancelBloodPressureAnalysis(const char* request_id) {
-    std::lock_guard<std::mutex> lock(dllMutex);
-    if (!LoadCythonDll() || !pCancel) return 0;
-    return pCancel(request_id);
+    std::lock_guard<std::mutex> lock(pyMutex);
+    if (!pythonInitialized || !pModule) return 0;
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    int result = 0;
+    PyObject* pFunc = PyObject_GetAttrString(pModule, "CancelBloodPressureAnalysis");
+    if (pFunc && PyCallable_Check(pFunc)) {
+        PyObject* pArgs = Py_BuildValue("(s)", request_id);
+        PyObject* pResult = PyObject_CallObject(pFunc, pArgs);
+        if (pResult) {
+            result = PyObject_IsTrue(pResult);
+            Py_DECREF(pResult);
+        } else {
+            PyErr_Print();
+        }
+        Py_DECREF(pArgs);
+        Py_DECREF(pFunc);
+    } else {
+        PyErr_Print();
+        Py_XDECREF(pFunc);
+    }
+    PyGILState_Release(gstate);
+    return result;
 }
 
 extern "C" __declspec(dllexport)
 const char* GetVersionInfo() {
-    std::lock_guard<std::mutex> lock(dllMutex);
-    if (!LoadCythonDll() || !pGetVersion) return "ERROR: DLL not loaded";
-    return pGetVersion();
+    static thread_local std::string ret;
+    ret = CallStringFunc("GetVersionInfo");
+    return ret.c_str();
 }
 
 extern "C" __declspec(dllexport)
 const char* GenerateRequestId() {
-    std::lock_guard<std::mutex> lock(dllMutex);
-    if (!LoadCythonDll() || !pGenReqId) return "ERROR: DLL not loaded";
-    return pGenReqId();
+    static thread_local std::string ret;
+    ret = CallStringFunc("GenerateRequestId");
+    return ret.c_str();
 } 
