@@ -721,9 +721,9 @@ jobs:
       - name: Run C# Integration Test in dist_csharp
         run: |
           Push-Location "dist_csharp"
-
+      
           Write-Host "=== C# Integration Test with Enhanced Environment ===" -ForegroundColor Green
-
+      
           # Verify all required files exist before testing
           Write-Host "Pre-test verification:" -ForegroundColor Yellow
           $requiredFiles = @(
@@ -732,7 +732,7 @@ jobs:
             "BloodPressureTest.exe",
             "vcruntime140.dll"
           )
-
+      
           $allFilesExist = $true
           foreach ($file in $requiredFiles) {
             if (Test-Path $file) {
@@ -743,7 +743,7 @@ jobs:
               $allFilesExist = $false
             }
           }
-
+      
           if (-not $allFilesExist) {
             Write-Host "Required files are missing! Listing all files:" -ForegroundColor Red
             Get-ChildItem -Filter "*.dll" | Format-Table Name, Length
@@ -751,13 +751,13 @@ jobs:
             Pop-Location
             exit 1
           }
-
+      
           # Set comprehensive environment variables
           $currentDir = Get-Location
           $pythonDepsPath = "$currentDir\python_deps"
           $numpyLibsPath = "$currentDir\python_deps\numpy\.libs"
           $scipyLibsPath = "$currentDir\python_deps\scipy\.libs"
-
+      
           # Enhanced PATH setup
           $newPath = @(
             $currentDir,
@@ -768,21 +768,21 @@ jobs:
             "$pythonDepsPath\cv2",
             $env:PATH
           ) -join ";"
-
+      
           $env:PATH = $newPath
           $env:PYTHONHOME = $currentDir
           $env:PYTHONPATH = $pythonDepsPath
           $env:PYTHONDONTWRITEBYTECODE = "1"
-
+      
           # Additional environment variables for DLL loading
           $env:DLL_DIRECTORY = $currentDir
-
+      
           Write-Host "Environment configuration:"
           Write-Host "  Current directory: $currentDir"
           Write-Host "  PYTHONHOME: $env:PYTHONHOME"
           Write-Host "  PYTHONPATH: $env:PYTHONPATH"
           Write-Host "  PATH (first 300 chars): $($env:PATH.Substring(0, [Math]::Min(300, $env:PATH.Length)))..."
-
+      
           # Additional dependency verification
           Write-Host "Python dependencies verification:" -ForegroundColor Yellow
           $pythonDeps = @(
@@ -790,7 +790,7 @@ jobs:
             "python_deps\cv2\cv2.pyd",
             "python_deps\sklearn\utils\_cython_blas.pyd"
           )
-
+      
           foreach ($dep in $pythonDeps) {
             if (Test-Path $dep) {
               Write-Host "$dep" -ForegroundColor Green
@@ -798,14 +798,14 @@ jobs:
               Write-Host "$dep" -ForegroundColor Yellow
             }
           }
-
+      
           # Test DLL loading capability
           Write-Host "Testing DLL loading capability..." -ForegroundColor Yellow
           try {
             Add-Type @"
             using System;
             using System.Runtime.InteropServices;
-
+            
             public class DllTest {
                 [DllImport("kernel32.dll", SetLastError = true)]
                 public static extern IntPtr LoadLibrary(string lpFileName);
@@ -825,7 +825,7 @@ jobs:
           } catch {
             Write-Host "DLL loading test failed: $($_.Exception.Message)" -ForegroundColor Red
           }
-
+      
           # Run the actual test
           Write-Host "Starting C# integration test..." -ForegroundColor Green
           try {
