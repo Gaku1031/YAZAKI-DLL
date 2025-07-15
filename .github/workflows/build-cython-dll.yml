@@ -523,7 +523,7 @@ jobs:
             $fullPath = "dist_csharp\$file"
             if (Test-Path $fullPath) {
               $size = [math]::Round((Get-Item $fullPath).Length / 1KB, 1)
-              Write-Host "$file ($($size) KB)"
+              Write-Host $file "($size KB)"
             } else {
               Write-Host "$file MISSING"
               $allCriticalFound = $false
