@@ -1031,26 +1031,26 @@ jobs:
         shell: powershell
         run: |
           Push-Location "dist_csharp"
-
+          
           Write-Host "=== Python Dependencies Pre-Test with Fixed Environment ===" -ForegroundColor Green
-
+          
           # DON'T set PYTHONHOME - this breaks Python standard library access
           # Only set PYTHONPATH to include our dependencies
           $currentDir = Get-Location
           $env:PYTHONPATH = "$currentDir\python_deps"
           # Remove PYTHONHOME to let Python use its original installation
           $env:PYTHONHOME = $null
-
+          
           # Set PATH to include current directory for DLL access
           $env:PATH = "$currentDir;$env:PATH"
-
+          
           Write-Host "Environment configuration for Python test:" -ForegroundColor Cyan
           Write-Host "  Current directory: $currentDir" -ForegroundColor Cyan  
           Write-Host "  PYTHONPATH: $env:PYTHONPATH" -ForegroundColor Cyan
           Write-Host "  PYTHONHOME: [UNSET - using system Python]" -ForegroundColor Cyan
-
+          
           Write-Host "Testing Python with system installation and our dependencies..." -ForegroundColor Yellow
-
+          
           try {
             # Test basic Python functionality first
             Write-Host "Testing basic Python functionality..." -ForegroundColor Gray
@@ -1106,18 +1106,18 @@ jobs:
             Write-Host "[ERROR] Python test execution failed: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "This indicates serious Python environment issues" -ForegroundColor Yellow
           }
-
+          
           # Final environment check for C# integration
           Write-Host "=== Final Environment Setup for C# Integration ===" -ForegroundColor Yellow
-
+          
           # For C# integration, we need a different approach
           # Copy Python standard library files that might be needed
           Write-Host "Preparing Python environment for C# DLL usage..." -ForegroundColor Gray
-
+          
           # Get original Python installation paths
           $originalPythonHome = python -c "import sys; print(sys.base_prefix)" 2>$null
           $originalPythonLib = python -c "import sys; import os; print(os.path.join(sys.base_prefix, 'Lib'))" 2>$null
-
+          
           if ($originalPythonHome -and $originalPythonLib) {
             Write-Host "Original Python installation:" -ForegroundColor Cyan
             Write-Host "  Home: $originalPythonHome" -ForegroundColor Cyan
@@ -1149,7 +1149,7 @@ jobs:
             
             Write-Host "Python standard library essentials copied for C# integration" -ForegroundColor Green
           }
-
+          
           Pop-Location
 
       - name: Run C# Integration Test in dist_csharp
