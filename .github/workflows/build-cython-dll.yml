@@ -1338,30 +1338,67 @@ jobs:
           Write-Host "Critical files status: $foundCount/$($criticalFiles.Count) found" -ForegroundColor Cyan
           
           # 8. Python環境テスト
-          Write-Host "8. Python environment final test" -ForegroundColor Yellow
+          Write-Host "8. Python environment final test (with error tolerance)" -ForegroundColor Yellow
           $env:PYTHONPATH = "python_deps"
           
-          # Test each module individually
+          # --- 依存DLL探索パスの強化 ---
+          $pythonDepsPath = "$currentDir\python_deps"
+          $numpyLibsPath = "$currentDir\python_deps\numpy\.libs"
+          $scipyLibsPath = "$currentDir\python_deps\scipy\.libs"
+          $sklearnLibsPath = "$currentDir\python_deps\sklearn\.libs"
+          $env:PATH = "$currentDir;$pythonDepsPath;$numpyLibsPath;$scipyLibsPath;$sklearnLibsPath;$env:PATH"
+          $env:PYTHONPATH = "$pythonDepsPath;$pythonDepsPath\scipy;$pythonDepsPath\sklearn;$env:PYTHONPATH"
+          
+          # Test each module individually with detailed error handling
           $modules = @("sys", "os", "numpy", "cv2", "scipy", "sklearn")
           $workingModules = @()
+          $criticalModules = @("sys", "os", "numpy", "cv2")
+          $criticalWorkingCount = 0
           
           foreach ($module in $modules) {
             try {
-              $result = python -c "import $module; print('${module}: OK')" 2>&1
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "  ${module}: OK" -ForegroundColor Green
+              $result = python -c "
+              import sys
+              sys.path.insert(0, 'python_deps')
+              try:
+                  import $module
+                  print('$module: OK')
+              except ImportError as e:
+                  print('$module: ImportError - ' + str(e))
+              except Exception as e:
+                  print('$module: Error - ' + str(e))
+              " 2>&1
+              
+              if ($result -like "*OK*") {
+                Write-Host "  $module: OK" -ForegroundColor Green
                 $workingModules += $module
+                if ($module -in $criticalModules) {
+                  $criticalWorkingCount++
+                }
               } else {
-                Write-Host "  ${module}: FAILED - $result" -ForegroundColor Yellow
+                Write-Host "  $module: FAILED - $result" -ForegroundColor Yellow
+                # Save detailed error for debugging
+                $result | Out-File -FilePath "import_${module}_error.txt" -Encoding UTF8 -Force
+                
+                # Don't fail the build for non-critical modules
+                if ($module -in $criticalModules) {
+                  Write-Host "    WARNING: Critical module $module failed!" -ForegroundColor Red
+                } else {
+                  Write-Host "    INFO: Optional module $module failed (not critical for basic functionality)" -ForegroundColor Cyan
+                }
               }
             } catch {
-              Write-Host "  ${module}: ERROR" -ForegroundColor Red
+              Write-Host "  $module: EXECUTION ERROR" -ForegroundColor Yellow
+              if ($module -in $criticalModules) {
+                Write-Host "    WARNING: Critical module $module had execution error!" -ForegroundColor Red
+              }
             }
           }
           
           Write-Host "Working modules: $($workingModules -join ', ')" -ForegroundColor Cyan
+          Write-Host "Critical modules working: $criticalWorkingCount/$($criticalModules.Count)" -ForegroundColor Cyan
           
-          # 9. Memory optimization for DLL
+          # 9. Memory optimization for DLL execution
           Write-Host "9. Memory optimization for DLL execution" -ForegroundColor Yellow
           
           # .NET memory settings
@@ -1381,6 +1418,41 @@ jobs:
           
           Write-Host "Memory optimization settings applied" -ForegroundColor Green
           
+          # 10. Final status assessment and decision
+          Write-Host "10. Final status assessment" -ForegroundColor Yellow
+          
+          $isReady = $true
+          $readinessIssues = @()
+          
+          # Check critical dependencies
+          if ($criticalWorkingCount -lt $criticalModules.Count) {
+            $missingCritical = $criticalModules | Where-Object { $_ -notin $workingModules }
+            $readinessIssues += "Critical modules missing: $($missingCritical -join ', ')"
+            
+            # Only fail if we have less than 2 critical modules working
+            if ($criticalWorkingCount -lt 2) {
+              $isReady = $false
+            }
+          }
+          
+          # Check DLL files
+          if (!(Test-Path "BloodPressureEstimation.dll")) {
+            $readinessIssues += "Main DLL missing"
+            $isReady = $false
+          }
+          
+          if (!(Test-Path "python311.dll")) {
+            $readinessIssues += "Python DLL missing"
+            $isReady = $false
+          }
+          
+          # Check NumPy core files
+          $numpyCoreExists = (Test-Path "python_deps\numpy\core\_multiarray_umath.cp311-win_amd64.pyd") -or (Test-Path "python_deps\numpy\core\_multiarray_umath.pyd")
+          if (-not $numpyCoreExists) {
+            $readinessIssues += "NumPy core files missing"
+            $isReady = $false
+          }
+          
           Write-Host "=== DLL Preparation Complete ===" -ForegroundColor Green
           Write-Host "Summary:" -ForegroundColor Cyan
           Write-Host "  Working directory: $currentDir" -ForegroundColor Gray
@@ -1390,6 +1462,39 @@ jobs:
           Write-Host "  NumPy core (platform): $(Test-Path 'python_deps\numpy\core\_multiarray_umath.cp311-win_amd64.pyd')" -ForegroundColor Gray
           Write-Host "  NumPy core (legacy): $(Test-Path 'python_deps\numpy\core\_multiarray_umath.pyd')" -ForegroundColor Gray
           Write-Host "  Working modules: $($workingModules.Count)/$($modules.Count)" -ForegroundColor Gray
+          Write-Host "  Critical modules: $criticalWorkingCount/$($criticalModules.Count)" -ForegroundColor Gray
+          
+          # Final decision logic
+          if ($isReady) {
+            Write-Host "STATUS: READY for C# integration" -ForegroundColor Green
+          } else {
+            Write-Host "STATUS: PARTIAL - evaluating if continuation is possible" -ForegroundColor Yellow
+            foreach ($issue in $readinessIssues) {
+              Write-Host "  ISSUE: $issue" -ForegroundColor Yellow
+            }
+            
+            # Only fail if absolutely critical components are missing
+            if ($criticalWorkingCount -eq 0) {
+              Write-Host "CRITICAL FAILURE: No essential modules working" -ForegroundColor Red
+              throw "Critical Python modules completely non-functional"
+            } elseif (!(Test-Path "BloodPressureEstimation.dll")) {
+              Write-Host "CRITICAL FAILURE: Main DLL missing" -ForegroundColor Red
+              throw "BloodPressureEstimation.dll not found"
+            } elseif (!(Test-Path "python311.dll")) {
+              Write-Host "CRITICAL FAILURE: Python runtime missing" -ForegroundColor Red
+              throw "python311.dll not found"
+            } else {
+              Write-Host "PROCEEDING: Essential components available" -ForegroundColor Yellow
+              Write-Host "  Working critical modules: $($workingModules | Where-Object { $_ -in $criticalModules } | ForEach-Object { $_ }) ($criticalWorkingCount/$($criticalModules.Count))" -ForegroundColor Green
+              if ("scipy" -notin $workingModules) {
+                Write-Host "  NOTE: SciPy not working - advanced signal processing may be limited" -ForegroundColor Cyan
+              }
+              if ("sklearn" -notin $workingModules) {
+                Write-Host "  NOTE: scikit-learn not working - will use fallback regression models" -ForegroundColor Cyan
+              }
+              Write-Host "  The DLL includes fallback implementations for missing components" -ForegroundColor Cyan
+            }
+          }
           
           Pop-Location
       
