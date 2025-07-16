@@ -851,8 +851,10 @@ jobs:
             $sitePackages = Join-Path $pythonDir "Lib\site-packages"
           }
 
-          Write-Host "Python directory: $pythonDir" -ForegroundColor Cyan
-          Write-Host "Site packages: $sitePackages" -ForegroundColor Cyan
+          Write-Host "[DEBUG] Python Executable: $pythonExe" -ForegroundColor Cyan
+          Write-Host "[DEBUG] Site-packages: $sitePackages" -ForegroundColor Cyan
+          Write-Host "[DEBUG] Listing site-packages contents:" -ForegroundColor Yellow
+          Get-ChildItem -Path $sitePackages | ForEach-Object { Write-Host "  $($_.Name)" }
 
           # 3. python_depsディレクトリ作成
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
