@@ -835,7 +835,9 @@ jobs:
           # 1. DLL本体コピー
           if (Test-Path "BloodPressureEstimation.dll") {
             Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
-            Write-Host "BloodPressureEstimation.dll copied" -ForegroundColor Green
+            # Python import用に.pydとしてもコピー
+            Copy-Item "BloodPressureEstimation.dll" "dist_csharp\BloodPressureEstimation.pyd" -Force
+            Write-Host "BloodPressureEstimation.dll and .pyd copied" -ForegroundColor Green
           } else {
             Write-Host "ERROR: BloodPressureEstimation.dll not found!" -ForegroundColor Red
             exit 1
