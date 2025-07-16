@@ -857,43 +857,26 @@ jobs:
           # 3. python_depsディレクトリ作成
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
-          # 4. 必須パッケージの厳選コピー
+          # 4. 必須パッケージの厳選コピー（ディレクトリごとコピー）
           $copyList = @(
-            @{ name = "numpy"; subdirs = @("core", "lib", "linalg") },
-            @{ name = "scipy"; subdirs = @("signal", "stats") },
-            @{ name = "sklearn"; subdirs = @("decomposition", "utils") },
-            @{ name = "cv2"; subdirs = @() },
-            @{ name = "mediapipe"; subdirs = @("python", "solutions") },
-            @{ name = "joblib"; subdirs = @() },
-            @{ name = "pandas"; subdirs = @() },
-            @{ name = "pywt"; subdirs = @() }
+            "numpy",
+            "scipy",
+            "sklearn",
+            "cv2",
+            "mediapipe",
+            "joblib",
+            "pandas",
+            "pywt"
           )
 
           foreach ($pkg in $copyList) {
-            $src = Join-Path $sitePackages $pkg.name
-            $dst = "dist_csharp/python_deps/$($pkg.name)"
+            $src = Join-Path $sitePackages $pkg
+            $dst = "dist_csharp/python_deps/$pkg"
             if (Test-Path $src) {
-              New-Item -ItemType Directory -Path $dst -Force | Out-Null
-              # __init__.py, .pyd, .dll, .so
-              Get-ChildItem -Path $src -Filter "__init__.py" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
-              Get-ChildItem -Path $src -Filter "*.pyd" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
-              Get-ChildItem -Path $src -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
-              Get-ChildItem -Path $src -Filter "*.so" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
-              # サブディレクトリ
-              foreach ($sub in $pkg.subdirs) {
-                $subSrc = Join-Path $src $sub
-                if (Test-Path $subSrc) {
-                  Copy-Item $subSrc (Join-Path $dst $sub) -Recurse -Force
-                }
-              }
-              # .libs (DLL)も必要なら
-              $libsDir = Join-Path $src ".libs"
-              if (Test-Path $libsDir) {
-                Copy-Item $libsDir (Join-Path $dst ".libs") -Recurse -Force
-              }
-              Write-Host "$($pkg.name) minimal copy completed" -ForegroundColor Green
+              Copy-Item $src $dst -Recurse -Force
+              Write-Host "$pkg directory copied" -ForegroundColor Green
             } else {
-              Write-Host "$($pkg.name) not found in site-packages" -ForegroundColor Yellow
+              Write-Host "$pkg not found in site-packages" -ForegroundColor Yellow
             }
           }
 
