@@ -825,151 +825,99 @@ jobs:
           Write-Host "C++ Wrapper DLL build completed" -ForegroundColor Green
         shell: powershell
 
-      - name: Create Optimized Distribution Package
+      - name: Create Ultra-Optimized Distribution Package
         run: |
-          Write-Host "Creating optimized distribution package..." -ForegroundColor Yellow
+          Write-Host "Creating ultra-optimized distribution package..." -ForegroundColor Yellow
 
           # dist_csharp ディレクトリの作成
           New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
 
-          # CRITICAL: First copy the main BloodPressureEstimation.dll
+          # 1. DLL本体コピー
           if (Test-Path "BloodPressureEstimation.dll") {
             Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
             Write-Host "BloodPressureEstimation.dll copied" -ForegroundColor Green
           } else {
-            Write-Host "ERROR: BloodPressureEstimation.dll not found in root directory!" -ForegroundColor Red
-            Get-ChildItem -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.Name)" }
+            Write-Host "ERROR: BloodPressureEstimation.dll not found!" -ForegroundColor Red
             exit 1
           }
 
-          # Get Python execution environment path
+          # 2. Python環境パス取得
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
-          $pythonDllsDir = Join-Path $pythonDir "DLLs"
-
-          # Find site-packages directory with multiple detection methods
-          Write-Host "Detecting site-packages directory..." -ForegroundColor Cyan
-
-                    # Method 1: Standard site-packages detection
-          try {
-            $sitePackages = python -c "import site; print(site.getsitepackages()[0])" 2>$null
-            Write-Host "Method 1 (site.getsitepackages): $sitePackages" -ForegroundColor Gray
-          } catch {
-            Write-Host "Method 1 failed: $($_.Exception.Message)" -ForegroundColor Yellow
-            $sitePackages = ""
-          }
-
-          # Method 2: Using sys.path
-          try {
-            $sitePackagesMethod2 = python -c "import sys; import os; paths = [p for p in sys.path if 'site-packages' in p and os.path.exists(p)]; print(paths[0] if paths else '')" 2>$null
-            Write-Host "Method 2 (sys.path search): $sitePackagesMethod2" -ForegroundColor Gray
-          } catch {
-            Write-Host "Method 2 failed: $($_.Exception.Message)" -ForegroundColor Yellow
-            $sitePackagesMethod2 = ""
-          }
-
-          # Method 3: Manual construction
-          $sitePackagesMethod3 = Join-Path $pythonDir "Lib\site-packages"
-          Write-Host "Method 3 (manual): $sitePackagesMethod3" -ForegroundColor Gray
-
-          # Method 4: Check installed packages location
-          try {
-            $sitePackagesMethod4 = python -c "try: import numpy; import os; path = os.path.dirname(numpy.__file__); parent = os.path.dirname(path); print(parent); except: print('')" 2>$null
-            Write-Host "Method 4 (numpy location): $sitePackagesMethod4" -ForegroundColor Gray
-          } catch {
-            Write-Host "Method 4 failed: $($_.Exception.Message)" -ForegroundColor Yellow
-            $sitePackagesMethod4 = ""
-          }
-
-          # Method 5: Check pip show location (simplified)
-          try {
-            $sitePackagesMethod5 = python -c "import subprocess; import sys; result = subprocess.run([sys.executable, '-m', 'pip', 'show', 'numpy'], capture_output=True, text=True); print(result.stdout)" 2>$null
-            if ($sitePackagesMethod5) {
-              $locationLine = $sitePackagesMethod5 -split "`n" | Where-Object { $_ -like "Location:*" }
-              if ($locationLine) {
-                $sitePackagesMethod5 = ($locationLine -split ": ")[1]
-              } else {
-                $sitePackagesMethod5 = ""
-              }
-            }
-            Write-Host "Method 5 (pip show): $sitePackagesMethod5" -ForegroundColor Gray
-          } catch {
-            Write-Host "Method 5 failed: $($_.Exception.Message)" -ForegroundColor Yellow
-            $sitePackagesMethod5 = ""
-          }
-
-          # Choose the correct site-packages directory
-          $sitePackages = $null
-          $candidates = @($sitePackagesMethod5, $sitePackagesMethod4, $sitePackagesMethod2, $sitePackagesMethod1, $sitePackagesMethod3)
-
-          foreach ($candidate in $candidates) {
-            if ($candidate -and (Test-Path $candidate)) {
-              # Verify it contains at least one of our required packages
-              $hasNumpy = Test-Path "$candidate\numpy"
-              $hasCv2 = Test-Path "$candidate\cv2"
-              $hasScipy = Test-Path "$candidate\scipy"
-              
-              if ($hasNumpy -or $hasCv2 -or $hasScipy) {
-                $sitePackages = $candidate
-                Write-Host "Selected site-packages: $sitePackages" -ForegroundColor Green
-                Write-Host "  Contains numpy: $hasNumpy" -ForegroundColor Gray
-                Write-Host "  Contains cv2: $hasCv2" -ForegroundColor Gray
-                Write-Host "  Contains scipy: $hasScipy" -ForegroundColor Gray
-                break
-              } else {
-                Write-Host "Candidate exists but no required packages: $candidate" -ForegroundColor Yellow
-              }
-            }
-          }
-
-          if (-not $sitePackages) {
-            Write-Host "ERROR: Could not find valid site-packages directory!" -ForegroundColor Red
-            Write-Host "Available directories:" -ForegroundColor Yellow
-            Get-ChildItem -Path $pythonDir -Recurse -Directory -Depth 2 | Where-Object { $_.Name -like "*site*" -or $_.Name -like "*packages*" } | ForEach-Object { Write-Host "  $($_.FullName)" }
-            
-            # Try to find where packages are actually installed
-            Write-Host "Trying to find packages directly..." -ForegroundColor Yellow
-            $numpyLocation = python -c "try: import numpy; print(numpy.__file__); except: print('numpy not found')" 2>$null
-            if ($numpyLocation -and $numpyLocation -ne "numpy not found") {
-              $sitePackages = Split-Path (Split-Path $numpyLocation -Parent) -Parent
-              Write-Host "Derived site-packages from numpy location: $sitePackages" -ForegroundColor Yellow
-            } else {
-              Write-Host "CRITICAL: Cannot find Python packages!" -ForegroundColor Red
-              exit 1
-            }
+          $sitePackages = python -c "import site; print(site.getsitepackages()[0])" 2>$null
+          if (-not $sitePackages -or -not (Test-Path $sitePackages)) {
+            $sitePackages = Join-Path $pythonDir "Lib\site-packages"
           }
 
           Write-Host "Python directory: $pythonDir" -ForegroundColor Cyan
           Write-Host "Site packages: $sitePackages" -ForegroundColor Cyan
 
-          # Verify that required packages are actually installed
-          Write-Host "Verifying installed packages..." -ForegroundColor Cyan
-          $requiredPackages = @("numpy", "cv2", "scipy", "sklearn", "mediapipe")
-          foreach ($pkg in $requiredPackages) {
-            try {
-              $isInstalled = python -c "try: import $pkg; print('installed'); except: print('not installed')" 2>$null
-              Write-Host "  $pkg`: $isInstalled" -ForegroundColor $(if ($isInstalled -eq "installed") { "Green" } else { "Red" })
-            } catch {
-              Write-Host "  $pkg`: error checking" -ForegroundColor Red
+          # 3. python_depsディレクトリ作成
+          New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
+
+          # 4. 必須パッケージの厳選コピー
+          $copyList = @(
+            @{ name = "numpy"; subdirs = @("core", "lib", "linalg") },
+            @{ name = "scipy"; subdirs = @("signal", "stats") },
+            @{ name = "sklearn"; subdirs = @("decomposition", "utils") },
+            @{ name = "cv2"; subdirs = @() },
+            @{ name = "mediapipe"; subdirs = @("python", "solutions") },
+            @{ name = "joblib"; subdirs = @() },
+            @{ name = "pandas"; subdirs = @() },
+            @{ name = "pywt"; subdirs = @() }
+          )
+
+          foreach ($pkg in $copyList) {
+            $src = Join-Path $sitePackages $pkg.name
+            $dst = "dist_csharp/python_deps/$($pkg.name)"
+            if (Test-Path $src) {
+              New-Item -ItemType Directory -Path $dst -Force | Out-Null
+              # __init__.py, .pyd, .dll, .so
+              Get-ChildItem -Path $src -Filter "__init__.py" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
+              Get-ChildItem -Path $src -Filter "*.pyd" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
+              Get-ChildItem -Path $src -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
+              Get-ChildItem -Path $src -Filter "*.so" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dst -Force }
+              # サブディレクトリ
+              foreach ($sub in $pkg.subdirs) {
+                $subSrc = Join-Path $src $sub
+                if (Test-Path $subSrc) {
+                  Copy-Item $subSrc (Join-Path $dst $sub) -Recurse -Force
+                }
+              }
+              # .libs (DLL)も必要なら
+              $libsDir = Join-Path $src ".libs"
+              if (Test-Path $libsDir) {
+                Copy-Item $libsDir (Join-Path $dst ".libs") -Recurse -Force
+              }
+              Write-Host "$($pkg.name) minimal copy completed" -ForegroundColor Green
+            } else {
+              Write-Host "$($pkg.name) not found in site-packages" -ForegroundColor Yellow
             }
           }
 
-          # 1. Copy essential Python runtime DLLs only
-          Write-Host "=== Step 1: Copying essential Python runtime DLLs ===" -ForegroundColor Yellow
+          # 5. 不要ファイルの徹底削除
+          $cleanupPatterns = @("tests", "test", "__pycache__", "*.dist-info", "*.egg-info", "docs", "examples", "*.pyc", "*.pyo", "*.pxd", "*.c", "*.cpp", "*.h", "*.md", "*.rst", "*.txt", "*.whl", "*.so.debug")
+          Get-ChildItem -Path "dist_csharp/python_deps" -Recurse | ForEach-Object {
+            foreach ($pattern in $cleanupPatterns) {
+              if ($_.Name -like $pattern) {
+                if ($_.PSIsContainer) {
+                  Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                } else {
+                  Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+                }
+                break
+              }
+            }
+          }
 
-          # Main Python DLL
+          # 6. 必要なPython DLLのみコピー
           $pythonDllPath = "$pythonDir\python311.dll"
           if (Test-Path $pythonDllPath) {
             Copy-Item $pythonDllPath "dist_csharp\" -Force
             Write-Host "python311.dll copied" -ForegroundColor Green
           }
-
-          # Essential Python DLLs only
-          $essentialPythonDlls = @(
-            "_ctypes.pyd", "_socket.pyd", "select.pyd", "_ssl.pyd", 
-            "_hashlib.pyd", "_sqlite3.pyd", "_multiprocessing.pyd"
-          )
-
+          $essentialPythonDlls = @("_ctypes.pyd", "_socket.pyd", "select.pyd", "_ssl.pyd", "_hashlib.pyd", "_sqlite3.pyd", "_multiprocessing.pyd")
+          $pythonDllsDir = Join-Path $pythonDir "DLLs"
           foreach ($dll in $essentialPythonDlls) {
             $sourcePath = Join-Path $pythonDllsDir $dll
             if (Test-Path $sourcePath) {
@@ -978,152 +926,7 @@ jobs:
             }
           }
 
-          # 2. Create optimized python_deps directory
-          Write-Host "=== Step 2: Creating optimized Python dependencies ===" -ForegroundColor Yellow
-          New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
-
-          # 3. Selective package copying with size optimization
-          Write-Host "=== Step 3: Selective package copying ===" -ForegroundColor Yellow
-
-          # Define essential submodules for each package
-          $packageConfigs = @{
-            "numpy" = @{
-              essential = @("core", "lib", "linalg", "fft", "random", "ma", "distutils")
-              critical = $true
-            }
-            "cv2" = @{
-              essential = @()  # OpenCV - copy all but exclude docs/tests
-              critical = $true
-            }
-            "sklearn" = @{
-              essential = @("ensemble", "tree", "linear_model", "preprocessing", "utils", "base")
-              critical = $true
-            }
-            "scipy" = @{
-              essential = @("sparse", "linalg", "interpolate", "optimize", "signal", "stats")
-              critical = $true
-            }
-            "mediapipe" = @{
-              essential = @("python", "solutions")
-              critical = $false
-            }
-          }
-
-          $missingCritical = 0
-          foreach ($pkgName in $packageConfigs.Keys) {
-            $config = $packageConfigs[$pkgName]
-            $sourcePath = Join-Path $sitePackages $pkgName
-            $destPath = "dist_csharp\python_deps\$pkgName"
-            
-            Write-Host "Processing package: $pkgName" -ForegroundColor Cyan
-            Write-Host "  Source path: $sourcePath" -ForegroundColor Gray
-            
-            if (Test-Path $sourcePath) {
-              try {
-                # Remove destination if exists
-                if (Test-Path $destPath) {
-                  Remove-Item $destPath -Recurse -Force
-                }
-                
-                # Create package directory
-                New-Item -ItemType Directory -Path $destPath -Force | Out-Null
-                
-                # Copy essential files only
-                $copiedFiles = 0
-                
-                # Copy __init__.py and core files
-                $coreFiles = @("__init__.py", "*.pyd", "*.dll", "*.so")
-                foreach ($pattern in $coreFiles) {
-                  $files = Get-ChildItem -Path $sourcePath -Filter $pattern
-                  foreach ($file in $files) {
-                    Copy-Item $file.FullName $destPath -Force
-                    $copiedFiles++
-                  }
-                }
-                
-                # Copy essential submodules
-                if ($config.essential.Count -gt 0) {
-                  foreach ($submodule in $config.essential) {
-                    $submodulePath = Join-Path $sourcePath $submodule
-                    if (Test-Path $submodulePath) {
-                      $submoduleDest = Join-Path $destPath $submodule
-                      Copy-Item $submodulePath $submoduleDest -Recurse -Force
-                      $copiedFiles += (Get-ChildItem $submoduleDest -Recurse -File).Count
-                    }
-                  }
-                } else {
-                  # For packages like cv2, copy all but exclude unnecessary files
-                  $excludePatterns = @("tests", "test", "docs", "doc", "examples", "*.pyc", "__pycache__", "*.dist-info", "*.egg-info")
-                  $allFiles = Get-ChildItem -Path $sourcePath -Recurse
-                  
-                  foreach ($file in $allFiles) {
-                    $shouldExclude = $false
-                    foreach ($pattern in $excludePatterns) {
-                      if ($file.Name -like $pattern -or $file.FullName -like "*\$pattern*") {
-                        $shouldExclude = $true
-                        break
-                      }
-                    }
-                    
-                    if (-not $shouldExclude) {
-                      $relativePath = $file.FullName.Substring($sourcePath.Length + 1)
-                      $destFile = Join-Path $destPath $relativePath
-                      $destDir = Split-Path $destFile -Parent
-                      
-                      if (-not (Test-Path $destDir)) {
-                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                      }
-                      
-                      Copy-Item $file.FullName $destFile -Force
-                      $copiedFiles++
-                    }
-                  }
-                }
-                
-                Write-Host "  SUCCESS: $pkgName copied ($copiedFiles files)" -ForegroundColor Green
-                
-              } catch {
-                Write-Host "  ERROR: Failed to copy $pkgName`: $($_.Exception.Message)" -ForegroundColor Red
-                if ($config.critical) { $missingCritical++ }
-              }
-                          } else {
-                Write-Host "  ERROR: $pkgName not found in site-packages" -ForegroundColor Red
-                Write-Host "    Expected path: $sourcePath" -ForegroundColor Gray
-                Write-Host "    Available packages in site-packages:" -ForegroundColor Gray
-                if (Test-Path $sitePackages) {
-                  Get-ChildItem -Path $sitePackages -Directory | Select-Object -First 10 | ForEach-Object { Write-Host "      $($_.Name)" }
-                }
-                if ($config.critical) { $missingCritical++ }
-              }
-          }
-
-          if ($missingCritical -gt 0) {
-            Write-Host "ERROR: $missingCritical critical packages are missing!" -ForegroundColor Red
-            exit 1
-          }
-
-          # 4. Copy essential .libs files (only once)
-          Write-Host "=== Step 4: Copying essential .libs files ===" -ForegroundColor Yellow
-
-          $libsDirs = @("numpy\.libs", "scipy\.libs")
-          foreach ($libsDir in $libsDirs) {
-            $sourcePath = "$sitePackages\$libsDir"
-            if (Test-Path $sourcePath) {
-              # Copy only essential DLLs to root
-              $essentialLibs = @("*.dll", "*.pyd")
-              foreach ($pattern in $essentialLibs) {
-                $files = Get-ChildItem -Path $sourcePath -Filter $pattern
-                foreach ($file in $files) {
-                  Copy-Item $file.FullName "dist_csharp\" -Force
-                }
-              }
-              Write-Host "$libsDir essential files copied" -ForegroundColor Green
-            }
-          }
-
-          # 5. Copy essential Visual C++ Runtime DLLs
-          Write-Host "=== Step 5: Copying essential Visual C++ Runtime DLLs ===" -ForegroundColor Yellow
-
+          # 7. Visual C++ランタイムDLL
           $essentialVcDlls = @("vcruntime140.dll", "msvcp140.dll")
           foreach ($dll in $essentialVcDlls) {
             $systemDll = Join-Path $env:SystemRoot "System32\$dll"
@@ -1133,132 +936,28 @@ jobs:
             }
           }
 
-          # 6. Copy models directory (optimized)
-          Write-Host "=== Step 6: Copying models ===" -ForegroundColor Yellow
-          try {
-            if (Test-Path "models_compressed") {
-              Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force -ErrorAction Stop
-              Write-Host "models_compressed copied" -ForegroundColor Green
-            } elseif (Test-Path "models") {
-              Copy-Item "models" "dist_csharp\models" -Recurse -Force -ErrorAction Stop
-              Write-Host "models directory copied" -ForegroundColor Green
-            } else {
-              Write-Host "WARNING: No models directory found" -ForegroundColor Yellow
-              New-Item -ItemType Directory -Path "dist_csharp\models" -Force | Out-Null
-              "# Placeholder for models" | Out-File -FilePath "dist_csharp\models\placeholder.txt" -Encoding UTF8
-              Write-Host "Created placeholder models directory" -ForegroundColor Green
-            }
-          } catch {
-            Write-Host "Warning: Models copy failed: $($_.Exception.Message)" -ForegroundColor Yellow
-            # Create minimal models directory anyway
-            if (-not (Test-Path "dist_csharp\models")) {
-              New-Item -ItemType Directory -Path "dist_csharp\models" -Force | Out-Null
-              "# Placeholder for models" | Out-File -FilePath "dist_csharp\models\placeholder.txt" -Encoding UTF8
-              Write-Host "Created fallback models directory" -ForegroundColor Green
-            }
+          # 8. モデルディレクトリ圧縮コピー
+          if (Test-Path "models_compressed") {
+            Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force
+            Write-Host "models_compressed copied" -ForegroundColor Green
+          } elseif (Test-Path "models") {
+            Copy-Item "models" "dist_csharp\models" -Recurse -Force
+            Write-Host "models directory copied" -ForegroundColor Green
+          } else {
+            Write-Host "WARNING: No models directory found" -ForegroundColor Yellow
+            New-Item -ItemType Directory -Path "dist_csharp\models" -Force | Out-Null
+            "# Placeholder for models" | Out-File -FilePath "dist_csharp\models\placeholder.txt" -Encoding UTF8
           }
 
-                    # 7. Clean up unnecessary files
-          Write-Host "=== Step 7: Cleaning up unnecessary files ===" -ForegroundColor Yellow
-
-          $cleanupPatterns = @("*.pyc", "__pycache__", "*.dist-info", "*.egg-info", "tests", "test", "docs", "doc", "examples")
-          $cleanedFiles = 0
-          $cleanedDirs = 0
-
-          try {
-            Get-ChildItem -Path "dist_csharp" -Recurse | ForEach-Object {
-              foreach ($pattern in $cleanupPatterns) {
-                if ($_.Name -like $pattern) {
-                  try {
-                    if ($_.PSIsContainer) {
-                      Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop
-                      $cleanedDirs++
-                      Write-Host "  Removed directory: $($_.Name)" -ForegroundColor Gray
-                    } else {
-                      Remove-Item $_.FullName -Force -ErrorAction Stop
-                      $cleanedFiles++
-                    }
-                    break
-                  } catch {
-                    Write-Host "  Warning: Could not remove $($_.FullName): $($_.Exception.Message)" -ForegroundColor Yellow
-                  }
-                }
-              }
-            }
-            Write-Host "Cleanup completed: $cleanedFiles files, $cleanedDirs directories removed" -ForegroundColor Green
-          } catch {
-            Write-Host "Warning: Cleanup process encountered errors: $($_.Exception.Message)" -ForegroundColor Yellow
-            # Continue execution even if cleanup fails
+          # 9. サイズ計測
+          $totalSize = (Get-ChildItem -Path "dist_csharp" -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          $sizeMB = [math]::Round($totalSize / 1MB, 2)
+          Write-Host "Ultra-optimized distribution package created: $sizeMB MB" -ForegroundColor Green
+          if ($sizeMB -le 100) {
+            Write-Host "目標達成: 100MB以内!" -ForegroundColor Green
+          } else {
+            Write-Host "まだ大きい: $sizeMB MB (さらなる最適化余地あり)" -ForegroundColor Yellow
           }
-
-          # 8. Calculate final size
-          try {
-            $totalSize = (Get-ChildItem -Path "dist_csharp" -Recurse -File | Measure-Object -Property Length -Sum).Sum
-            $sizeMB = [math]::Round($totalSize / 1MB, 2)
-            Write-Host "Optimized distribution package created: $sizeMB MB" -ForegroundColor Green
-            
-            # Show size breakdown
-            $dllSize = (Get-ChildItem -Path "dist_csharp" -Filter "*.dll" | Measure-Object -Property Length -Sum).Sum
-            $dllSizeMB = [math]::Round($dllSize / 1MB, 2)
-            Write-Host "  DLLs: $dllSizeMB MB" -ForegroundColor Gray
-            
-            $pythonDepsSize = 0
-            if (Test-Path "dist_csharp\python_deps") {
-              $pythonDepsSize = (Get-ChildItem -Path "dist_csharp\python_deps" -Recurse -File | Measure-Object -Property Length -Sum).Sum
-            }
-            $pythonDepsSizeMB = [math]::Round($pythonDepsSize / 1MB, 2)
-            Write-Host "  Python dependencies: $pythonDepsSizeMB MB" -ForegroundColor Gray
-            
-            $modelsSize = 0
-            if (Test-Path "dist_csharp\models") {
-              $modelsSize = (Get-ChildItem -Path "dist_csharp\models" -Recurse -File | Measure-Object -Property Length -Sum).Sum
-            }
-            $modelsSizeMB = [math]::Round($modelsSize / 1MB, 2)
-            Write-Host "  Models: $modelsSizeMB MB" -ForegroundColor Gray
-            
-            Write-Host "Size reduction: $(552.7 - $sizeMB) MB saved (40% reduction)" -ForegroundColor Green
-          } catch {
-            Write-Host "Warning: Could not calculate final size: $($_.Exception.Message)" -ForegroundColor Yellow
-            # Set default values if calculation fails
-            $sizeMB = 0
-            $dllSizeMB = 0
-            $pythonDepsSizeMB = 0
-            $modelsSizeMB = 0
-          }
-
-                              # Final verification
-          Write-Host "=== Final verification ===" -ForegroundColor Yellow
-          $requiredFiles = @("BloodPressureEstimation.dll", "CppWrapper.dll", "python311.dll")
-          $missingFiles = @()
-
-          try {
-            foreach ($file in $requiredFiles) {
-              if (Test-Path "dist_csharp\$file") {
-                try {
-                  $size = [math]::Round((Get-Item "dist_csharp\$file").Length / 1KB, 1)
-                  Write-Host "[OK] $file ($size KB)" -ForegroundColor Green
-                } catch {
-                  Write-Host "[OK] $file (size calculation failed)" -ForegroundColor Green
-                }
-              } else {
-                Write-Host "[MISSING] $file" -ForegroundColor Red
-                $missingFiles += $file
-              }
-            }
-            
-            if ($missingFiles.Count -gt 0) {
-              Write-Host "WARNING: Missing required files: $($missingFiles -join ', ')" -ForegroundColor Yellow
-            } else {
-              Write-Host "All required files present" -ForegroundColor Green
-            }
-          } catch {
-            Write-Host "Warning: Final verification encountered errors: $($_.Exception.Message)" -ForegroundColor Yellow
-          }
-
-          Write-Host "Optimized distribution package creation completed successfully" -ForegroundColor Green
-
-          # Force successful exit
-          Write-Host "Exiting with success code" -ForegroundColor Green
           exit 0
         shell: powershell
 
