@@ -1395,6 +1395,10 @@ jobs:
           Write-Host "=== dist_csharp DLLs ===" -ForegroundColor Yellow
           Get-ChildItem -Path "." -Filter "*.dll" | ForEach-Object { Write-Host $_.FullName }
 
+          # デバッグ: dist_csharp直下のPYD一覧
+          Write-Host "=== dist_csharp PYDs ===" -ForegroundColor Yellow
+          Get-ChildItem -Path "." -Filter "*.pyd" | ForEach-Object { Write-Host $_.FullName }
+
           # デバッグ: C#テスト実行時のPYTHONPATH/PATH
           Write-Host "PYTHONPATH: $env:PYTHONPATH"
           Write-Host "PATH: $env:PATH"
@@ -1421,10 +1425,10 @@ jobs:
             
             # Run C# test with detailed output capture and explicit environment variables
             Write-Host "Executing comprehensive C# integration test..." -ForegroundColor Yellow
-
+            
             $envVars = @{
-              "PYTHONPATH" = "dist_csharp/python_deps;dist_csharp"
-              "PATH" = "$($PWD);$env:PATH"
+              "PYTHONPATH" = "$PWD\python_deps;$PWD"
+              "PATH" = "$PWD;$env:PATH"
               "PYTHONIOENCODING" = "utf-8"
               "PYTHONOPTIMIZE" = "1"
               "PYTHONNOUSERSITE" = "1"
