@@ -62,18 +62,8 @@ jobs:
           # pipをアップグレード
           python -m pip install --upgrade pip
 
-          # 依存パッケージを--no-depsでインストール
-          pip install --no-deps -r requirements_dll.txt
-
-          # 各パッケージを個別に--no-depsでインストール（NumPyは最後にforce-reinstall）
-          pip install --no-deps scipy==1.10.1
-          pip install --no-deps scikit-learn==1.2.2
-          pip install --no-deps opencv-python-headless==4.8.0.76
-          pip install --no-deps mediapipe==0.9.1.0
-          pip install --no-deps joblib==1.3.1
-          pip install --no-deps pywavelets==1.4.1
-          pip install --no-deps pandas==2.0.3
-          pip install --force-reinstall numpy==1.23.5
+          # 依存パッケージをrequirements_dll.txtで一括インストール
+          pip install -r requirements_dll.txt
 
           # 依存関係の不足があればpip checkで確認
           pip check
@@ -782,9 +772,6 @@ jobs:
 
           # 3. Create python_deps with FIXED NumPy handling
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
-
-          # 依存パッケージをrequirements_dll.txtで一括インストール
-          pip install -r requirements_dll.txt
 
           # NumPy (必要なファイルのみコピー)
           Write-Host "Copying NumPy minimal set..." -ForegroundColor Yellow
