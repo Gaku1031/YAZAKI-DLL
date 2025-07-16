@@ -760,21 +760,34 @@ jobs:
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
           $sitePackages = Join-Path $pythonDir "Lib\site-packages"
+          Write-Host "site-packages: $sitePackages" -ForegroundColor Yellow
+
+          # NumPyのインストール先をPythonから確認
+          python -c "import numpy; print('NumPy __file__:', numpy.__file__); import os; print('NumPy core exists:', os.path.exists(os.path.join(os.path.dirname(numpy.__file__), 'core'))); import sys; print('sys.path:', sys.path)"
+
+          # coreディレクトリの中身を列挙
+          Write-Host "numpy/core directory listing:" -ForegroundColor Yellow
+          if (Test-Path "$sitePackages\numpy\core") {
+            Get-ChildItem -Path "$sitePackages\numpy\core" -Recurse | ForEach-Object { Write-Host $_.FullName }
+          } else {
+            Write-Host "core directory not found in expected site-packages path" -ForegroundColor Red
+          }
+
+          # _multiarray_umath.pydの存在チェック
           $multiarrayPyd = Join-Path $sitePackages "numpy\core\_multiarray_umath.pyd"
           if (Test-Path $multiarrayPyd) {
             Write-Host "NumPy C-extension found: $multiarrayPyd" -ForegroundColor Green
           } else {
             Write-Host "ERROR: NumPy C-extension missing after pip install! Trying force-reinstall..." -ForegroundColor Red
-            python -m pip install --upgrade pip
-            pip install numpy==1.26.4 --force-reinstall
+            python -m pip install --upgrade pip setuptools wheel
+            pip install --no-cache-dir numpy==1.26.4 --force-reinstall
+            if (Test-Path "$sitePackages\numpy\core") {
+              Get-ChildItem -Path "$sitePackages\numpy\core" -Recurse | ForEach-Object { Write-Host $_.FullName }
+            }
             if (!(Test-Path $multiarrayPyd)) {
               Write-Host "ERROR: Still missing _multiarray_umath.pyd. Check Python version, pip version, and wheel availability." -ForegroundColor Red
-              Write-Host "Python version:" -ForegroundColor Yellow
-              python --version
-              Write-Host "Pip version:" -ForegroundColor Yellow
-              pip --version
-              Write-Host "NumPy install log (verbose):" -ForegroundColor Yellow
-              pip install -v numpy==1.26.4
+              python -c "import sys; print(sys.version); import pip; print(pip.__version__)"
+              python -c "import numpy; print(numpy.__version__); print(numpy.__file__)"
               exit 1
             } else {
               Write-Host "NumPy C-extension found after force-reinstall: $multiarrayPyd" -ForegroundColor Green
