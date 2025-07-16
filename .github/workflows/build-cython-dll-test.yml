@@ -1313,8 +1313,22 @@ jobs:
           
           Write-Host "=== Comprehensive DLL Dependency Test ===" -ForegroundColor Yellow
           
-          # 各DLLの読み込みテスト
+          # 各DLLの読み込みテスト（Here-Stringを使わない方法）
           $testDlls = @("python311.dll", "BloodPressureEstimation.dll", "CppWrapper.dll")
+          
+          # C#コードを文字列配列として作成
+          $csharpCode = @(
+            'using System;',
+            'using System.Runtime.InteropServices;',
+            'public class DllLoader {',
+            '    [DllImport("kernel32.dll", SetLastError = true)]',
+            '    public static extern IntPtr LoadLibrary(string lpFileName);',
+            '    [DllImport("kernel32.dll", SetLastError = true)]',
+            '    public static extern bool FreeLibrary(IntPtr hModule);',
+            '    [DllImport("kernel32.dll", SetLastError = true)]',
+            '    public static extern uint GetLastError();',
+            '}'
+          ) -join "`n"
           
           foreach ($dll in $testDlls) {
             if (Test-Path $dll) {
@@ -1322,18 +1336,7 @@ jobs:
               
               try {
                 # PowerShellでのDLL読み込みテスト
-                Add-Type @"
-                using System;
-                using System.Runtime.InteropServices;
-                public class DllLoader {
-                    [DllImport("kernel32.dll", SetLastError = true)]
-                    public static extern IntPtr LoadLibrary(string lpFileName);
-                    [DllImport("kernel32.dll", SetLastError = true)]
-                    public static extern bool FreeLibrary(IntPtr hModule);
-                    [DllImport("kernel32.dll", SetLastError = true)]
-                    public static extern uint GetLastError();
-                }
-                "@
+                Add-Type -TypeDefinition $csharpCode
                 
                 $handle = [DllLoader]::LoadLibrary((Resolve-Path $dll).Path)
                 if ($handle -ne [IntPtr]::Zero) {
@@ -1352,45 +1355,47 @@ jobs:
             }
           }
           
-          # Python環境の詳細テスト
+          # Python環境の詳細テスト（ファイルを作成して実行）
           Write-Host "`nTesting Python environment in current context..." -ForegroundColor Cyan
           
-          $pythonTest = @'
-          import sys
-          import os
-          print(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-          print(f"Executable: {sys.executable}")
-          print(f"Current dir: {os.getcwd()}")
-
-          # Test critical modules
-          modules_to_test = ['numpy', 'cv2', 'sklearn', 'scipy']
-          for module in modules_to_test:
-              try:
-                  if module == 'numpy':
-                      sys.path.insert(0, 'python_deps')
-                      import numpy as np
-                      test_array = np.array([1, 2, 3])
-                      assert test_array.sum() == 6
-                      print(f"{module} {np.__version__}: OK (test passed)")
-                  elif module == 'cv2':
-                      sys.path.insert(0, 'python_deps')
-                      import cv2
-                      print(f"{module} {cv2.__version__}: OK")
-                  elif module == 'sklearn':
-                      sys.path.insert(0, 'python_deps')
-                      import sklearn
-                      print(f"{module} {sklearn.__version__}: OK")
-                  elif module == 'scipy':
-                      sys.path.insert(0, 'python_deps')
-                      import scipy
-                      print(f"{module} {scipy.__version__}: OK")
-              except Exception as e:
-                  print(f"{module}: FAILED - {e}")
-
-          print("Python environment test completed")
-          '@
+          # Pythonテストコードを文字列配列として作成
+          $pythonTestLines = @(
+            'import sys',
+            'import os',
+            'print(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")',
+            'print(f"Executable: {sys.executable}")',
+            'print(f"Current dir: {os.getcwd()}")',
+            '',
+            '# Test critical modules',
+            "modules_to_test = ['numpy', 'cv2', 'sklearn', 'scipy']",
+            'for module in modules_to_test:',
+            '    try:',
+            '        if module == "numpy":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import numpy as np',
+            '            test_array = np.array([1, 2, 3])',
+            '            assert test_array.sum() == 6',
+            '            print(f"{module} {np.__version__}: OK (test passed)")',
+            '        elif module == "cv2":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import cv2',
+            '            print(f"{module} {cv2.__version__}: OK")',
+            '        elif module == "sklearn":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import sklearn',
+            '            print(f"{module} {sklearn.__version__}: OK")',
+            '        elif module == "scipy":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import scipy',
+            '            print(f"{module} {scipy.__version__}: OK")',
+            '    except Exception as e:',
+            '        print(f"{module}: FAILED - {e}")',
+            '',
+            'print("Python environment test completed")'
+          )
           
-          $pythonTest | Out-File -FilePath "python_env_test.py" -Encoding UTF8
+          $pythonTestContent = $pythonTestLines -join "`n"
+          $pythonTestContent | Out-File -FilePath "python_env_test.py" -Encoding UTF8
           
           try {
             python python_env_test.py
