@@ -773,37 +773,34 @@ jobs:
           # 3. Create python_deps with FIXED NumPy handling
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
-          # NumPy (必要なファイルのみコピー)
-          Write-Host "Copying NumPy minimal set..." -ForegroundColor Yellow
+          # NumPy (pip install直後のsite-packages/numpyをそのままコピー)
+          Write-Host "Copying NumPy (pip site-packages version, no source tree)..." -ForegroundColor Yellow
           $numpySrc = Join-Path $sitePackages "numpy"
           $numpyDst = "dist_csharp\python_deps\numpy"
 
           if (Test-Path $numpySrc) {
-            New-Item -ItemType Directory -Path $numpyDst -Force | Out-Null
-            # .pyファイルのみコピー
-            Get-ChildItem -Path $numpySrc -Filter "*.py" -File | ForEach-Object {
-              $targetFile = Join-Path $numpyDst $_.Name
-              Copy-Item $_.FullName $targetFile -Force
-            }
-            # サブディレクトリ（core, lib, random, ...）をコピー
-            $numpySubDirs = @("core", "lib", "random", "linalg", "fft", "polynomial", "ma", "matrixlib")
-            foreach ($dir in $numpySubDirs) {
-              $srcDir = Join-Path $numpySrc $dir
-              if (Test-Path $srcDir) {
-                Copy-Item $srcDir (Join-Path $numpyDst $dir) -Recurse -Force
+            # まずまるごとコピー
+            Copy-Item $numpySrc $numpyDst -Recurse -Force
+            Write-Host "NumPy copied (entire pip site-packages directory)" -ForegroundColor Green
+            # 不要な開発用ディレクトリを除外
+            $cleanupPatterns = @(
+              "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools"
+            )
+            Get-ChildItem -Path $numpyDst -Recurse | ForEach-Object {
+              foreach ($pattern in $cleanupPatterns) {
+                if ($_.Name -like $pattern) {
+                  if ($_.PSIsContainer) {
+                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-Host "  Removed numpy/$($_.Name) (directory)" -ForegroundColor Gray
+                  } else {
+                    Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+                    Write-Host "  Removed numpy/$($_.Name) (file)" -ForegroundColor Gray
+                  }
+                  break
+                }
               }
             }
-            # .pydファイルもコピー
-            Get-ChildItem -Path $numpySrc -Filter "*.pyd" -Recurse | ForEach-Object {
-              $relativePath = $_.FullName.Substring($numpySrc.Length + 1)
-              $targetPath = Join-Path $numpyDst $relativePath
-              $targetDir = Split-Path $targetPath -Parent
-              if (!(Test-Path $targetDir)) {
-                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-              }
-              Copy-Item $_.FullName $targetPath -Force
-            }
-            Write-Host "NumPy minimal set copied" -ForegroundColor Green
+            Write-Host "NumPy cleaned up (pip site-packages version)" -ForegroundColor Green
           }
 
           # NumPy依存DLLのコピー（例: libopenblas*.dll）
