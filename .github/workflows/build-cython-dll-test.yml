@@ -1363,6 +1363,22 @@ jobs:
 
           Write-Host "=== Critical C# Integration Test ===" -ForegroundColor Green
 
+          # デバッグ: NumPyディレクトリの全ファイルリスト
+          Write-Host "=== NumPy directory after cleanup ===" -ForegroundColor Yellow
+          if (Test-Path "python_deps/numpy") {
+            Get-ChildItem -Path "python_deps/numpy" -Recurse | ForEach-Object { Write-Host $_.FullName }
+          } else {
+            Write-Host "python_deps/numpy not found" -ForegroundColor Red
+          }
+
+          # デバッグ: dist_csharp直下のDLL一覧
+          Write-Host "=== dist_csharp DLLs ===" -ForegroundColor Yellow
+          Get-ChildItem -Path "." -Filter "*.dll" | ForEach-Object { Write-Host $_.FullName }
+
+          # デバッグ: C#テスト実行時のPYTHONPATH/PATH
+          Write-Host "PYTHONPATH: $env:PYTHONPATH"
+          Write-Host "PATH: $env:PATH"
+
           try {
             # Verify all required files exist
             $requiredFiles = @("CppWrapper.dll", "BloodPressureEstimation.dll", "python311.dll", "BloodPressureTest.exe")
