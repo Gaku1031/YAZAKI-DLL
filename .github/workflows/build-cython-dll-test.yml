@@ -821,9 +821,9 @@ jobs:
               
               $pkgSize = (Get-ChildItem $dstPath -Recurse -File | Measure-Object -Property Length -Sum).Sum
               $pkgSizeMB = [math]::Round($pkgSize / 1MB, 2)
-              Write-Host "$pkg: $pkgSizeMB MB" -ForegroundColor Green
+              Write-Host "${pkg}: $pkgSizeMB MB" -ForegroundColor Green
             } else {
-              Write-Host "$pkg: not found" -ForegroundColor Yellow
+              Write-Host "${pkg}: not found" -ForegroundColor Yellow
             }
           }
           
