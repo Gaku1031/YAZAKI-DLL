@@ -804,7 +804,9 @@ jobs:
 
             # 1. numpy直下の.pyファイルのみコピー
             Get-ChildItem -Path $numpySrc -Filter "*.py" -File | ForEach-Object {
-              Copy-Item $_.FullName $numpyDst -Force
+              $targetFile = Join-Path $numpyDst $_.Name
+              Copy-Item $_.FullName $targetFile -Force
+              Write-Host "Copied $($_.Name) to $numpyDst" -ForegroundColor Green
             }
 
             # 2. サブディレクトリ（core, lib, random, ...）をコピー
