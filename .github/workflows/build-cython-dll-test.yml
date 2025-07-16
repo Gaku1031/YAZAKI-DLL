@@ -242,7 +242,7 @@ jobs:
           #ifdef __cplusplus
           extern "C" {
           #endif
-
+          
           __declspec(dllexport) int InitializeBP(const char* model_dir);
           __declspec(dllexport) void CleanupBP();
           __declspec(dllexport) const char* StartBloodPressureAnalysisRequest(
@@ -252,7 +252,7 @@ jobs:
           __declspec(dllexport) const char* GetVersionInfo();
           __declspec(dllexport) const char* GenerateRequestId();
           __declspec(dllexport) const char* GetBPLastError();
-
+          
           #ifdef __cplusplus
           }
           #endif
@@ -266,12 +266,12 @@ jobs:
           #include <windows.h>
           #include <string>
           #include <mutex>
-
+          
           static std::mutex pyMutex;
           static bool pythonInitialized = false;
           static PyObject* pModule = nullptr;
           static std::string lastError;
-
+          
           static void ClearPythonError() {
               if (PyErr_Occurred()) {
                   PyObject *ptype, *pvalue, *ptraceback;
@@ -291,7 +291,7 @@ jobs:
                   Py_XDECREF(ptraceback);
               }
           }
-
+          
           static bool SafeInitializePython() {
               try {
                   if (pythonInitialized) return true;
@@ -312,7 +312,7 @@ jobs:
                   return false;
               }
           }
-
+          
           extern "C" __declspec(dllexport)
           int InitializeBP(const char* model_dir) {
               std::lock_guard<std::mutex> lock(pyMutex);
@@ -323,28 +323,39 @@ jobs:
                   PyGILState_STATE gstate = PyGILState_Ensure();
                   
                   try {
-                      // Comprehensive Python path setup
+                      // Enhanced Python path setup with NumPy fix
                       const char* pathSetup = R"(
           import sys
           import os
           current_dir = os.getcwd()
           python_deps = os.path.join(current_dir, 'python_deps')
-
+          
+          # Clear any existing numpy from sys.modules to avoid conflicts
+          numpy_modules = [mod for mod in sys.modules.keys() if mod.startswith('numpy')]
+          for mod in numpy_modules:
+              del sys.modules[mod]
+          
           # Add current directory first
           if current_dir not in sys.path:
               sys.path.insert(0, current_dir)
-
+          
           # Add python_deps directory
           if os.path.exists(python_deps):
               if python_deps not in sys.path:
                   sys.path.insert(0, python_deps)
-
+          
+          # Ensure numpy path is correctly set
+          numpy_path = os.path.join(python_deps, 'numpy')
+          if os.path.exists(numpy_path):
+              if numpy_path not in sys.path:
+                  sys.path.insert(0, numpy_path)
+          
           # Add site-packages style paths for each package
           package_dirs = [
-              'numpy', 'scipy', 'sklearn', 'cv2', 'mediapipe', 
+              'scipy', 'sklearn', 'cv2', 'mediapipe', 
               'joblib', 'pywt', 'pandas'
           ]
-
+          
           for pkg_dir in package_dirs:
               pkg_path = os.path.join(python_deps, pkg_dir)
               if os.path.exists(pkg_path):
@@ -352,13 +363,7 @@ jobs:
                       sys.path.insert(0, pkg_path)
                   
                   # Add subdirectories for packages with submodules
-                  if pkg_dir == 'numpy':
-                      for subdir in ['core', 'random', 'lib', 'linalg', 'fft']:
-                          subpath = os.path.join(pkg_path, subdir)
-                          if os.path.exists(subpath) and subpath not in sys.path:
-                              sys.path.insert(0, subpath)
-                  
-                  elif pkg_dir == 'scipy':
+                  if pkg_dir == 'scipy':
                       for subdir in ['signal', 'stats', 'sparse', 'linalg']:
                           subpath = os.path.join(pkg_path, subdir)
                           if os.path.exists(subpath) and subpath not in sys.path:
@@ -369,8 +374,8 @@ jobs:
                           subpath = os.path.join(pkg_path, subdir)
                           if os.path.exists(subpath) and subpath not in sys.path:
                               sys.path.insert(0, subpath)
-
-          print('Python path configuration completed')
+          
+          print('Python path configuration completed with NumPy fix')
           print(f'Total paths: {len(sys.path)}')
           )";
                       
@@ -385,9 +390,9 @@ jobs:
                       const char* importTest = R"(
           import warnings
           warnings.filterwarnings('ignore')
-
+          
           import_results = []
-
+          
           try:
               import numpy as np
               from numpy import random
@@ -398,14 +403,14 @@ jobs:
           except Exception as e:
               import_results.append(f'NumPy FAILED: {e}')
               raise
-
+          
           try:
               import cv2
               import_results.append(f'OpenCV {cv2.__version__}: OK')
           except Exception as e:
               import_results.append(f'OpenCV FAILED: {e}')
               raise
-
+          
           try:
               import scipy
               from scipy import signal
@@ -414,7 +419,7 @@ jobs:
           except Exception as e:
               import_results.append(f'SciPy FAILED: {e}')
               raise
-
+          
           try:
               import sklearn
               from sklearn.decomposition import PCA
@@ -423,7 +428,7 @@ jobs:
           except Exception as e:
               import_results.append(f'scikit-learn FAILED: {e}')
               raise
-
+          
           try:
               import mediapipe as mp
               try:
@@ -433,32 +438,33 @@ jobs:
                   import_results.append(f'MediaPipe {mp.__version__}: OK (with warnings: {mesh_error})')
           except Exception as e:
               import_results.append(f'MediaPipe WARNING: {e}')
-
+              # Don't raise for MediaPipe - continue with warning
+          
           try:
               import joblib
               import_results.append(f'joblib {joblib.__version__}: OK')
           except Exception as e:
               import_results.append(f'joblib FAILED: {e}')
               raise
-
+          
           try:
               import pywt
               import_results.append(f'PyWavelets {pywt.__version__}: OK')
           except Exception as e:
               import_results.append(f'PyWavelets FAILED: {e}')
               raise
-
+          
           try:
               import pandas as pd
               import_results.append(f'pandas {pd.__version__}: OK')
           except Exception as e:
               import_results.append(f'pandas FAILED: {e}')
               raise
-
+          
           for result in import_results:
               print(result)
-
-          print('All dependencies loaded successfully')
+          
+          print('Dependencies loaded (MediaPipe may have warnings)')
           )";
                       
                       PyRun_SimpleString(importTest);
@@ -519,7 +525,7 @@ jobs:
                   return 0;
               }
           }
-
+          
           static std::string CallStringFunc(const char* funcName, const char* fmt = nullptr, ...) {
               std::lock_guard<std::mutex> lock(pyMutex);
               
@@ -577,21 +583,21 @@ jobs:
                   return "ERROR: Exception in CallStringFunc";
               }
           }
-
+          
           extern "C" __declspec(dllexport)
           const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path) {
               static thread_local std::string ret;
               ret = CallStringFunc("StartBloodPressureAnalysisRequest", "siiis", request_id, height, weight, sex, movie_path);
               return ret.c_str();
           }
-
+          
           extern "C" __declspec(dllexport)
           const char* GetProcessingStatus(const char* request_id) {
               static thread_local std::string ret;
               ret = CallStringFunc("GetProcessingStatus", "s", request_id);
               return ret.c_str();
           }
-
+          
           extern "C" __declspec(dllexport)
           int CancelBloodPressureAnalysis(const char* request_id) {
               std::lock_guard<std::mutex> lock(pyMutex);
@@ -634,27 +640,27 @@ jobs:
                   return 0;
               }
           }
-
+          
           extern "C" __declspec(dllexport)
           const char* GetVersionInfo() {
               static thread_local std::string ret;
               ret = CallStringFunc("GetVersionInfo");
               return ret.c_str();
           }
-
+          
           extern "C" __declspec(dllexport)
           const char* GenerateRequestId() {
               static thread_local std::string ret;
               ret = CallStringFunc("GenerateRequestId");
               return ret.c_str();
           }
-
+          
           extern "C" __declspec(dllexport)
           const char* GetBPLastError() {
               static std::string error_copy = lastError;
               return error_copy.c_str();
           }
-
+          
           extern "C" __declspec(dllexport)
           void CleanupBP() {
               std::lock_guard<std::mutex> lock(pyMutex);
@@ -671,7 +677,7 @@ jobs:
                   pythonInitialized = false;
               }
           }
-
+          
           BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
               switch (ul_reason_for_call) {
               case DLL_PROCESS_ATTACH:
@@ -689,7 +695,6 @@ jobs:
           $cppContent | Out-File -FilePath "CppWrapperDLL\CppWrapperDLL.cpp" -Encoding UTF8
           Write-Host "C++ wrapper source files created" -ForegroundColor Green
         shell: powershell
-
       - name: Build C++ Wrapper DLL
         run: |
           Write-Host "Building C++ Wrapper DLL..." -ForegroundColor Yellow
@@ -769,9 +774,9 @@ jobs:
           }
         shell: powershell
 
-      - name: Create Smart Distribution Package
+      - name: Create Smart Distribution Package with NumPy Fix
         run: |
-          Write-Host "Creating smart distribution package..." -ForegroundColor Yellow
+          Write-Host "Creating distribution package with NumPy path fix..." -ForegroundColor Yellow
           
           New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
           
@@ -785,18 +790,59 @@ jobs:
           $pythonDir = Split-Path $pythonExe -Parent
           $sitePackages = Join-Path $pythonDir "Lib\site-packages"
           
-          # 3. Create python_deps with complete package structures
+          # 3. Create python_deps with FIXED NumPy handling
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
           
-          # Copy complete packages but with optimization
-          $packages = @("numpy", "cv2", "scipy", "sklearn", "mediapipe", "joblib", "pywt", "pandas")
+          # Special handling for NumPy to avoid source directory issue
+          Write-Host "Copying NumPy with special handling..." -ForegroundColor Yellow
+          $numpySrc = Join-Path $sitePackages "numpy"
+          $numpyDst = "dist_csharp\python_deps\numpy"
           
-          foreach ($pkg in $packages) {
+          if (Test-Path $numpySrc) {
+            # Copy numpy but exclude problematic source files
+            New-Item -ItemType Directory -Path $numpyDst -Force | Out-Null
+            
+            # Copy only essential NumPy files
+            $numpyEssentials = @(
+              "core", "lib", "random", "linalg", "fft", "polynomial", 
+              "ma", "matrixlib", "__init__.py", "_version.py", "version.py"
+            )
+            
+            foreach ($item in $numpyEssentials) {
+              $srcItem = Join-Path $numpySrc $item
+              if (Test-Path $srcItem) {
+                if (Test-Path $srcItem -PathType Container) {
+                  Copy-Item $srcItem (Join-Path $numpyDst $item) -Recurse -Force
+                } else {
+                  Copy-Item $srcItem $numpyDst -Force
+                }
+                Write-Host "  Copied numpy/$item" -ForegroundColor Green
+              }
+            }
+            
+            # Copy all .pyd files (compiled extensions)
+            Get-ChildItem -Path $numpySrc -Filter "*.pyd" -Recurse | ForEach-Object {
+              $relativePath = $_.FullName.Substring($numpySrc.Length + 1)
+              $targetPath = Join-Path $numpyDst $relativePath
+              $targetDir = Split-Path $targetPath -Parent
+              if (!(Test-Path $targetDir)) {
+                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+              }
+              Copy-Item $_.FullName $targetPath -Force
+            }
+            
+            Write-Host "NumPy copied with source directory fix" -ForegroundColor Green
+          }
+          
+          # Copy other packages normally
+          $otherPackages = @("cv2", "scipy", "sklearn", "mediapipe", "joblib", "pywt", "pandas")
+          
+          foreach ($pkg in $otherPackages) {
             $srcPath = Join-Path $sitePackages $pkg
             $dstPath = "dist_csharp\python_deps\$pkg"
             
             if (Test-Path $srcPath) {
-              Write-Host "Copying $pkg..." -ForegroundColor Yellow
+              Write-Host "Copying ${pkg}..." -ForegroundColor Yellow
               Copy-Item $srcPath $dstPath -Recurse -Force
               
               # Remove unnecessary files after copying
