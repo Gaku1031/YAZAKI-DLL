@@ -674,6 +674,7 @@ cdef public const char* GenerateRequestId():
         result_buffer[n] = 0
         return <const char*>result_buffer
 
+# C++ラッパーから呼び出されるエクスポート関数
 def InitializeDLL(model_dir: str = "models") -> int:
     """C++ラッパー用のDLL初期化関数"""
     try:
@@ -731,31 +732,31 @@ def GenerateRequestId() -> str:
         logger.error(f"GenerateRequestId error: {e}")
         return "ERROR: ID generation failed"
 
-# エクスポート関数のテスト
+# Export functions test
 def test_export_functions():
-    """エクスポート関数のテスト"""
+    """Export functions test"""
     print("=== Testing Export Functions ===")
     
-    # 初期化テスト
+    # Initialize test
     init_result = InitializeDLL("models")
     print(f"InitializeDLL result: {init_result}")
     
-    # バージョン情報テスト
+    # Version info test
     version = GetVersionInfo()
     print(f"Version: {version}")
     
-    # リクエストID生成テスト
+    # Request ID generation test
     request_id = GenerateRequestId()
     print(f"Generated Request ID: {request_id}")
     
-    # ステータステスト
+    # Status test
     status = GetProcessingStatus("test_123")
     print(f"Status: {status}")
     
     print("=== Export Functions Test Complete ===")
 
 if __name__ == "__main__":
-    # テスト実行
+    # Test execution
     test_export_functions()0
     except Exception as e:
         logger.error(f"InitializeDLL error: {e}")
