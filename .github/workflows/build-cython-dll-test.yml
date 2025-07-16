@@ -794,42 +794,34 @@ jobs:
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
           # Special handling for NumPy to avoid source directory issue
-          Write-Host "Copying NumPy with special handling..." -ForegroundColor Yellow
+          Write-Host "Copying NumPy (entire directory) for full compatibility..." -ForegroundColor Yellow
           $numpySrc = Join-Path $sitePackages "numpy"
           $numpyDst = "dist_csharp\python_deps\numpy"
 
           if (Test-Path $numpySrc) {
-            # Copy numpy but exclude problematic source files
-            New-Item -ItemType Directory -Path $numpyDst -Force | Out-Null
+            # numpyディレクトリ全体をコピー
+            Copy-Item $numpySrc $numpyDst -Recurse -Force
 
-            # 1. numpy直下の全.pyファイルをコピー
-            Get-ChildItem -Path $numpySrc -Filter "*.py" -File | ForEach-Object {
-              Copy-Item $_.FullName $numpyDst -Force
-              Write-Host "  Copied numpy/$($_.Name)" -ForegroundColor Green
-            }
+            # 不要なファイル・ディレクトリを削除
+            $cleanupPatterns = @(
+              "tests", "test", "__pycache__", "*.pyc", "*.pyo", 
+              "docs", "examples", "*.md", "*.rst", "*.txt",
+              "*.dist-info", "*.egg-info", "benchmarks"
+            )
 
-            # 2. サブディレクトリ（core, lib, random, ...）をコピー
-            $numpySubDirs = @("core", "lib", "random", "linalg", "fft", "polynomial", "ma", "matrixlib")
-            foreach ($dir in $numpySubDirs) {
-              $srcDir = Join-Path $numpySrc $dir
-              if (Test-Path $srcDir) {
-                Copy-Item $srcDir (Join-Path $numpyDst $dir) -Recurse -Force
-                Write-Host "  Copied numpy/$dir/" -ForegroundColor Green
+            Get-ChildItem -Path $numpyDst -Recurse | ForEach-Object {
+              foreach ($pattern in $cleanupPatterns) {
+                if ($_.Name -like $pattern) {
+                  if ($_.PSIsContainer) {
+                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                  } else {
+                    Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+                  }
+                  break
+                }
               }
             }
-
-            # 3. .pydファイルもコピー
-            Get-ChildItem -Path $numpySrc -Filter "*.pyd" -Recurse | ForEach-Object {
-              $relativePath = $_.FullName.Substring($numpySrc.Length + 1)
-              $targetPath = Join-Path $numpyDst $relativePath
-              $targetDir = Split-Path $targetPath -Parent
-              if (!(Test-Path $targetDir)) {
-                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-              }
-              Copy-Item $_.FullName $targetPath -Force
-            }
-
-            Write-Host "NumPy copied with all .py files and subdirectories" -ForegroundColor Green
+            Write-Host "NumPy copied (entire directory) and cleaned up unnecessary files" -ForegroundColor Green
           }
 
           # Copy other packages normally
