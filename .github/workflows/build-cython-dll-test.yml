@@ -56,38 +56,38 @@ jobs:
       - name: Install Dependencies with Optimization
         run: |
           $ErrorActionPreference = "Stop"
-          
+
           Write-Host "Installing dependencies with size optimization..." -ForegroundColor Cyan
-          
+
           # Upgrade pip
           python -m pip install --upgrade pip
-          
+
           # Install packages with controlled dependencies
           Write-Host "Installing core packages..." -ForegroundColor Yellow
-          
+
           # Install Cython first
           pip install cython==3.0.2
-          
+
           # Install NumPy with essential dependencies
           pip install numpy==1.24.3
-          
+
           # Install OpenCV with minimal dependencies
           pip install opencv-python-headless==4.8.0.76
-          
+
           # Install SciPy (required for signal processing)
           pip install scipy==1.11.1
-          
+
           # Install scikit-learn with minimal dependencies
           pip install scikit-learn==1.3.0
-          
+
           # Install MediaPipe (required for face detection)
           pip install mediapipe==0.10.21
-          
+
           # Install additional required packages
           pip install joblib==1.3.1
           pip install pywavelets==1.4.1
           pip install pandas==2.0.3
-          
+
           Write-Host "Verifying critical imports..." -ForegroundColor Yellow
           python -c "
           import sys
@@ -178,7 +178,7 @@ jobs:
 
           print('All critical imports successful')
           "
-          
+
           Write-Host "Dependencies installed and verified" -ForegroundColor Green
         shell: powershell
 
@@ -200,21 +200,21 @@ jobs:
       - name: Build Cython DLL
         run: |
           Write-Host "Building Cython DLL..." -ForegroundColor Green
-          
+
           # Clean build artifacts
           if (Test-Path "build") { Remove-Item "build" -Recurse -Force }
           if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
           Get-ChildItem -Filter "*.pyd" | Remove-Item -Force -ErrorAction SilentlyContinue
           Get-ChildItem -Filter "*.dll" | Remove-Item -Force -ErrorAction SilentlyContinue
-          
+
           # Build Cython extension
           python build_cython_dll.py
-          
+
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Cython build failed" -ForegroundColor Red
             exit 1
           }
-          
+
           # Verify DLL creation
           if (Test-Path "BloodPressureEstimation.dll") {
             $size = [math]::Round((Get-Item "BloodPressureEstimation.dll").Length / 1MB, 2)
@@ -233,16 +233,16 @@ jobs:
       - name: Create C++ Wrapper Source Files
         run: |
           Write-Host "Creating C++ wrapper source files..." -ForegroundColor Yellow
-          
+
           New-Item -ItemType Directory -Path "CppWrapperDLL" -Force | Out-Null
-          
+
           # Create header file
           $headerContent = @'
           #pragma once
           #ifdef __cplusplus
           extern "C" {
           #endif
-          
+
           __declspec(dllexport) int InitializeBP(const char* model_dir);
           __declspec(dllexport) void CleanupBP();
           __declspec(dllexport) const char* StartBloodPressureAnalysisRequest(
@@ -252,13 +252,13 @@ jobs:
           __declspec(dllexport) const char* GetVersionInfo();
           __declspec(dllexport) const char* GenerateRequestId();
           __declspec(dllexport) const char* GetBPLastError();
-          
+
           #ifdef __cplusplus
           }
           #endif
           '@
           $headerContent | Out-File -FilePath "CppWrapperDLL\BloodPressureWrapper.h" -Encoding UTF8
-          
+
           # Create implementation file with improved Python path handling
           $cppContent = @'
           #include "BloodPressureWrapper.h"
@@ -266,12 +266,12 @@ jobs:
           #include <windows.h>
           #include <string>
           #include <mutex>
-          
+
           static std::mutex pyMutex;
           static bool pythonInitialized = false;
           static PyObject* pModule = nullptr;
           static std::string lastError;
-          
+
           static void ClearPythonError() {
               if (PyErr_Occurred()) {
                   PyObject *ptype, *pvalue, *ptraceback;
@@ -291,7 +291,7 @@ jobs:
                   Py_XDECREF(ptraceback);
               }
           }
-          
+
           static bool SafeInitializePython() {
               try {
                   if (pythonInitialized) return true;
@@ -312,7 +312,7 @@ jobs:
                   return false;
               }
           }
-          
+
           extern "C" __declspec(dllexport)
           int InitializeBP(const char* model_dir) {
               std::lock_guard<std::mutex> lock(pyMutex);
@@ -329,33 +329,33 @@ jobs:
           import os
           current_dir = os.getcwd()
           python_deps = os.path.join(current_dir, 'python_deps')
-          
+
           # Clear any existing numpy from sys.modules to avoid conflicts
           numpy_modules = [mod for mod in sys.modules.keys() if mod.startswith('numpy')]
           for mod in numpy_modules:
               del sys.modules[mod]
-          
+
           # Add current directory first
           if current_dir not in sys.path:
               sys.path.insert(0, current_dir)
-          
+
           # Add python_deps directory
           if os.path.exists(python_deps):
               if python_deps not in sys.path:
                   sys.path.insert(0, python_deps)
-          
+
           # Ensure numpy path is correctly set
           numpy_path = os.path.join(python_deps, 'numpy')
           if os.path.exists(numpy_path):
               if numpy_path not in sys.path:
                   sys.path.insert(0, numpy_path)
-          
+
           # Add site-packages style paths for each package
           package_dirs = [
               'scipy', 'sklearn', 'cv2', 'mediapipe', 
               'joblib', 'pywt', 'pandas'
           ]
-          
+
           for pkg_dir in package_dirs:
               pkg_path = os.path.join(python_deps, pkg_dir)
               if os.path.exists(pkg_path):
@@ -374,7 +374,7 @@ jobs:
                           subpath = os.path.join(pkg_path, subdir)
                           if os.path.exists(subpath) and subpath not in sys.path:
                               sys.path.insert(0, subpath)
-          
+
           print('Python path configuration completed with NumPy fix')
           print(f'Total paths: {len(sys.path)}')
           )";
@@ -390,9 +390,9 @@ jobs:
                       const char* importTest = R"(
           import warnings
           warnings.filterwarnings('ignore')
-          
+
           import_results = []
-          
+
           try:
               import numpy as np
               from numpy import random
@@ -403,14 +403,14 @@ jobs:
           except Exception as e:
               import_results.append(f'NumPy FAILED: {e}')
               raise
-          
+
           try:
               import cv2
               import_results.append(f'OpenCV {cv2.__version__}: OK')
           except Exception as e:
               import_results.append(f'OpenCV FAILED: {e}')
               raise
-          
+
           try:
               import scipy
               from scipy import signal
@@ -419,7 +419,7 @@ jobs:
           except Exception as e:
               import_results.append(f'SciPy FAILED: {e}')
               raise
-          
+
           try:
               import sklearn
               from sklearn.decomposition import PCA
@@ -428,7 +428,7 @@ jobs:
           except Exception as e:
               import_results.append(f'scikit-learn FAILED: {e}')
               raise
-          
+
           try:
               import mediapipe as mp
               try:
@@ -439,31 +439,31 @@ jobs:
           except Exception as e:
               import_results.append(f'MediaPipe WARNING: {e}')
               # Don't raise for MediaPipe - continue with warning
-          
+
           try:
               import joblib
               import_results.append(f'joblib {joblib.__version__}: OK')
           except Exception as e:
               import_results.append(f'joblib FAILED: {e}')
               raise
-          
+
           try:
               import pywt
               import_results.append(f'PyWavelets {pywt.__version__}: OK')
           except Exception as e:
               import_results.append(f'PyWavelets FAILED: {e}')
               raise
-          
+
           try:
               import pandas as pd
               import_results.append(f'pandas {pd.__version__}: OK')
           except Exception as e:
               import_results.append(f'pandas FAILED: {e}')
               raise
-          
+
           for result in import_results:
               print(result)
-          
+
           print('Dependencies loaded (MediaPipe may have warnings)')
           )";
                       
@@ -525,7 +525,7 @@ jobs:
                   return 0;
               }
           }
-          
+
           static std::string CallStringFunc(const char* funcName, const char* fmt = nullptr, ...) {
               std::lock_guard<std::mutex> lock(pyMutex);
               
@@ -583,21 +583,21 @@ jobs:
                   return "ERROR: Exception in CallStringFunc";
               }
           }
-          
+
           extern "C" __declspec(dllexport)
           const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path) {
               static thread_local std::string ret;
               ret = CallStringFunc("StartBloodPressureAnalysisRequest", "siiis", request_id, height, weight, sex, movie_path);
               return ret.c_str();
           }
-          
+
           extern "C" __declspec(dllexport)
           const char* GetProcessingStatus(const char* request_id) {
               static thread_local std::string ret;
               ret = CallStringFunc("GetProcessingStatus", "s", request_id);
               return ret.c_str();
           }
-          
+
           extern "C" __declspec(dllexport)
           int CancelBloodPressureAnalysis(const char* request_id) {
               std::lock_guard<std::mutex> lock(pyMutex);
@@ -640,27 +640,27 @@ jobs:
                   return 0;
               }
           }
-          
+
           extern "C" __declspec(dllexport)
           const char* GetVersionInfo() {
               static thread_local std::string ret;
               ret = CallStringFunc("GetVersionInfo");
               return ret.c_str();
           }
-          
+
           extern "C" __declspec(dllexport)
           const char* GenerateRequestId() {
               static thread_local std::string ret;
               ret = CallStringFunc("GenerateRequestId");
               return ret.c_str();
           }
-          
+
           extern "C" __declspec(dllexport)
           const char* GetBPLastError() {
               static std::string error_copy = lastError;
               return error_copy.c_str();
           }
-          
+
           extern "C" __declspec(dllexport)
           void CleanupBP() {
               std::lock_guard<std::mutex> lock(pyMutex);
@@ -677,7 +677,7 @@ jobs:
                   pythonInitialized = false;
               }
           }
-          
+
           BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
               switch (ul_reason_for_call) {
               case DLL_PROCESS_ATTACH:
@@ -698,7 +698,7 @@ jobs:
       - name: Build C++ Wrapper DLL
         run: |
           Write-Host "Building C++ Wrapper DLL..." -ForegroundColor Yellow
-          
+
           # Create CMakeLists.txt
           $cmakeContent = @'
           cmake_minimum_required(VERSION 3.20)
@@ -746,13 +746,13 @@ jobs:
               PREFIX ""
           )
           '@
-          
+
           $cmakeContent | Out-File -FilePath "CppWrapperDLL\CMakeLists.txt" -Encoding UTF8
-          
+
           # Build
           New-Item -ItemType Directory -Path "CppWrapperDLL\build" -Force | Out-Null
           Push-Location "CppWrapperDLL\build"
-          
+
           try {
             $pythonExe = python -c "import sys; print(sys.executable)"
             $pythonDir = Split-Path $pythonExe -Parent
@@ -777,50 +777,48 @@ jobs:
       - name: Create Smart Distribution Package with NumPy Fix
         run: |
           Write-Host "Creating distribution package with NumPy path fix..." -ForegroundColor Yellow
-          
+
           New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
-          
+
           # 1. Copy core DLLs
           Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
           Copy-Item "BloodPressureEstimation.dll" "dist_csharp\BloodPressureEstimation.pyd" -Force
           Copy-Item "CppWrapper.dll" "dist_csharp\" -Force
-          
+
           # 2. Get Python environment info
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
           $sitePackages = Join-Path $pythonDir "Lib\site-packages"
-          
+
           # 3. Create python_deps with FIXED NumPy handling
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
-          
+
           # Special handling for NumPy to avoid source directory issue
           Write-Host "Copying NumPy with special handling..." -ForegroundColor Yellow
           $numpySrc = Join-Path $sitePackages "numpy"
           $numpyDst = "dist_csharp\python_deps\numpy"
-          
+
           if (Test-Path $numpySrc) {
             # Copy numpy but exclude problematic source files
             New-Item -ItemType Directory -Path $numpyDst -Force | Out-Null
-            
-            # Copy only essential NumPy files
-            $numpyEssentials = @(
-              "core", "lib", "random", "linalg", "fft", "polynomial", 
-              "ma", "matrixlib", "__init__.py", "_version.py", "version.py"
-            )
-            
-            foreach ($item in $numpyEssentials) {
-              $srcItem = Join-Path $numpySrc $item
-              if (Test-Path $srcItem) {
-                if (Test-Path $srcItem -PathType Container) {
-                  Copy-Item $srcItem (Join-Path $numpyDst $item) -Recurse -Force
-                } else {
-                  Copy-Item $srcItem $numpyDst -Force
-                }
-                Write-Host "  Copied numpy/$item" -ForegroundColor Green
+
+            # 1. numpy直下の全.pyファイルをコピー
+            Get-ChildItem -Path $numpySrc -Filter "*.py" -File | ForEach-Object {
+              Copy-Item $_.FullName $numpyDst -Force
+              Write-Host "  Copied numpy/$($_.Name)" -ForegroundColor Green
+            }
+
+            # 2. サブディレクトリ（core, lib, random, ...）をコピー
+            $numpySubDirs = @("core", "lib", "random", "linalg", "fft", "polynomial", "ma", "matrixlib")
+            foreach ($dir in $numpySubDirs) {
+              $srcDir = Join-Path $numpySrc $dir
+              if (Test-Path $srcDir) {
+                Copy-Item $srcDir (Join-Path $numpyDst $dir) -Recurse -Force
+                Write-Host "  Copied numpy/$dir/" -ForegroundColor Green
               }
             }
-            
-            # Copy all .pyd files (compiled extensions)
+
+            # 3. .pydファイルもコピー
             Get-ChildItem -Path $numpySrc -Filter "*.pyd" -Recurse | ForEach-Object {
               $relativePath = $_.FullName.Substring($numpySrc.Length + 1)
               $targetPath = Join-Path $numpyDst $relativePath
@@ -830,13 +828,13 @@ jobs:
               }
               Copy-Item $_.FullName $targetPath -Force
             }
-            
-            Write-Host "NumPy copied with source directory fix" -ForegroundColor Green
+
+            Write-Host "NumPy copied with all .py files and subdirectories" -ForegroundColor Green
           }
-          
+
           # Copy other packages normally
           $otherPackages = @("cv2", "scipy", "sklearn", "mediapipe", "joblib", "pywt", "pandas")
-          
+
           foreach ($pkg in $otherPackages) {
             $srcPath = Join-Path $sitePackages $pkg
             $dstPath = "dist_csharp\python_deps\$pkg"
@@ -872,14 +870,14 @@ jobs:
               Write-Host "${pkg}: not found" -ForegroundColor Yellow
             }
           }
-          
+
           # 4. Copy essential Python runtime files
           $pythonDllPath = "$pythonDir\python311.dll"
           if (Test-Path $pythonDllPath) {
             Copy-Item $pythonDllPath "dist_csharp\" -Force
             Write-Host "python311.dll copied" -ForegroundColor Green
           }
-          
+
           # Copy essential Python extension DLLs
           $essentialPydFiles = @("_ctypes.pyd", "_socket.pyd", "_ssl.pyd", "_hashlib.pyd")
           $pythonDllsDir = Join-Path $pythonDir "DLLs"
@@ -890,7 +888,7 @@ jobs:
               Write-Host "$pyd copied" -ForegroundColor Green
             }
           }
-          
+
           # 5. Copy Visual C++ runtime DLLs
           $vcredistDlls = @("vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll")
           foreach ($dll in $vcredistDlls) {
@@ -900,7 +898,7 @@ jobs:
               Write-Host "$dll copied" -ForegroundColor Green
             }
           }
-          
+
           # 6. Copy models
           if (Test-Path "models_compressed") {
             Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force
@@ -910,12 +908,12 @@ jobs:
             "# Placeholder" | Out-File -FilePath "dist_csharp\models\placeholder.txt" -Encoding UTF8
             Write-Host "Created placeholder models directory" -ForegroundColor Yellow
           }
-          
+
           # 7. Calculate final size
           $totalSize = (Get-ChildItem -Path "dist_csharp" -Recurse -File | Measure-Object -Property Length -Sum).Sum
           $sizeMB = [math]::Round($totalSize / 1MB, 2)
           Write-Host "Distribution package created: $sizeMB MB" -ForegroundColor Green
-          
+
           if ($sizeMB -gt 100) {
             Write-Host "WARNING: Package size exceeds 100MB target ($sizeMB MB)" -ForegroundColor Yellow
             Write-Host "Consider further optimization if needed" -ForegroundColor Yellow
@@ -927,7 +925,7 @@ jobs:
       - name: Create and Build C# Test Project
         run: |
           Write-Host "Creating C# test project..." -ForegroundColor Yellow
-          
+
           New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
 
           # Create C# project file
@@ -944,7 +942,7 @@ jobs:
           </Project>
           '@
           $csprojContent | Out-File -FilePath "tests\CSharpTest\BloodPressureTest.csproj" -Encoding UTF8
-          
+
           # Create enhanced C# test code
           $csharpCode = @'
           using System;
@@ -1284,17 +1282,17 @@ jobs:
       - name: Enhanced Environment Setup
         run: |
           Push-Location "dist_csharp"
-          
+
           Write-Host "=== Enhanced Environment Setup ===" -ForegroundColor Green
-          
+
           $currentDir = Get-Location
-          
+
           # Comprehensive Python path setup
           $pythonPaths = @(
             "$currentDir",
             "$currentDir\python_deps"
           )
-          
+
           # Add each package directory to Python path
           $packages = @("numpy", "cv2", "scipy", "sklearn", "mediapipe", "joblib", "pywt", "pandas")
           foreach ($pkg in $packages) {
@@ -1303,35 +1301,35 @@ jobs:
               $pythonPaths += $pkgPath
             }
           }
-          
+
           $env:PYTHONPATH = $pythonPaths -join ";"
           $env:PATH = "$currentDir;" + $env:PATH
-          
+
           # Python optimization settings
           $env:PYTHONDONTWRITEBYTECODE = "1"
           $env:PYTHONIOENCODING = "utf-8"
           $env:PYTHONOPTIMIZE = "1"
           $env:PYTHONNOUSERSITE = "1"
           $env:PYTHONUNBUFFERED = "1"
-          
+
           # Disable threading for stability
           $env:OPENBLAS_NUM_THREADS = "1"
           $env:OMP_NUM_THREADS = "1"
           $env:MKL_NUM_THREADS = "1"
           $env:NUMPY_EXPERIMENTAL_ARRAY_FUNCTION = "0"
-          
+
           Write-Host "Environment setup completed" -ForegroundColor Green
           Write-Host "PYTHONPATH entries: $($pythonPaths.Count)" -ForegroundColor Cyan
-          
+
           Pop-Location
         shell: powershell
 
       - name: Critical C# Integration Test
         run: |
           Push-Location "dist_csharp"
-          
+
           Write-Host "=== Critical C# Integration Test ===" -ForegroundColor Green
-          
+
           try {
             # Verify all required files exist
             $requiredFiles = @("CppWrapper.dll", "BloodPressureEstimation.dll", "python311.dll", "BloodPressureTest.exe")
@@ -1405,11 +1403,11 @@ jobs:
       - name: Final Package Analysis
         run: |
           Write-Host "=== Final Package Analysis ===" -ForegroundColor Green
-          
+
           # Calculate detailed size breakdown
           $totalSize = (Get-ChildItem -Path "dist_csharp" -Recurse -File | Measure-Object -Property Length -Sum).Sum
           $totalSizeMB = [math]::Round($totalSize / 1MB, 2)
-          
+
           # Component analysis
           $components = @{
             "DLLs" = @("*.dll")
@@ -1418,10 +1416,10 @@ jobs:
             "Models" = @("models\*")
             "PythonDeps" = @("python_deps\*")
           }
-          
+
           Write-Host "=== PACKAGE SIZE ANALYSIS ===" -ForegroundColor Cyan
           Write-Host "Total Size: $totalSizeMB MB" -ForegroundColor $(if ($totalSizeMB -le 100) { "Green" } else { "Red" })
-          
+
           foreach ($component in $components.Keys) {
             try {
               $componentSize = 0
@@ -1437,9 +1435,9 @@ jobs:
               Write-Host "$component : 0 MB" -ForegroundColor Gray
             }
           }
-          
+
           Write-Host "Target (100MB): $(if ($totalSizeMB -le 100) { "ACHIEVED" } else { "EXCEEDED" })" -ForegroundColor $(if ($totalSizeMB -le 100) { "Green" } else { "Red" })
-          
+
           # Create final report
           $report = @"
           # Blood Pressure DLL - Final Build Report
@@ -1470,7 +1468,7 @@ jobs:
           - **Python Version**: 3.11
           - **Configuration**: Release with Smart Optimization
           "@
-          
+
           $report | Out-File -FilePath "final_report.md" -Encoding UTF8
           Write-Host "Final report created: final_report.md" -ForegroundColor Green
         shell: powershell
