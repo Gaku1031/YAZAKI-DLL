@@ -850,25 +850,53 @@ jobs:
           # Find site-packages directory with multiple detection methods
           Write-Host "Detecting site-packages directory..." -ForegroundColor Cyan
 
-          # Method 1: Standard site-packages detection
-          $sitePackages = python -c "import site; print(site.getsitepackages()[0])" 2>$null
-          Write-Host "Method 1 (site.getsitepackages): $sitePackages" -ForegroundColor Gray
+                    # Method 1: Standard site-packages detection
+          try {
+            $sitePackages = python -c "import site; print(site.getsitepackages()[0])" 2>$null
+            Write-Host "Method 1 (site.getsitepackages): $sitePackages" -ForegroundColor Gray
+          } catch {
+            Write-Host "Method 1 failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            $sitePackages = ""
+          }
 
           # Method 2: Using sys.path
-          $sitePackagesMethod2 = python -c "import sys; import os; paths = [p for p in sys.path if 'site-packages' in p and os.path.exists(p)]; print(paths[0] if paths else '')" 2>$null
-          Write-Host "Method 2 (sys.path search): $sitePackagesMethod2" -ForegroundColor Gray
+          try {
+            $sitePackagesMethod2 = python -c "import sys; import os; paths = [p for p in sys.path if 'site-packages' in p and os.path.exists(p)]; print(paths[0] if paths else '')" 2>$null
+            Write-Host "Method 2 (sys.path search): $sitePackagesMethod2" -ForegroundColor Gray
+          } catch {
+            Write-Host "Method 2 failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            $sitePackagesMethod2 = ""
+          }
 
           # Method 3: Manual construction
           $sitePackagesMethod3 = Join-Path $pythonDir "Lib\site-packages"
           Write-Host "Method 3 (manual): $sitePackagesMethod3" -ForegroundColor Gray
 
           # Method 4: Check installed packages location
-          $sitePackagesMethod4 = python -c "try: import numpy; import os; print(os.path.dirname(numpy.__file__).split('numpy')[0].rstrip(os.sep)); except: print('')" 2>$null
-          Write-Host "Method 4 (numpy location): $sitePackagesMethod4" -ForegroundColor Gray
+          try {
+            $sitePackagesMethod4 = python -c "try: import numpy; import os; path = os.path.dirname(numpy.__file__); parent = os.path.dirname(path); print(parent); except: print('')" 2>$null
+            Write-Host "Method 4 (numpy location): $sitePackagesMethod4" -ForegroundColor Gray
+          } catch {
+            Write-Host "Method 4 failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            $sitePackagesMethod4 = ""
+          }
 
-          # Method 5: Check pip show location
-          $sitePackagesMethod5 = python -c "import subprocess; import sys; result = subprocess.run([sys.executable, '-m', 'pip', 'show', 'numpy'], capture_output=True, text=True); lines = result.stdout.split('\n'); location = [l.split(': ')[1] for l in lines if l.startswith('Location: ')]; print(location[0] if location else '')" 2>$null
-          Write-Host "Method 5 (pip show): $sitePackagesMethod5" -ForegroundColor Gray
+          # Method 5: Check pip show location (simplified)
+          try {
+            $sitePackagesMethod5 = python -c "import subprocess; import sys; result = subprocess.run([sys.executable, '-m', 'pip', 'show', 'numpy'], capture_output=True, text=True); print(result.stdout)" 2>$null
+            if ($sitePackagesMethod5) {
+              $locationLine = $sitePackagesMethod5 -split "`n" | Where-Object { $_ -like "Location:*" }
+              if ($locationLine) {
+                $sitePackagesMethod5 = ($locationLine -split ": ")[1]
+              } else {
+                $sitePackagesMethod5 = ""
+              }
+            }
+            Write-Host "Method 5 (pip show): $sitePackagesMethod5" -ForegroundColor Gray
+          } catch {
+            Write-Host "Method 5 failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            $sitePackagesMethod5 = ""
+          }
 
           # Choose the correct site-packages directory
           $sitePackages = $null
@@ -918,8 +946,12 @@ jobs:
           Write-Host "Verifying installed packages..." -ForegroundColor Cyan
           $requiredPackages = @("numpy", "cv2", "scipy", "sklearn", "mediapipe")
           foreach ($pkg in $requiredPackages) {
-            $isInstalled = python -c "try: import $pkg; print('installed'); except: print('not installed')" 2>$null
-            Write-Host "  $pkg`: $isInstalled" -ForegroundColor $(if ($isInstalled -eq "installed") { "Green" } else { "Red" })
+            try {
+              $isInstalled = python -c "try: import $pkg; print('installed'); except: print('not installed')" 2>$null
+              Write-Host "  $pkg`: $isInstalled" -ForegroundColor $(if ($isInstalled -eq "installed") { "Green" } else { "Red" })
+            } catch {
+              Write-Host "  $pkg`: error checking" -ForegroundColor Red
+            }
           }
 
           # 1. Copy essential Python runtime DLLs only
