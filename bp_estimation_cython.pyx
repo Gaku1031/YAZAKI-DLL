@@ -674,138 +674,85 @@ cdef public const char* GenerateRequestId():
         result_buffer[n] = 0
         return <const char*>result_buffer
 
-# C++ラッパーから呼び出されるエクスポート関数
-def InitializeDLL(model_dir: str = "models") -> int:
-    """C++ラッパー用のDLL初期化関数"""
+# Additional Python wrapper functions for C++ integration
+def InitializeDLL_Python(model_dir: str = "models") -> int:
+    """Python wrapper for DLL initialization"""
     try:
-        success = initialize_dll(model_dir)
-        return 1 if success else 0
+        result = initialize_models(model_dir)
+        return 1 if result else 0
     except Exception as e:
-        logger.error(f"InitializeDLL error: {e}")
+        print(f"InitializeDLL_Python error: {e}")
         return 0
 
-def StartBloodPressureAnalysisRequest(request_id: str, height: int, weight: int, 
-                                    sex: int, movie_path: str) -> str:
-    """C++ラッパー用の血圧解析開始関数"""
+def StartBloodPressureAnalysisRequest_Python(request_id: str, height: int, weight: int, 
+                                           sex: int, movie_path: str) -> str:
+    """Python wrapper for blood pressure analysis request"""
     try:
-        # 非同期コールバックなしで同期実行
-        error_code = start_bp_analysis(request_id, height, weight, sex, movie_path, None)
-        if error_code is None:
+        error_code = start_blood_pressure_analysis(request_id, height, weight, sex, movie_path)
+        if error_code == "":
             return "SUCCESS"
         else:
             return error_code
     except Exception as e:
-        logger.error(f"StartBloodPressureAnalysisRequest error: {e}")
+        print(f"StartBloodPressureAnalysisRequest_Python error: {e}")
         return ErrorCode.INTERNAL_PROCESSING_ERROR
 
-def GetProcessingStatus(request_id: str) -> str:
-    """C++ラッパー用の処理状況取得関数"""
+def GetProcessingStatus_Python(request_id: str) -> str:
+    """Python wrapper for processing status"""
     try:
-        return get_bp_status(request_id)
+        return get_processing_status(request_id)
     except Exception as e:
-        logger.error(f"GetProcessingStatus error: {e}")
+        print(f"GetProcessingStatus_Python error: {e}")
         return ProcessingStatus.NONE
 
-def CancelBloodPressureAnalysis(request_id: str) -> int:
-    """C++ラッパー用の処理中断関数"""
+def CancelBloodPressureAnalysis_Python(request_id: str) -> int:
+    """Python wrapper for cancellation"""
     try:
-        success = cancel_bp_processing(request_id)
-        return 1 if success else 0
+        result = cancel_blood_pressure_analysis(request_id)
+        return 1 if result else 0
     except Exception as e:
-        logger.error(f"CancelBloodPressureAnalysis error: {e}")
+        print(f"CancelBloodPressureAnalysis_Python error: {e}")
         return 0
 
-def GetVersionInfo() -> str:
-    """C++ラッパー用のバージョン情報取得関数"""
+def GetVersionInfo_Python() -> str:
+    """Python wrapper for version info"""
     try:
-        return get_dll_version()
+        return get_version_info()
     except Exception as e:
-        logger.error(f"GetVersionInfo error: {e}")
+        print(f"GetVersionInfo_Python error: {e}")
         return "ERROR: Version unavailable"
 
-def GenerateRequestId() -> str:
-    """C++ラッパー用のリクエストID生成関数"""
+def GenerateRequestId_Python() -> str:
+    """Python wrapper for request ID generation"""
     try:
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
-        return f"{timestamp}_DEFAULT_001"
+        return generate_request_id()
     except Exception as e:
-        logger.error(f"GenerateRequestId error: {e}")
+        print(f"GenerateRequestId_Python error: {e}")
         return "ERROR: ID generation failed"
 
-# Export functions test
+# Test function
 def test_export_functions():
-    """Export functions test"""
+    """Test export functions"""
     print("=== Testing Export Functions ===")
     
     # Initialize test
-    init_result = InitializeDLL("models")
+    init_result = InitializeDLL_Python("models")
     print(f"InitializeDLL result: {init_result}")
     
     # Version info test
-    version = GetVersionInfo()
+    version = GetVersionInfo_Python()
     print(f"Version: {version}")
     
     # Request ID generation test
-    request_id = GenerateRequestId()
+    request_id = GenerateRequestId_Python()
     print(f"Generated Request ID: {request_id}")
     
     # Status test
-    status = GetProcessingStatus("test_123")
+    status = GetProcessingStatus_Python("test_123")
     print(f"Status: {status}")
     
     print("=== Export Functions Test Complete ===")
 
 if __name__ == "__main__":
     # Test execution
-    test_export_functions()0
-    except Exception as e:
-        logger.error(f"InitializeDLL error: {e}")
-        return 0
-
-def StartBloodPressureAnalysisRequest(request_id: str, height: int, weight: int, 
-                                    sex: int, movie_path: str) -> str:
-    """C++ラッパー用の血圧解析開始関数"""
-    try:
-        # 非同期コールバックなしで同期実行
-        error_code = start_bp_analysis(request_id, height, weight, sex, movie_path, None)
-        if error_code is None:
-            return "SUCCESS"
-        else:
-            return error_code
-    except Exception as e:
-        logger.error(f"StartBloodPressureAnalysisRequest error: {e}")
-        return ErrorCode.INTERNAL_PROCESSING_ERROR
-
-def GetProcessingStatus(request_id: str) -> str:
-    """C++ラッパー用の処理状況取得関数"""
-    try:
-        return get_bp_status(request_id)
-    except Exception as e:
-        logger.error(f"GetProcessingStatus error: {e}")
-        return ProcessingStatus.NONE
-
-def CancelBloodPressureAnalysis(request_id: str) -> int:
-    """C++ラッパー用の処理中断関数"""
-    try:
-        success = cancel_bp_processing(request_id)
-        return 1 if success else 0
-    except Exception as e:
-        logger.error(f"CancelBloodPressureAnalysis error: {e}")
-        return 0
-
-def GetVersionInfo() -> str:
-    """C++ラッパー用のバージョン情報取得関数"""
-    try:
-        return get_dll_version()
-    except Exception as e:
-        logger.error(f"GetVersionInfo error: {e}")
-        return "ERROR: Version unavailable"
-
-def GenerateRequestId() -> str:
-    """C++ラッパー用のリクエストID生成関数"""
-    try:
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
-        return f"{timestamp}_DEFAULT_001"
-    except Exception as e:
-        logger.error(f"GenerateRequestId error: {e}")
-        return "ERROR: ID generation failed"
+    test_export_functions()
