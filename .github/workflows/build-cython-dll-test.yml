@@ -818,17 +818,16 @@ jobs:
               "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools", "setup.py", "*.egg-info", "*.dist-info"
             )
             foreach ($pattern in $cleanupPatterns) {
-              Get-ChildItem -Path $numpyDst -Recurse -Force -Filter $pattern | ForEach-Object {
-                if ($_.PSIsContainer) {
-                  Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                  Write-Host "  Removed numpy/$($_.FullName) (directory)" -ForegroundColor Gray
-                } else {
-                  Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
-                  Write-Host "  Removed numpy/$($_.FullName) (file)" -ForegroundColor Gray
-                }
+              # ディレクトリ名一致で再帰的に削除
+              Get-ChildItem -Path $numpyDst -Recurse -Force -Directory | Where-Object { $_.Name -like $pattern } | ForEach-Object {
+                Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+              }
+              # ファイル名一致で再帰的に削除
+              Get-ChildItem -Path $numpyDst -Recurse -Force -File | Where-Object { $_.Name -like $pattern } | ForEach-Object {
+                Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
               }
             }
-            # 追加: random/_examples も削除
+            # random/_examplesを明示的に削除
             $randomExamples = Join-Path $numpyDst "random\_examples"
             if (Test-Path $randomExamples) {
               Remove-Item $randomExamples -Recurse -Force -ErrorAction SilentlyContinue
@@ -865,9 +864,12 @@ jobs:
               }
             }
 
-            # PYTHONPATHの設定を dist_csharp/python_deps;dist_csharp にする（空にならないように必ず設定）
-            $env:PYTHONPATH = "dist_csharp/python_deps;dist_csharp"
+            # PYTHONPATH/PATHの設定を dist_csharp/python_deps;dist_csharp にする（空にならないように必ず設定）
+            $currentDir = (Get-Location).Path
+            $env:PYTHONPATH = "$currentDir\python_deps;$currentDir"
+            $env:PATH = "$currentDir;" + $env:PATH
             Write-Host "PYTHONPATH set to: $env:PYTHONPATH" -ForegroundColor Cyan
+            Write-Host "PATH set to: $env:PATH" -ForegroundColor Cyan
 
           }
 
