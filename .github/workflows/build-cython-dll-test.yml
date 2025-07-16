@@ -847,14 +847,80 @@ jobs:
           $pythonDir = Split-Path $pythonExe -Parent
           $pythonDllsDir = Join-Path $pythonDir "DLLs"
 
-          # Find site-packages directory
+          # Find site-packages directory with multiple detection methods
+          Write-Host "Detecting site-packages directory..." -ForegroundColor Cyan
+
+          # Method 1: Standard site-packages detection
           $sitePackages = python -c "import site; print(site.getsitepackages()[0])" 2>$null
-          if (-not $sitePackages -or -not (Test-Path $sitePackages)) {
-            $sitePackages = Join-Path $pythonDir "Lib\site-packages"
+          Write-Host "Method 1 (site.getsitepackages): $sitePackages" -ForegroundColor Gray
+
+          # Method 2: Using sys.path
+          $sitePackagesMethod2 = python -c "import sys; import os; paths = [p for p in sys.path if 'site-packages' in p and os.path.exists(p)]; print(paths[0] if paths else '')" 2>$null
+          Write-Host "Method 2 (sys.path search): $sitePackagesMethod2" -ForegroundColor Gray
+
+          # Method 3: Manual construction
+          $sitePackagesMethod3 = Join-Path $pythonDir "Lib\site-packages"
+          Write-Host "Method 3 (manual): $sitePackagesMethod3" -ForegroundColor Gray
+
+          # Method 4: Check installed packages location
+          $sitePackagesMethod4 = python -c "try: import numpy; import os; print(os.path.dirname(numpy.__file__).split('numpy')[0].rstrip(os.sep)); except: print('')" 2>$null
+          Write-Host "Method 4 (numpy location): $sitePackagesMethod4" -ForegroundColor Gray
+
+          # Method 5: Check pip show location
+          $sitePackagesMethod5 = python -c "import subprocess; import sys; result = subprocess.run([sys.executable, '-m', 'pip', 'show', 'numpy'], capture_output=True, text=True); lines = result.stdout.split('\n'); location = [l.split(': ')[1] for l in lines if l.startswith('Location: ')]; print(location[0] if location else '')" 2>$null
+          Write-Host "Method 5 (pip show): $sitePackagesMethod5" -ForegroundColor Gray
+
+          # Choose the correct site-packages directory
+          $sitePackages = $null
+          $candidates = @($sitePackagesMethod5, $sitePackagesMethod4, $sitePackagesMethod2, $sitePackagesMethod1, $sitePackagesMethod3)
+
+          foreach ($candidate in $candidates) {
+            if ($candidate -and (Test-Path $candidate)) {
+              # Verify it contains at least one of our required packages
+              $hasNumpy = Test-Path "$candidate\numpy"
+              $hasCv2 = Test-Path "$candidate\cv2"
+              $hasScipy = Test-Path "$candidate\scipy"
+              
+              if ($hasNumpy -or $hasCv2 -or $hasScipy) {
+                $sitePackages = $candidate
+                Write-Host "Selected site-packages: $sitePackages" -ForegroundColor Green
+                Write-Host "  Contains numpy: $hasNumpy" -ForegroundColor Gray
+                Write-Host "  Contains cv2: $hasCv2" -ForegroundColor Gray
+                Write-Host "  Contains scipy: $hasScipy" -ForegroundColor Gray
+                break
+              } else {
+                Write-Host "Candidate exists but no required packages: $candidate" -ForegroundColor Yellow
+              }
+            }
+          }
+
+          if (-not $sitePackages) {
+            Write-Host "ERROR: Could not find valid site-packages directory!" -ForegroundColor Red
+            Write-Host "Available directories:" -ForegroundColor Yellow
+            Get-ChildItem -Path $pythonDir -Recurse -Directory -Depth 2 | Where-Object { $_.Name -like "*site*" -or $_.Name -like "*packages*" } | ForEach-Object { Write-Host "  $($_.FullName)" }
+            
+            # Try to find where packages are actually installed
+            Write-Host "Trying to find packages directly..." -ForegroundColor Yellow
+            $numpyLocation = python -c "try: import numpy; print(numpy.__file__); except: print('numpy not found')" 2>$null
+            if ($numpyLocation -and $numpyLocation -ne "numpy not found") {
+              $sitePackages = Split-Path (Split-Path $numpyLocation -Parent) -Parent
+              Write-Host "Derived site-packages from numpy location: $sitePackages" -ForegroundColor Yellow
+            } else {
+              Write-Host "CRITICAL: Cannot find Python packages!" -ForegroundColor Red
+              exit 1
+            }
           }
 
           Write-Host "Python directory: $pythonDir" -ForegroundColor Cyan
           Write-Host "Site packages: $sitePackages" -ForegroundColor Cyan
+
+          # Verify that required packages are actually installed
+          Write-Host "Verifying installed packages..." -ForegroundColor Cyan
+          $requiredPackages = @("numpy", "cv2", "scipy", "sklearn", "mediapipe")
+          foreach ($pkg in $requiredPackages) {
+            $isInstalled = python -c "try: import $pkg; print('installed'); except: print('not installed')" 2>$null
+            Write-Host "  $pkg`: $isInstalled" -ForegroundColor $(if ($isInstalled -eq "installed") { "Green" } else { "Red" })
+          }
 
           # 1. Copy essential Python runtime DLLs only
           Write-Host "=== Step 1: Copying essential Python runtime DLLs ===" -ForegroundColor Yellow
@@ -918,6 +984,7 @@ jobs:
             $destPath = "dist_csharp\python_deps\$pkgName"
             
             Write-Host "Processing package: $pkgName" -ForegroundColor Cyan
+            Write-Host "  Source path: $sourcePath" -ForegroundColor Gray
             
             if (Test-Path $sourcePath) {
               try {
@@ -987,10 +1054,15 @@ jobs:
                 Write-Host "  ERROR: Failed to copy $pkgName`: $($_.Exception.Message)" -ForegroundColor Red
                 if ($config.critical) { $missingCritical++ }
               }
-            } else {
-              Write-Host "  ERROR: $pkgName not found in site-packages" -ForegroundColor Red
-              if ($config.critical) { $missingCritical++ }
-            }
+                          } else {
+                Write-Host "  ERROR: $pkgName not found in site-packages" -ForegroundColor Red
+                Write-Host "    Expected path: $sourcePath" -ForegroundColor Gray
+                Write-Host "    Available packages in site-packages:" -ForegroundColor Gray
+                if (Test-Path $sitePackages) {
+                  Get-ChildItem -Path $sitePackages -Directory | Select-Object -First 10 | ForEach-Object { Write-Host "      $($_.Name)" }
+                }
+                if ($config.critical) { $missingCritical++ }
+              }
           }
 
           if ($missingCritical -gt 0) {
