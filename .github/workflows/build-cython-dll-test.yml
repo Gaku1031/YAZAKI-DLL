@@ -782,7 +782,7 @@ jobs:
             # まずまるごとコピー
             Copy-Item $numpySrc $numpyDst -Recurse -Force
             Write-Host "NumPy copied (entire pip site-packages directory)" -ForegroundColor Green
-            # 不要な開発用ディレクトリを除外
+            # 不要な開発用ディレクトリを徹底除去
             $cleanupPatterns = @(
               "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools", "setup.py"
             )
@@ -810,6 +810,15 @@ jobs:
                 Write-Host "Copied NumPy dependency DLL: $($_.Name)" -ForegroundColor Green
               }
             }
+
+            # NumPyのC拡張（.pyd）が存在するかチェック
+            $multiarrayPyd = Join-Path $numpyDst "core\_multiarray_umath.pyd"
+            if (!(Test-Path $multiarrayPyd)) {
+              Write-Host "ERROR: _multiarray_umath.pyd not found in dist_csharp/python_deps/numpy/core" -ForegroundColor Red
+              exit 1
+            } else {
+              Write-Host "Found _multiarray_umath.pyd" -ForegroundColor Green
+            }
           }
 
           # vcruntime140.dll等もPython実行ディレクトリからdist_csharp直下にコピー
@@ -823,6 +832,10 @@ jobs:
               Write-Host "Copied $dll to dist_csharp" -ForegroundColor Green
             }
           }
+
+          # PYTHONPATHの設定を dist_csharp/python_deps;dist_csharp にする
+          $env:PYTHONPATH = "dist_csharp/python_deps;dist_csharp"
+          Write-Host "PYTHONPATH set to: $env:PYTHONPATH" -ForegroundColor Cyan
 
           # Copy other packages normally
           $otherPackages = @("cv2", "scipy", "sklearn", "mediapipe", "joblib", "pywt", "pandas")
