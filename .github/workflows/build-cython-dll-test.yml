@@ -1442,7 +1442,7 @@ jobs:
           } finally {
             Pop-Location
           }
-        shell: powershell
+        shell: pwsh
 
       - name: Final Package Analysis
         run: |
