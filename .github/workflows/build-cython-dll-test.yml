@@ -784,7 +784,7 @@ jobs:
             Write-Host "NumPy copied (entire pip site-packages directory)" -ForegroundColor Green
             # 不要な開発用ディレクトリを除外
             $cleanupPatterns = @(
-              "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools"
+              "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools", "setup.py"
             )
             Get-ChildItem -Path $numpyDst -Recurse | ForEach-Object {
               foreach ($pattern in $cleanupPatterns) {
@@ -801,13 +801,27 @@ jobs:
               }
             }
             Write-Host "NumPy cleaned up (pip site-packages version)" -ForegroundColor Green
+
+            # NumPy依存DLL（.libs配下の*.dll）をdist_csharp直下にコピー
+            $numpyLibs = Join-Path $numpyDst ".libs"
+            if (Test-Path $numpyLibs) {
+              Get-ChildItem -Path $numpyLibs -Filter "*.dll" | ForEach-Object {
+                Copy-Item $_.FullName "dist_csharp\" -Force
+                Write-Host "Copied NumPy dependency DLL: $($_.Name)" -ForegroundColor Green
+              }
+            }
           }
 
-          # NumPy依存DLLのコピー（例: libopenblas*.dll）
-          $openblasDlls = Get-ChildItem -Path $sitePackages -Filter "libopenblas*.dll" -File
-          foreach ($dll in $openblasDlls) {
-            Copy-Item $dll.FullName "dist_csharp\" -Force
-            Write-Host "Copied $($dll.Name) to dist_csharp" -ForegroundColor Green
+          # vcruntime140.dll等もPython実行ディレクトリからdist_csharp直下にコピー
+          $pythonExe = python -c "import sys; print(sys.executable)"
+          $pythonDir = Split-Path $pythonExe -Parent
+          $vcDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+          foreach ($dll in $vcDlls) {
+            $dllPath = Join-Path $pythonDir $dll
+            if (Test-Path $dllPath) {
+              Copy-Item $dllPath "dist_csharp\" -Force
+              Write-Host "Copied $dll to dist_csharp" -ForegroundColor Green
+            }
           }
 
           # Copy other packages normally
