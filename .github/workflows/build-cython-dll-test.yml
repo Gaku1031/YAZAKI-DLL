@@ -1220,7 +1220,7 @@ jobs:
             Write-Host "Warning: Could not calculate final size: $($_.Exception.Message)" -ForegroundColor Yellow
           }
 
-          # Final verification
+                    # Final verification
           Write-Host "=== Final verification ===" -ForegroundColor Yellow
           $requiredFiles = @("BloodPressureEstimation.dll", "CppWrapper.dll", "python311.dll")
           $missingFiles = @()
@@ -1228,9 +1228,9 @@ jobs:
           foreach ($file in $requiredFiles) {
             if (Test-Path "dist_csharp\$file") {
               $size = [math]::Round((Get-Item "dist_csharp\$file").Length / 1KB, 1)
-              Write-Host "✓ $file ($size KB)" -ForegroundColor Green
+              Write-Host "[OK] $file ($size KB)" -ForegroundColor Green
             } else {
-              Write-Host "✗ $file (missing)" -ForegroundColor Red
+              Write-Host "[MISSING] $file" -ForegroundColor Red
               $missingFiles += $file
             }
           }
