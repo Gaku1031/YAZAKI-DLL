@@ -828,6 +828,11 @@ jobs:
                 }
               }
             }
+            # 追加: random/_examples も削除
+            $randomExamples = Join-Path $numpyDst "random\_examples"
+            if (Test-Path $randomExamples) {
+              Remove-Item $randomExamples -Recurse -Force -ErrorAction SilentlyContinue
+            }
             Write-Host "NumPy cleaned up (pip site-packages version, recursive)" -ForegroundColor Green
 
             # 不要なNumPyサブパッケージ・ディレクトリを徹底削除
@@ -842,7 +847,7 @@ jobs:
               }
             }
 
-            # NumPy依存DLL（.libs, core, pythonDir から openblas, vcruntime, msvcp など）をdist_csharp直下に徹底コピー
+            # NumPy依存DLL（.libs, core, pythonDir から openblas, vcruntime, msvcp, *.pyd など）をdist_csharp直下に徹底コピー
             $dllPatterns = @("*.dll", "openblas*.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "*.pyd")
             $searchDirs = @(
               (Join-Path $numpyDst ".libs"),
@@ -859,6 +864,11 @@ jobs:
                 }
               }
             }
+
+            # PYTHONPATHの設定を dist_csharp/python_deps;dist_csharp にする（空にならないように必ず設定）
+            $env:PYTHONPATH = "dist_csharp/python_deps;dist_csharp"
+            Write-Host "PYTHONPATH set to: $env:PYTHONPATH" -ForegroundColor Cyan
+
           }
 
           # vcruntime140.dll等もPython実行ディレクトリからdist_csharp直下にコピー
@@ -872,10 +882,6 @@ jobs:
               Write-Host "Copied $dll to dist_csharp" -ForegroundColor Green
             }
           }
-
-          # PYTHONPATHの設定を dist_csharp/python_deps;dist_csharp にする
-          $env:PYTHONPATH = "dist_csharp/python_deps;dist_csharp"
-          Write-Host "PYTHONPATH set to: $env:PYTHONPATH" -ForegroundColor Cyan
 
           # Copy other packages normally
           $otherPackages = @("cv2", "scipy", "sklearn", "mediapipe", "joblib", "pywt", "pandas")
