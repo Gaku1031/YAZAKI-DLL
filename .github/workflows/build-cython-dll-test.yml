@@ -830,6 +830,18 @@ jobs:
             }
             Write-Host "NumPy cleaned up (pip site-packages version, recursive)" -ForegroundColor Green
 
+            # 不要なNumPyサブパッケージ・ディレクトリを徹底削除
+            $unneededDirs = @(
+              "testing", "distutils", "f2py", "_core", "_pyinstaller", "_typing", "_utils"
+            )
+            foreach ($dir in $unneededDirs) {
+              $target = Join-Path $numpyDst $dir
+              if (Test-Path $target) {
+                Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "Removed $target" -ForegroundColor Gray
+              }
+            }
+
             # NumPy依存DLL（.libs, core, pythonDir から openblas, vcruntime, msvcp など）をdist_csharp直下に徹底コピー
             $dllPatterns = @("*.dll", "openblas*.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
             $searchDirs = @(
