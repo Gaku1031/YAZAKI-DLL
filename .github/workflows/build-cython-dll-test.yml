@@ -846,12 +846,10 @@ jobs:
           # 2. Python環境パス取得
           $pythonExe = python -c "import sys; print(sys.executable)"
           $pythonDir = Split-Path $pythonExe -Parent
-          $sitePackages = python -c "import site; print(site.getsitepackages()[0])" 2>$null
-          if (-not $sitePackages -or -not (Test-Path $sitePackages)) {
-            $sitePackages = Join-Path $pythonDir "Lib\site-packages"
-          }
+          $sitePackages = Join-Path $pythonDir "Lib\site-packages"
 
           Write-Host "[DEBUG] Python Executable: $pythonExe" -ForegroundColor Cyan
+          Write-Host "[DEBUG] PythonDir: $pythonDir" -ForegroundColor Cyan
           Write-Host "[DEBUG] Site-packages: $sitePackages" -ForegroundColor Cyan
           Write-Host "[DEBUG] Listing site-packages contents:" -ForegroundColor Yellow
           Get-ChildItem -Path $sitePackages | ForEach-Object { Write-Host "  $($_.Name)" }
