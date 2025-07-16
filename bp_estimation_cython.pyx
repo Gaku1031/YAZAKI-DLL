@@ -673,3 +673,138 @@ cdef public const char* GenerateRequestId():
         memcpy(result_buffer, <const char*>result_bytes, n)
         result_buffer[n] = 0
         return <const char*>result_buffer
+
+def InitializeDLL(model_dir: str = "models") -> int:
+    """C++ラッパー用のDLL初期化関数"""
+    try:
+        success = initialize_dll(model_dir)
+        return 1 if success else 0
+    except Exception as e:
+        logger.error(f"InitializeDLL error: {e}")
+        return 0
+
+def StartBloodPressureAnalysisRequest(request_id: str, height: int, weight: int, 
+                                    sex: int, movie_path: str) -> str:
+    """C++ラッパー用の血圧解析開始関数"""
+    try:
+        # 非同期コールバックなしで同期実行
+        error_code = start_bp_analysis(request_id, height, weight, sex, movie_path, None)
+        if error_code is None:
+            return "SUCCESS"
+        else:
+            return error_code
+    except Exception as e:
+        logger.error(f"StartBloodPressureAnalysisRequest error: {e}")
+        return ErrorCode.INTERNAL_PROCESSING_ERROR
+
+def GetProcessingStatus(request_id: str) -> str:
+    """C++ラッパー用の処理状況取得関数"""
+    try:
+        return get_bp_status(request_id)
+    except Exception as e:
+        logger.error(f"GetProcessingStatus error: {e}")
+        return ProcessingStatus.NONE
+
+def CancelBloodPressureAnalysis(request_id: str) -> int:
+    """C++ラッパー用の処理中断関数"""
+    try:
+        success = cancel_bp_processing(request_id)
+        return 1 if success else 0
+    except Exception as e:
+        logger.error(f"CancelBloodPressureAnalysis error: {e}")
+        return 0
+
+def GetVersionInfo() -> str:
+    """C++ラッパー用のバージョン情報取得関数"""
+    try:
+        return get_dll_version()
+    except Exception as e:
+        logger.error(f"GetVersionInfo error: {e}")
+        return "ERROR: Version unavailable"
+
+def GenerateRequestId() -> str:
+    """C++ラッパー用のリクエストID生成関数"""
+    try:
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
+        return f"{timestamp}_DEFAULT_001"
+    except Exception as e:
+        logger.error(f"GenerateRequestId error: {e}")
+        return "ERROR: ID generation failed"
+
+# エクスポート関数のテスト
+def test_export_functions():
+    """エクスポート関数のテスト"""
+    print("=== Testing Export Functions ===")
+    
+    # 初期化テスト
+    init_result = InitializeDLL("models")
+    print(f"InitializeDLL result: {init_result}")
+    
+    # バージョン情報テスト
+    version = GetVersionInfo()
+    print(f"Version: {version}")
+    
+    # リクエストID生成テスト
+    request_id = GenerateRequestId()
+    print(f"Generated Request ID: {request_id}")
+    
+    # ステータステスト
+    status = GetProcessingStatus("test_123")
+    print(f"Status: {status}")
+    
+    print("=== Export Functions Test Complete ===")
+
+if __name__ == "__main__":
+    # テスト実行
+    test_export_functions()0
+    except Exception as e:
+        logger.error(f"InitializeDLL error: {e}")
+        return 0
+
+def StartBloodPressureAnalysisRequest(request_id: str, height: int, weight: int, 
+                                    sex: int, movie_path: str) -> str:
+    """C++ラッパー用の血圧解析開始関数"""
+    try:
+        # 非同期コールバックなしで同期実行
+        error_code = start_bp_analysis(request_id, height, weight, sex, movie_path, None)
+        if error_code is None:
+            return "SUCCESS"
+        else:
+            return error_code
+    except Exception as e:
+        logger.error(f"StartBloodPressureAnalysisRequest error: {e}")
+        return ErrorCode.INTERNAL_PROCESSING_ERROR
+
+def GetProcessingStatus(request_id: str) -> str:
+    """C++ラッパー用の処理状況取得関数"""
+    try:
+        return get_bp_status(request_id)
+    except Exception as e:
+        logger.error(f"GetProcessingStatus error: {e}")
+        return ProcessingStatus.NONE
+
+def CancelBloodPressureAnalysis(request_id: str) -> int:
+    """C++ラッパー用の処理中断関数"""
+    try:
+        success = cancel_bp_processing(request_id)
+        return 1 if success else 0
+    except Exception as e:
+        logger.error(f"CancelBloodPressureAnalysis error: {e}")
+        return 0
+
+def GetVersionInfo() -> str:
+    """C++ラッパー用のバージョン情報取得関数"""
+    try:
+        return get_dll_version()
+    except Exception as e:
+        logger.error(f"GetVersionInfo error: {e}")
+        return "ERROR: Version unavailable"
+
+def GenerateRequestId() -> str:
+    """C++ラッパー用のリクエストID生成関数"""
+    try:
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
+        return f"{timestamp}_DEFAULT_001"
+    except Exception as e:
+        logger.error(f"GenerateRequestId error: {e}")
+        return "ERROR: ID generation failed"
