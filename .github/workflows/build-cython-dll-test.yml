@@ -323,7 +323,6 @@ jobs:
           # 修正されたヘッダーファイルの作成
           $headerContent = @'
           #pragma once
-
           #ifdef __cplusplus
           extern "C" {
           #endif
@@ -348,17 +347,18 @@ jobs:
           __declspec(dllexport) const char* GetVersionInfo();
           __declspec(dllexport) const char* GenerateRequestId();
 
-          // デバッグ・エラー処理
-          __declspec(dllexport) const char* GetLastError();
+          // デバッグ・エラー処理（Windows APIと衝突しないよう名前変更）
+          __declspec(dllexport) const char* GetBPLastError();
 
           #ifdef __cplusplus
           }
           #endif
           '@
           $headerContent | Out-File -FilePath "CppWrapperDLL\BloodPressureWrapper.h" -Encoding UTF8
-          # 修正されたC++実装ファイルの作成
+          
+          # 修正されたC++実装ファイルの作成（Python 3.11対応＋関数名修正）
           $cppContent = @'
-          // CppWrapperDLL.cpp - 修正版
+          // CppWrapperDLL.cpp - Python 3.11対応修正版
           #include "BloodPressureWrapper.h"
           #include <Python.h>
           #include <windows.h>
@@ -393,18 +393,15 @@ jobs:
               }
           }
 
-          // 安全なPython初期化
+          // 安全なPython初期化（Python 3.11対応）
           static bool SafeInitializePython() {
               try {
                   if (pythonInitialized) {
                       return true;
                   }
 
-                  // Python環境の設定
-                  const wchar_t* pythonHomeW = L".";
-                  
-                  // PythonHomeを設定（重要）
-                  Py_SetPythonHome(const_cast<wchar_t*>(pythonHomeW));
+                  // Python 3.11では Py_SetPythonHome は非推奨
+                  // 代わりに環境変数やPy_SetPath を使用
                   
                   // Python初期化
                   if (!Py_IsInitialized()) {
@@ -416,9 +413,10 @@ jobs:
                       return false;
                   }
 
-                  // GIL状態の確認と設定
+                  // Python 3.9以降 PyEval_InitThreads は自動的に呼ばれるため不要
+                  // GIL状態の確認のみ行う
                   if (!PyGILState_Check()) {
-                      PyEval_InitThreads();
+                      // Python 3.9以降は自動的にスレッドサポートが有効
                   }
 
                   pythonInitialized = true;
@@ -449,16 +447,17 @@ jobs:
                       PyRun_SimpleString(
                           "import sys\n"
                           "import os\n"
-                          "current_dir = os.path.dirname(os.path.abspath('.'))\n"
+                          "current_dir = os.getcwd()\n"
                           "python_deps = os.path.join(current_dir, 'python_deps')\n"
                           "if current_dir not in sys.path:\n"
                           "    sys.path.insert(0, current_dir)\n"
                           "if python_deps not in sys.path:\n"
                           "    sys.path.insert(0, python_deps)\n"
-                          "if os.path.join(python_deps, 'numpy') not in sys.path:\n"
-                          "    sys.path.insert(0, os.path.join(python_deps, 'numpy'))\n"
-                          "if os.path.join(python_deps, 'cv2') not in sys.path:\n"
-                          "    sys.path.insert(0, os.path.join(python_deps, 'cv2'))\n"
+                          "if os.path.exists(python_deps):\n"
+                          "    for subdir in ['numpy', 'cv2', 'sklearn', 'scipy']:\n"
+                          "        subpath = os.path.join(python_deps, subdir)\n"
+                          "        if os.path.exists(subpath) and subpath not in sys.path:\n"
+                          "            sys.path.insert(0, subpath)\n"
                           "print('Python paths configured')"
                       );
                       
@@ -666,9 +665,9 @@ jobs:
               return ret.c_str();
           }
 
-          // エラー情報取得関数（デバッグ用）
+          // エラー情報取得関数（Windows APIと衝突しないよう名前変更）
           extern "C" __declspec(dllexport)
-          const char* GetLastError() {
+          const char* GetBPLastError() {
               static std::string error_copy = lastError;
               return error_copy.c_str();
           }
@@ -1036,7 +1035,6 @@ jobs:
           Write-Host "Distribution package created successfully" -ForegroundColor Green
         shell: powershell
 
-      # ===== PHASE 7: C#テストプロジェクト作成 =====
       - name: Create and Build C# Test Project
         run: |
           Write-Host "Creating and building C# test project..." -ForegroundColor Yellow
@@ -1072,7 +1070,7 @@ jobs:
               {
                   private const string DllPath = "CppWrapper.dll";  // C++ラッパーDLLを使用
 
-                  // DLL関数の宣言
+                  // DLL関数の宣言（関数名修正対応）
                   [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
                   public static extern int InitializeBP([MarshalAs(UnmanagedType.LPStr)] string modelDir);
 
@@ -1101,9 +1099,10 @@ jobs:
                   [return: MarshalAs(UnmanagedType.LPStr)]
                   public static extern string GenerateRequestId();
 
+                  // 関数名変更: GetLastError → GetBPLastError
                   [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
                   [return: MarshalAs(UnmanagedType.LPStr)]
-                  public static extern string GetLastError();
+                  public static extern string GetBPLastError();
 
                   public static void TestBalancedDLL()
                   {
@@ -1147,7 +1146,7 @@ jobs:
                           catch (Exception ex)
                           {
                               Console.WriteLine($"   Version test failed: {ex.Message}");
-                              string lastError = GetLastError();
+                              string lastError = GetBPLastError(); // 修正された関数名
                               Console.WriteLine($"   Last error: {lastError}");
                               return;
                           }
@@ -1161,7 +1160,7 @@ jobs:
                               
                               if (initResult == 0)
                               {
-                                  string lastError = GetLastError();
+                                  string lastError = GetBPLastError(); // 修正された関数名
                                   Console.WriteLine($"   Initialization failed. Last error: {lastError}");
                                   return;
                               }
@@ -1169,7 +1168,7 @@ jobs:
                           catch (Exception ex)
                           {
                               Console.WriteLine($"   Initialization exception: {ex.Message}");
-                              string lastError = GetLastError();
+                              string lastError = GetBPLastError(); // 修正された関数名
                               Console.WriteLine($"   Last error: {lastError}");
                               return;
                           }
@@ -1236,7 +1235,7 @@ jobs:
                   }
               }
           }
-          '@    
+          '@   
           $csharpCode | Out-File -FilePath "tests\CSharpTest\Program.cs" -Encoding UTF8
 
           # プロジェクトのビルドと発行
@@ -1250,7 +1249,6 @@ jobs:
             exit 1
           }
         shell: powershell
-      
       - name: Enhanced Environment Preparation for C# Integration
         run: |
           Push-Location "dist_csharp"
