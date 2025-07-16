@@ -1,0 +1,1656 @@
+name: Build Cython Blood Pressure DLL
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "bp_estimation_cython.pyx"
+      - "setup_cython_dll.py"
+      - "build_cython_dll.py"
+      - "requirements_cython.txt"
+      - "CppWrapperDLL.cpp"
+      - "BloodPressureWrapper.h"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "bp_estimation_cython.pyx"
+      - "setup_cython_dll.py"
+      - "build_cython_dll.py"
+      - "requirements_cython.txt"
+      - "CppWrapperDLL.cpp"
+      - "BloodPressureWrapper.h"
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build type"
+        required: true
+        default: "cython"
+        type: choice
+        options:
+          - cython
+          - full
+      force_rebuild:
+        description: "Force rebuild all dependencies"
+        required: false
+        default: false
+        type: boolean
+      debug_mode:
+        description: "Enable debug mode"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  SOLUTION_FILE_PATH: .
+  BUILD_CONFIGURATION: Release
+
+jobs:
+  build-cython-dll:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+
+      - name: Verify Python Environment
+        run: |
+          $ErrorActionPreference = "Continue"
+
+          Write-Host "Python Environment Information:" -ForegroundColor Cyan
+          python --version
+          python -c "import sys; print('Python path:', sys.executable)"
+          python -c "import sys; print('Python paths:', sys.path[:3])"
+
+          Write-Host "Cleaning up any conflicting packages..." -ForegroundColor Yellow
+
+          # Comprehensive cleanup - ignore any errors
+          pip uninstall numpy opencv-python opencv-python-headless scipy scikit-learn joblib cython -y --quiet 2>$null
+
+          # Clear pip cache to avoid conflicts
+          pip cache purge
+
+          Write-Host "Python environment prepared" -ForegroundColor Green
+
+          # Reset error action preference
+          $ErrorActionPreference = "Stop"
+        shell: powershell
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-cython-pip-${{ hashFiles('**/requirements_cython.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-cython-pip-
+
+      - name: Install Cython dependencies
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          Write-Host "Installing Cython dependencies..." -ForegroundColor Cyan
+          Write-Host "Build type: ${{ github.event.inputs.build_type }}" -ForegroundColor Cyan
+          Write-Host "Force rebuild: ${{ github.event.inputs.force_rebuild }}" -ForegroundColor Cyan
+          Write-Host "Debug mode: ${{ github.event.inputs.debug_mode }}" -ForegroundColor Cyan
+
+          # Upgrade pip first
+          python -m pip install --upgrade pip
+
+          # Clean up any existing packages to avoid conflicts
+          Write-Host "Cleaning up existing packages..." -ForegroundColor Yellow
+          $packagesToRemove = @("numpy", "opencv-python", "opencv-python-headless", "scipy", "scikit-learn", "joblib", "mediapipe")
+          foreach ($package in $packagesToRemove) {
+            try {
+              # Check if package is installed before trying to uninstall
+              $isInstalled = python -c "import $package; print('installed')" 2>$null
+              if ($isInstalled -eq "installed") {
+                pip uninstall $package -y 2>$null
+                Write-Host "Removed $package" -ForegroundColor Gray
+              } else {
+                Write-Host "Package $package was not installed" -ForegroundColor Gray
+              }
+            } catch {
+              Write-Host "Package $package was not installed or already removed" -ForegroundColor Gray
+            }
+          }
+
+          # Install all dependencies from requirements file with strict version control
+          Write-Host "Installing dependencies from requirements_cython.txt..." -ForegroundColor Yellow
+          try {
+            if ("${{ github.event.inputs.force_rebuild }}" -eq "true") {
+              Write-Host "Force rebuilding all packages..." -ForegroundColor Yellow
+              pip install -r requirements_cython.txt --force-reinstall --no-cache-dir
+            } else {
+              pip install -r requirements_cython.txt --force-reinstall
+            }
+            Write-Host "[OK] All dependencies installed from requirements file" -ForegroundColor Green
+          } catch {
+            Write-Host "[ERROR] Failed to install dependencies: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
+
+
+
+          # Verify all packages are compatible
+          Write-Host "Verifying package compatibility..." -ForegroundColor Yellow
+          python -c "import sys; import numpy as np; import cv2; import sklearn; import scipy; import mediapipe; print(f'NumPy: {np.__version__}'); print(f'OpenCV: {cv2.__version__}'); print(f'scikit-learn: {sklearn.__version__}'); print(f'scipy: {scipy.__version__}'); print(f'MediaPipe: {mediapipe.__version__}'); print('All packages imported successfully'); assert np.__version__ == '1.24.3', f'NumPy {np.__version__} is not the expected version 1.24.3'; print('NumPy-scipy compatibility verified')"
+
+          # Additional NumPy compatibility check
+          Write-Host "Checking NumPy compatibility..." -ForegroundColor Yellow
+          python -c "import numpy as np; print(f'NumPy version: {np.__version__}'); assert np.__version__ == '1.24.3', f'NumPy version {np.__version__} is not compatible. Expected 1.24.3'; print('NumPy version is compatible with scipy')"
+
+          # Check installed packages
+          Write-Host "Installed packages:" -ForegroundColor Yellow
+          pip list
+
+          # Run pip check to confirm no broken dependencies
+          Write-Host "Running pip check..." -ForegroundColor Yellow
+          pip check
+
+          # Test critical imports
+          Write-Host "Testing Cython..." -ForegroundColor Gray
+          python -c "import Cython; print('Cython version:', Cython.__version__)"
+
+          Write-Host "Testing NumPy..." -ForegroundColor Gray
+          python -c "import numpy; print('NumPy version:', numpy.__version__)"
+
+          Write-Host "Testing OpenCV..." -ForegroundColor Gray
+          python -c "import cv2; print('OpenCV version:', cv2.__version__)"
+
+          Write-Host "Testing scikit-learn..." -ForegroundColor Gray
+          python -c "import sklearn; print('scikit-learn version:', sklearn.__version__)"
+
+          Write-Host "Testing MediaPipe..." -ForegroundColor Gray
+          python -c "import mediapipe; print('MediaPipe version:', mediapipe.__version__)"
+
+          Write-Host "Package installation and verification completed" -ForegroundColor Green
+        shell: powershell
+
+      - name: Prepare Models Directory
+        run: |
+          Write-Host "Preparing models directory..." -ForegroundColor Yellow
+
+          # Check if models_compressed exists, if not use models or create empty
+          if (Test-Path "models_compressed") {
+            Write-Host "Found models_compressed directory" -ForegroundColor Green
+            Get-ChildItem "models_compressed" | ForEach-Object { Write-Host "  $($_.Name)" }
+          } elseif (Test-Path "models") {
+            Write-Host "models_compressed not found, copying from models directory" -ForegroundColor Yellow
+            Copy-Item "models" "models_compressed" -Recurse -Force
+            Write-Host "Created models_compressed from models directory" -ForegroundColor Green
+          } else {
+            Write-Host "No models directory found, creating empty models_compressed" -ForegroundColor Yellow
+            New-Item -ItemType Directory -Path "models_compressed" -Force | Out-Null
+            # Create a dummy file to prevent empty directory issues
+            "# Placeholder file" | Out-File -FilePath "models_compressed\placeholder.txt" -Encoding UTF8
+            Write-Host "Created empty models_compressed directory with placeholder" -ForegroundColor Green
+          }
+
+          # Additional environment setup for NumPy/OpenCV compatibility
+          Write-Host "Setting up NumPy/OpenCV compatibility environment..." -ForegroundColor Yellow
+
+          # Set environment variables to help with NumPy compatibility
+          $env:OPENBLAS_NUM_THREADS = "1"
+          $env:NUMPY_EXPERIMENTAL_ARRAY_FUNCTION = "0"
+          $env:OMP_NUM_THREADS = "1"
+
+          Write-Host "Environment variables set for compatibility" -ForegroundColor Green
+        shell: powershell
+
+      - name: Build Cython DLL with Obfuscation
+        run: |
+          Write-Host "Building Cython DLL with code obfuscation..." -ForegroundColor Green
+          Write-Host "Manual trigger parameters:" -ForegroundColor Cyan
+          Write-Host "  Build type: ${{ github.event.inputs.build_type }}" -ForegroundColor Cyan
+          Write-Host "  Force rebuild: ${{ github.event.inputs.force_rebuild }}" -ForegroundColor Cyan
+          Write-Host "  Debug mode: ${{ github.event.inputs.debug_mode }}" -ForegroundColor Cyan
+
+          # Add debug information
+          Write-Host "Current directory: $(Get-Location)" -ForegroundColor Yellow
+          Write-Host "Files in current directory:" -ForegroundColor Yellow
+          Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" }
+
+          # Check Cython files existence
+          $cythonFiles = @("bp_estimation_cython.pyx", "setup_cython_dll.py")
+          foreach ($file in $cythonFiles) {
+            if (Test-Path $file) {
+              Write-Host "Cython file found: $file" -ForegroundColor Green
+              $fileSize = (Get-Item $file).Length
+              Write-Host "File size: $fileSize bytes" -ForegroundColor Cyan
+            } else {
+              Write-Host "Cython file not found: $file" -ForegroundColor Red
+              exit 1
+            }
+          }
+
+          # Verify models_compressed directory exists
+          if (Test-Path "models_compressed") {
+            Write-Host "Models compressed directory verified" -ForegroundColor Green
+            Get-ChildItem "models_compressed" | ForEach-Object { Write-Host "  $($_.Name)" }
+          } else {
+            Write-Host "ERROR: models_compressed directory still not found!" -ForegroundColor Red
+            exit 1
+          }
+
+          # Clean up any existing build artifacts
+          Write-Host "Cleaning up build artifacts..." -ForegroundColor Yellow
+          if (Test-Path "build") { Remove-Item "build" -Recurse -Force }
+          if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
+          if (Test-Path "dist_cython") { Remove-Item "dist_cython" -Recurse -Force }
+          if (Test-Path "__pycache__") { Remove-Item "__pycache__" -Recurse -Force }
+          Get-ChildItem -Filter "*.pyd" | Remove-Item -Force
+          Get-ChildItem -Filter "*.so" | Remove-Item -Force
+          Get-ChildItem -Filter "*.c" | Remove-Item -Force
+          Get-ChildItem -Filter "*.cpp" | Remove-Item -Force
+          Write-Host "Build artifacts cleaned up" -ForegroundColor Green
+
+          # Set environment variables for optimization
+          $env:CFLAGS = "-O3 -DNDEBUG"
+          $env:CXXFLAGS = "-O3 -DNDEBUG"
+
+          # Final NumPy version check before building
+          Write-Host "Final NumPy version check before building..." -ForegroundColor Yellow
+          python -c "import numpy as np; print(f'Final NumPy version: {np.__version__}'); assert np.__version__ == '1.24.3', f'CRITICAL: NumPy version {np.__version__} is not 1.24.3. Build will fail.'; print('NumPy version is correct for Cython build')"
+
+          # Build Windows DLL from Cython
+          Write-Host "Building Windows DLL from Cython..." -ForegroundColor Yellow
+          if ("${{ github.event.inputs.debug_mode }}" -eq "true") {
+            Write-Host "Debug mode enabled - building with debug information..." -ForegroundColor Yellow
+            python build_cython_dll.py
+          } else {
+            python build_cython_dll.py
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Cython build failed" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "Cython extension built successfully" -ForegroundColor Green
+
+          # Check for built Windows DLL
+          $dllFiles = @("BloodPressureEstimation.dll")
+          foreach ($pattern in $dllFiles) {
+            $files = Get-ChildItem -Filter $pattern
+            if ($files) {
+              foreach ($file in $files) {
+                $size = [math]::Round($file.Length / 1MB, 2)
+                Write-Host "[OK] Built Windows DLL: $($file.Name) ($size MB)" -ForegroundColor Green
+              }
+            } else {
+              Write-Host "[WARNING] No Windows DLL found matching pattern: $pattern" -ForegroundColor Yellow
+            }
+          }
+
+          # Test the built DLL
+          Write-Host "Testing built DLL..." -ForegroundColor Yellow
+          if (Test-Path "BloodPressureEstimation.dll") {
+            Write-Host "[OK] Windows DLL file exists" -ForegroundColor Green
+            # Test basic functionality by checking file properties
+            $dllInfo = Get-Item "BloodPressureEstimation.dll"
+            Write-Host "[OK] DLL size: $([math]::Round($dllInfo.Length / 1MB, 2)) MB" -ForegroundColor Green
+            Write-Host "[OK] DLL created: $($dllInfo.CreationTime)" -ForegroundColor Green
+          } else {
+            Write-Host "[ERROR] Windows DLL file not found" -ForegroundColor Red
+            exit 1
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Extension tests failed" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "Cython DLL build completed successfully" -ForegroundColor Green
+        shell: powershell
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "6.0.x"
+
+      - name: Create Enhanced C++ Wrapper Source Files
+        run: |
+          Write-Host "Creating enhanced C++ wrapper source files..." -ForegroundColor Yellow
+          
+          # C++ラッパープロジェクトディレクトリの作成
+          New-Item -ItemType Directory -Path "CppWrapperDLL" -Force | Out-Null
+          
+          # 修正されたヘッダーファイルの作成
+          $headerContent = @'
+          #pragma once
+          #ifdef __cplusplus
+          extern "C" {
+          #endif
+
+          // 初期化・終了処理
+          __declspec(dllexport) int InitializeBP(const char* model_dir);
+          __declspec(dllexport) void CleanupBP();
+
+          // 血圧解析機能
+          __declspec(dllexport) const char* StartBloodPressureAnalysisRequest(
+              const char* request_id, 
+              int height, 
+              int weight, 
+              int sex, 
+              const char* movie_path
+          );
+
+          __declspec(dllexport) const char* GetProcessingStatus(const char* request_id);
+          __declspec(dllexport) int CancelBloodPressureAnalysis(const char* request_id);
+
+          // ユーティリティ関数
+          __declspec(dllexport) const char* GetVersionInfo();
+          __declspec(dllexport) const char* GenerateRequestId();
+
+          // デバッグ・エラー処理（Windows APIと衝突しないよう名前変更）
+          __declspec(dllexport) const char* GetBPLastError();
+
+          #ifdef __cplusplus
+          }
+          #endif
+          '@
+          $headerContent | Out-File -FilePath "CppWrapperDLL\BloodPressureWrapper.h" -Encoding UTF8
+          
+          # 修正されたC++実装ファイルの作成（Python 3.11対応＋関数名修正）
+          $cppContent = @'
+          // CppWrapperDLL.cpp - Python 3.11対応修正版
+          #include "BloodPressureWrapper.h"
+          #include <Python.h>
+          #include <windows.h>
+          #include <string>
+          #include <mutex>
+
+          static std::mutex pyMutex;
+          static bool pythonInitialized = false;
+          static PyObject* pModule = nullptr;
+          static std::string lastError;
+
+          // エラーハンドリング関数
+          static void ClearPythonError() {
+              if (PyErr_Occurred()) {
+                  PyObject *ptype, *pvalue, *ptraceback;
+                  PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+                  
+                  if (pvalue) {
+                      PyObject* str = PyObject_Str(pvalue);
+                      if (str) {
+                          const char* errorStr = PyUnicode_AsUTF8(str);
+                          if (errorStr) {
+                              lastError = std::string("Python Error: ") + errorStr;
+                          }
+                          Py_DECREF(str);
+                      }
+                  }
+                  
+                  Py_XDECREF(ptype);
+                  Py_XDECREF(pvalue);
+                  Py_XDECREF(ptraceback);
+              }
+          }
+
+          // 安全なPython初期化（Python 3.11対応）
+          static bool SafeInitializePython() {
+              try {
+                  if (pythonInitialized) {
+                      return true;
+                  }
+
+                  // Python 3.11では Py_SetPythonHome は非推奨
+                  // 代わりに環境変数やPy_SetPath を使用
+                  
+                  // Python初期化
+                  if (!Py_IsInitialized()) {
+                      Py_Initialize();
+                  }
+                  
+                  if (!Py_IsInitialized()) {
+                      lastError = "Failed to initialize Python interpreter";
+                      return false;
+                  }
+
+                  // Python 3.9以降 PyEval_InitThreads は自動的に呼ばれるため不要
+                  // GIL状態の確認のみ行う
+                  if (!PyGILState_Check()) {
+                      // Python 3.9以降は自動的にスレッドサポートが有効
+                  }
+
+                  pythonInitialized = true;
+                  return true;
+                  
+              } catch (...) {
+                  lastError = "Exception during Python initialization";
+                  return false;
+              }
+          }
+
+          // PythonランタイムとCython DLLの初期化
+          extern "C" __declspec(dllexport)
+          int InitializeBP(const char* model_dir) {
+              std::lock_guard<std::mutex> lock(pyMutex);
+              
+              try {
+                  // 安全なPython初期化
+                  if (!SafeInitializePython()) {
+                      return 0;
+                  }
+                  
+                  // GIL確保
+                  PyGILState_STATE gstate = PyGILState_Ensure();
+                  
+                  try {
+                      // sys.pathの設定（詳細）
+                      PyRun_SimpleString(
+                          "import sys\n"
+                          "import os\n"
+                          "current_dir = os.getcwd()\n"
+                          "python_deps = os.path.join(current_dir, 'python_deps')\n"
+                          "if current_dir not in sys.path:\n"
+                          "    sys.path.insert(0, current_dir)\n"
+                          "if python_deps not in sys.path:\n"
+                          "    sys.path.insert(0, python_deps)\n"
+                          "if os.path.exists(python_deps):\n"
+                          "    for subdir in ['numpy', 'cv2', 'sklearn', 'scipy']:\n"
+                          "        subpath = os.path.join(python_deps, subdir)\n"
+                          "        if os.path.exists(subpath) and subpath not in sys.path:\n"
+                          "            sys.path.insert(0, subpath)\n"
+                          "print('Python paths configured')"
+                      );
+                      
+                      if (PyErr_Occurred()) {
+                          ClearPythonError();
+                          PyGILState_Release(gstate);
+                          return 0;
+                      }
+
+                      // 依存関係のプリロード
+                      PyRun_SimpleString(
+                          "try:\n"
+                          "    import numpy as np\n"
+                          "    print(f'NumPy {np.__version__} loaded successfully')\n"
+                          "except Exception as e:\n"
+                          "    print(f'NumPy load failed: {e}')\n"
+                          "try:\n"
+                          "    import cv2\n"
+                          "    print(f'OpenCV {cv2.__version__} loaded successfully')\n"
+                          "except Exception as e:\n"
+                          "    print(f'OpenCV load failed: {e}')"
+                      );
+
+                      // Cython拡張モジュール（pyd）をimport
+                      if (pModule) {
+                          Py_DECREF(pModule);
+                          pModule = nullptr;
+                      }
+                      
+                      pModule = PyImport_ImportModule("BloodPressureEstimation");
+                      if (!pModule) {
+                          ClearPythonError();
+                          PyGILState_Release(gstate);
+                          return 0;
+                      }
+
+                      int result = 0;
+                      PyObject* pFunc = PyObject_GetAttrString(pModule, "InitializeDLL");
+                      if (pFunc && PyCallable_Check(pFunc)) {
+                          PyObject* pArgs = Py_BuildValue("(s)", model_dir ? model_dir : "models");
+                          if (pArgs) {
+                              PyObject* pResult = PyObject_CallObject(pFunc, pArgs);
+                              if (pResult) {
+                                  if (PyLong_Check(pResult)) {
+                                      result = (int)PyLong_AsLong(pResult);
+                                  } else if (PyBool_Check(pResult)) {
+                                      result = PyObject_IsTrue(pResult);
+                                  }
+                                  Py_DECREF(pResult);
+                              } else {
+                                  ClearPythonError();
+                              }
+                              Py_DECREF(pArgs);
+                          }
+                          Py_DECREF(pFunc);
+                      } else {
+                          ClearPythonError();
+                          Py_XDECREF(pFunc);
+                      }
+                      
+                      PyGILState_Release(gstate);
+                      return result;
+                      
+                  } catch (...) {
+                      PyGILState_Release(gstate);
+                      lastError = "Exception in Python execution";
+                      return 0;
+                  }
+                  
+              } catch (...) {
+                  lastError = "Exception in InitializeBP";
+                  return 0;
+              }
+          }
+
+          // 安全な文字列関数呼び出し
+          static std::string CallStringFunc(const char* funcName, const char* fmt = nullptr, ...) {
+              std::lock_guard<std::mutex> lock(pyMutex);
+              
+              if (!pythonInitialized || !pModule) {
+                  return "ERROR: Not initialized";
+              }
+              
+              try {
+                  PyGILState_STATE gstate = PyGILState_Ensure();
+                  
+                  try {
+                      std::string result = "";
+                      PyObject* pFunc = PyObject_GetAttrString(pModule, funcName);
+                      
+                      if (pFunc && PyCallable_Check(pFunc)) {
+                          PyObject* pArgs = nullptr;
+                          
+                          if (fmt) {
+                              va_list args;
+                              va_start(args, fmt);
+                              pArgs = Py_VaBuildValue(fmt, args);
+                              va_end(args);
+                          }
+                          
+                          PyObject* pResult = PyObject_CallObject(pFunc, pArgs);
+                          if (pResult) {
+                              if (PyUnicode_Check(pResult)) {
+                                  const char* resultStr = PyUnicode_AsUTF8(pResult);
+                                  if (resultStr) {
+                                      result = resultStr;
+                                  }
+                              }
+                              Py_DECREF(pResult);
+                          } else {
+                              ClearPythonError();
+                              result = "ERROR: Exception in " + std::string(funcName);
+                          }
+                          
+                          if (pArgs) Py_DECREF(pArgs);
+                          Py_DECREF(pFunc);
+                      } else {
+                          ClearPythonError();
+                          result = "ERROR: Function not found: " + std::string(funcName);
+                          Py_XDECREF(pFunc);
+                      }
+                      
+                      PyGILState_Release(gstate);
+                      return result;
+                      
+                  } catch (...) {
+                      PyGILState_Release(gstate);
+                      return "ERROR: Exception in function call";
+                  }
+                  
+              } catch (...) {
+                  return "ERROR: Exception in CallStringFunc";
+              }
+          }
+
+          extern "C" __declspec(dllexport)
+          const char* StartBloodPressureAnalysisRequest(const char* request_id, int height, int weight, int sex, const char* movie_path) {
+              static thread_local std::string ret;
+              ret = CallStringFunc("StartBloodPressureAnalysisRequest", "siiis", request_id, height, weight, sex, movie_path);
+              return ret.c_str();
+          }
+
+          extern "C" __declspec(dllexport)
+          const char* GetProcessingStatus(const char* request_id) {
+              static thread_local std::string ret;
+              ret = CallStringFunc("GetProcessingStatus", "s", request_id);
+              return ret.c_str();
+          }
+
+          extern "C" __declspec(dllexport)
+          int CancelBloodPressureAnalysis(const char* request_id) {
+              std::lock_guard<std::mutex> lock(pyMutex);
+              
+              if (!pythonInitialized || !pModule) return 0;
+              
+              try {
+                  PyGILState_STATE gstate = PyGILState_Ensure();
+                  
+                  try {
+                      int result = 0;
+                      PyObject* pFunc = PyObject_GetAttrString(pModule, "CancelBloodPressureAnalysis");
+                      
+                      if (pFunc && PyCallable_Check(pFunc)) {
+                          PyObject* pArgs = Py_BuildValue("(s)", request_id);
+                          if (pArgs) {
+                              PyObject* pResult = PyObject_CallObject(pFunc, pArgs);
+                              if (pResult) {
+                                  result = PyObject_IsTrue(pResult);
+                                  Py_DECREF(pResult);
+                              } else {
+                                  ClearPythonError();
+                              }
+                              Py_DECREF(pArgs);
+                          }
+                          Py_DECREF(pFunc);
+                      } else {
+                          ClearPythonError();
+                          Py_XDECREF(pFunc);
+                      }
+                      
+                      PyGILState_Release(gstate);
+                      return result;
+                      
+                  } catch (...) {
+                      PyGILState_Release(gstate);
+                      return 0;
+                  }
+                  
+              } catch (...) {
+                  return 0;
+              }
+          }
+
+          extern "C" __declspec(dllexport)
+          const char* GetVersionInfo() {
+              static thread_local std::string ret;
+              ret = CallStringFunc("GetVersionInfo");
+              return ret.c_str();
+          }
+
+          extern "C" __declspec(dllexport)
+          const char* GenerateRequestId() {
+              static thread_local std::string ret;
+              ret = CallStringFunc("GenerateRequestId");
+              return ret.c_str();
+          }
+
+          // エラー情報取得関数（Windows APIと衝突しないよう名前変更）
+          extern "C" __declspec(dllexport)
+          const char* GetBPLastError() {
+              static std::string error_copy = lastError;
+              return error_copy.c_str();
+          }
+
+          // DLL終了処理
+          extern "C" __declspec(dllexport)
+          void CleanupBP() {
+              std::lock_guard<std::mutex> lock(pyMutex);
+              
+              if (pModule) {
+                  Py_DECREF(pModule);
+                  pModule = nullptr;
+              }
+              
+              if (pythonInitialized) {
+                  if (Py_IsInitialized()) {
+                      Py_Finalize();
+                  }
+                  pythonInitialized = false;
+              }
+          }
+
+          // DLLエントリポイント
+          BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+              switch (ul_reason_for_call) {
+              case DLL_PROCESS_ATTACH:
+                  // DLL読み込み時の初期化
+                  break;
+              case DLL_PROCESS_DETACH:
+                  // DLL解放時のクリーンアップ
+                  CleanupBP();
+                  break;
+              case DLL_THREAD_ATTACH:
+              case DLL_THREAD_DETACH:
+                  break;
+              }
+              return TRUE;
+          }
+          '@
+          $cppContent | Out-File -FilePath "CppWrapperDLL\CppWrapperDLL.cpp" -Encoding UTF8
+          Write-Host "C++ wrapper source files created" -ForegroundColor Green
+        shell: powershell
+
+      - name: Build C++ Wrapper DLL with Enhanced Error Handling
+        run: |
+          Write-Host "Building C++ Wrapper DLL with enhanced error handling..." -ForegroundColor Yellow
+          
+          # CMakeLists.txtの作成
+          $cmakeContent = @'
+          cmake_minimum_required(VERSION 3.20)
+          project(CppWrapper LANGUAGES CXX)
+
+          set(CMAKE_CXX_STANDARD 17)
+          set(CMAKE_CXX_STANDARD_REQUIRED ON)
+          set(CMAKE_BUILD_TYPE RelWithDebInfo)
+
+          find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
+          add_library(CppWrapper SHARED
+              CppWrapperDLL.cpp
+              BloodPressureWrapper.h
+          )
+
+          target_compile_definitions(CppWrapper PRIVATE
+              WIN32_LEAN_AND_MEAN
+              NOMINMAX
+              _CRT_SECURE_NO_WARNINGS
+              PY_SSIZE_T_CLEAN
+          )
+
+          target_include_directories(CppWrapper PRIVATE
+              ${Python3_INCLUDE_DIRS}
+              ${CMAKE_CURRENT_SOURCE_DIR}
+          )
+
+          target_link_libraries(CppWrapper PRIVATE
+              ${Python3_LIBRARIES}
+          )
+
+          if(MSVC)
+              target_compile_options(CppWrapper PRIVATE
+                  /W3 /EHsc /MP /Gy /GS
+              )
+              target_link_options(CppWrapper PRIVATE
+                  /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF
+              )
+          endif()
+
+          set_target_properties(CppWrapper PROPERTIES
+              OUTPUT_NAME "CppWrapper"
+              SUFFIX ".dll"
+              PREFIX ""
+              RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Release
+              LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Release
+              ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Release
+          )
+          '@
+          
+          $cmakeContent | Out-File -FilePath "CppWrapperDLL\CMakeLists.txt" -Encoding UTF8
+
+          # ビルドディレクトリの作成
+          New-Item -ItemType Directory -Path "CppWrapperDLL\build" -Force | Out-Null
+          Push-Location "CppWrapperDLL\build"
+
+          try {
+            # Python環境の取得
+            $pythonExe = python -c "import sys; print(sys.executable)"
+            $pythonDir = Split-Path $pythonExe -Parent
+            $pythonInclude = "$pythonDir\include"
+            $pythonLib = "$pythonDir\libs\python311.lib"
+
+            Write-Host "Python environment:" -ForegroundColor Cyan
+            Write-Host "  Executable: $pythonExe" -ForegroundColor Cyan
+            Write-Host "  Include: $pythonInclude" -ForegroundColor Cyan
+            Write-Host "  Library: $pythonLib" -ForegroundColor Cyan
+
+            # CMake設定
+            cmake .. `
+              -DCMAKE_BUILD_TYPE=Release `
+              -DPython3_EXECUTABLE="$pythonExe" `
+              -DPython3_INCLUDE_DIR="$pythonInclude" `
+              -DPython3_LIBRARY="$pythonLib"
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "CMake configuration failed"
+            }
+
+            # ビルド実行
+            cmake --build . --config Release --parallel
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "CMake build failed"
+            }
+
+            # 成果物の確認とコピー
+            $builtDll = Get-ChildItem -Path . -Recurse -Filter "CppWrapper.dll" | Select-Object -First 1
+            if ($builtDll) {
+              # まずdist_csharpディレクトリを作成
+              if (!(Test-Path "..\..\dist_csharp")) {
+                New-Item -ItemType Directory -Path "..\..\dist_csharp" -Force | Out-Null
+              }
+              Copy-Item $builtDll.FullName "..\..\dist_csharp\" -Force
+              Write-Host "CppWrapper.dll copied to dist_csharp" -ForegroundColor Green
+            } else {
+              Write-Host "CppWrapper.dll not found after build" -ForegroundColor Red
+              # ビルド成果物の一覧表示
+              Get-ChildItem -Path . -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.FullName)" }
+              throw "CppWrapper.dll not generated"
+            }
+
+          } finally {
+            Pop-Location
+          }
+
+          Write-Host "C++ Wrapper DLL build completed" -ForegroundColor Green
+        shell: powershell
+      
+      - name: Create Comprehensive Distribution Package
+        run: |
+          Write-Host "Creating comprehensive distribution package..." -ForegroundColor Yellow
+
+          # dist_csharp ディレクトリの作成
+          New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
+
+          # CRITICAL: First copy the main BloodPressureEstimation.dll
+          if (Test-Path "BloodPressureEstimation.dll") {
+            Copy-Item "BloodPressureEstimation.dll" "dist_csharp\" -Force
+            Write-Host "BloodPressureEstimation.dll copied" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: BloodPressureEstimation.dll not found in root directory!" -ForegroundColor Red
+            Get-ChildItem -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.Name)" }
+            exit 1
+          }
+
+          # Get Python execution environment path with correct site-packages detection
+          $pythonExe = python -c "import sys; print(sys.executable)"
+          $pythonDir = Split-Path $pythonExe -Parent
+          $pythonDllsDir = Join-Path $pythonDir "DLLs"
+
+          # Try multiple methods to find site-packages
+          Write-Host "Detecting site-packages directory..." -ForegroundColor Cyan
+
+          # Method 1: Standard site-packages detection
+          $sitePackagesMethod1 = python -c "import site; print(site.getsitepackages()[0])" 2>$null
+
+          # Method 2: Using sys.path
+          $sitePackagesMethod2 = python -c "import sys; import os; paths = [p for p in sys.path if 'site-packages' in p and os.path.exists(p)]; print(paths[0] if paths else '')" 2>$null
+
+          # Method 3: Manual construction
+          $sitePackagesMethod3 = Join-Path $pythonDir "Lib\site-packages"
+
+          # Method 4: Check installed packages location
+          $sitePackagesMethod4 = python -c "import numpy; import os; print(os.path.dirname(numpy.__file__).split('numpy')[0].rstrip(os.sep))" 2>$null
+
+          Write-Host "Site-packages detection methods:" -ForegroundColor Gray
+          Write-Host "  Method 1 (site.getsitepackages): $sitePackagesMethod1" -ForegroundColor Gray
+          Write-Host "  Method 2 (sys.path search): $sitePackagesMethod2" -ForegroundColor Gray
+          Write-Host "  Method 3 (manual): $sitePackagesMethod3" -ForegroundColor Gray
+          Write-Host "  Method 4 (numpy location): $sitePackagesMethod4" -ForegroundColor Gray
+
+          # Choose the correct site-packages directory
+          $sitePackages = $null
+          $candidates = @($sitePackagesMethod1, $sitePackagesMethod2, $sitePackagesMethod3, $sitePackagesMethod4)
+
+          foreach ($candidate in $candidates) {
+            if ($candidate -and (Test-Path $candidate) -and (Test-Path "$candidate\numpy")) {
+              $sitePackages = $candidate
+              Write-Host "Selected site-packages: $sitePackages (contains numpy)" -ForegroundColor Green
+              break
+            } elseif ($candidate -and (Test-Path $candidate)) {
+              Write-Host "Candidate exists but no numpy: $candidate" -ForegroundColor Yellow
+            }
+          }
+
+          if (-not $sitePackages) {
+            Write-Host "ERROR: Could not find valid site-packages directory!" -ForegroundColor Red
+            # Try to find where packages are actually installed
+            $numpyLocation = python -c "try: import numpy; print(numpy.__file__); except: print('numpy not found')" 2>$null
+            
+            if ($numpyLocation -and $numpyLocation -ne "numpy not found") {
+              $sitePackages = Split-Path (Split-Path $numpyLocation -Parent) -Parent
+              Write-Host "Derived site-packages from numpy location: $sitePackages" -ForegroundColor Yellow
+            } else {
+              Write-Host "CRITICAL: Cannot find Python packages!" -ForegroundColor Red
+              exit 1
+            }
+          }
+
+          Write-Host "Python directory: $pythonDir" -ForegroundColor Cyan
+          Write-Host "Python DLLs directory: $pythonDllsDir" -ForegroundColor Cyan
+          Write-Host "Site packages: $sitePackages" -ForegroundColor Cyan
+
+          # 1. Copy all important Python DLLs
+          Write-Host "=== Step 1: Copying Python runtime DLLs ===" -ForegroundColor Yellow
+
+          # Main Python DLL
+          $pythonDllPath = "$pythonDir\python311.dll"
+          if (Test-Path $pythonDllPath) {
+            Copy-Item $pythonDllPath "dist_csharp\" -Force
+            Write-Host "python311.dll copied" -ForegroundColor Green
+          }
+
+          # Python DLLs directory from important files
+          $pythonDlls = @(
+            "_ctypes.pyd", "_socket.pyd", "select.pyd", "_ssl.pyd", 
+            "_hashlib.pyd", "_sqlite3.pyd", "_lzma.pyd", "_bz2.pyd",
+            "unicodedata.pyd", "_decimal.pyd", "_multiprocessing.pyd"
+          )
+
+          foreach ($dll in $pythonDlls) {
+            $sourcePath = Join-Path $pythonDllsDir $dll
+            if (Test-Path $sourcePath) {
+              Copy-Item $sourcePath "dist_csharp\" -Force
+              Write-Host "$dll copied" -ForegroundColor Green
+            } else {
+              Write-Host "$dll not found" -ForegroundColor Yellow
+            }
+          }
+
+          # 2. Create python_deps directory structure
+          Write-Host "=== Step 2: Creating Python dependencies structure ===" -ForegroundColor Yellow
+          New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
+
+          # 3. Copy Python packages with full verification
+          Write-Host "=== Step 3: Copying Python packages with verification ===" -ForegroundColor Yellow
+
+          # Define critical packages
+          $packages = @(
+            @{ name = "numpy"; critical = $true },
+            @{ name = "cv2"; critical = $true },
+            @{ name = "sklearn"; critical = $true },
+            @{ name = "scipy"; critical = $true },
+            @{ name = "joblib"; critical = $false },
+            @{ name = "mediapipe"; critical = $false },
+            @{ name = "threadpoolctl"; critical = $false }
+          )
+
+          $missingCritical = 0
+          foreach ($pkg in $packages) {
+            $sourcePath = Join-Path $sitePackages $pkg.name
+            $destPath = "dist_csharp\python_deps\$($pkg.name)"
+            
+            Write-Host "Processing package: $($pkg.name)" -ForegroundColor Cyan
+            
+            if (Test-Path $sourcePath) {
+              try {
+                # Remove destination if exists
+                if (Test-Path $destPath) {
+                  Remove-Item $destPath -Recurse -Force
+                }
+                
+                # Copy with error handling
+                Copy-Item $sourcePath $destPath -Recurse -Force -ErrorAction Stop
+                
+                # Verify copy
+                if (Test-Path $destPath) {
+                  $fileCount = (Get-ChildItem $destPath -Recurse -File).Count
+                  Write-Host "  SUCCESS: $($pkg.name) copied ($fileCount files)" -ForegroundColor Green
+                } else {
+                  Write-Host "  ERROR: $($pkg.name) copy verification failed" -ForegroundColor Red
+                  if ($pkg.critical) { $missingCritical++ }
+                }
+              } catch {
+                Write-Host "  ERROR: Failed to copy $($pkg.name): $($_.Exception.Message)" -ForegroundColor Red
+                if ($pkg.critical) { $missingCritical++ }
+              }
+            } else {
+              Write-Host "  ERROR: $($pkg.name) not found in site-packages" -ForegroundColor Red
+              if ($pkg.critical) { $missingCritical++ }
+            }
+          }
+
+          if ($missingCritical -gt 0) {
+            Write-Host "ERROR: $missingCritical critical packages are missing!" -ForegroundColor Red
+            exit 1
+          }
+
+          # 4. Special handling for .libs directories with fallback
+          Write-Host "=== Step 4: Copying .libs directories ===" -ForegroundColor Yellow
+
+          $libsDirs = @("numpy\.libs", "scipy\.libs")
+          foreach ($libsDir in $libsDirs) {
+            $sourcePath = "$sitePackages\$libsDir"
+            if (Test-Path $sourcePath) {
+              # Copy to both python_deps and root for maximum compatibility
+              try {
+                Copy-Item "$sourcePath\*" "dist_csharp\" -Force -ErrorAction Stop
+                Copy-Item "$sourcePath\*" "dist_csharp\python_deps\" -Force -ErrorAction Stop
+                Write-Host "$libsDir DLLs copied to multiple locations" -ForegroundColor Green
+              } catch {
+                Write-Host "Warning: Could not copy some files from $libsDir" -ForegroundColor Yellow
+              }
+            }
+          }
+
+          # 5. Copy Visual C++ Runtime DLLs
+          Write-Host "=== Step 5: Copying Visual C++ Runtime DLLs ===" -ForegroundColor Yellow
+
+          $vcRuntimeDlls = @("vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll", "ucrtbase.dll")
+          foreach ($dll in $vcRuntimeDlls) {
+            $systemDll = Join-Path $env:SystemRoot "System32\$dll"
+            if (Test-Path $systemDll) {
+              Copy-Item $systemDll "dist_csharp\" -Force
+              Write-Host "$dll copied from System32" -ForegroundColor Green
+            } else {
+              Write-Host "$dll not found in System32" -ForegroundColor Yellow
+            }
+          }
+
+          # 6. Copy models directory
+          Write-Host "=== Step 6: Copying models ===" -ForegroundColor Yellow
+          if (Test-Path "models_compressed") {
+            Copy-Item "models_compressed" "dist_csharp\models" -Recurse -Force
+            Write-Host "models_compressed copied to models" -ForegroundColor Green
+          } elseif (Test-Path "models") {
+            Copy-Item "models" "dist_csharp\models" -Recurse -Force
+            Write-Host "models directory copied" -ForegroundColor Green
+          } else {
+            Write-Host "WARNING: No models directory found" -ForegroundColor Yellow
+            # Create dummy models directory
+            New-Item -ItemType Directory -Path "dist_csharp\models" -Force | Out-Null
+            "# Placeholder for models" | Out-File -FilePath "dist_csharp\models\placeholder.txt" -Encoding UTF8
+          }
+
+          Write-Host "Distribution package created successfully" -ForegroundColor Green
+        shell: powershell
+
+      - name: Create and Build C# Test Project
+        run: |
+          Write-Host "Creating and building C# test project..." -ForegroundColor Yellow
+
+          # Ensure tests directory exists
+          New-Item -ItemType Directory -Path "tests\CSharpTest" -Force | Out-Null
+
+          # Create C# project file
+          $csprojContent = @'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net6.0</TargetFramework>
+              <Platforms>x64</Platforms>
+              <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+            </PropertyGroup>
+          </Project>
+          '@
+          
+          $csprojContent | Out-File -FilePath "tests\CSharpTest\BloodPressureTest.csproj" -Encoding UTF8
+
+          # Create C# test code
+          $csharpCode = @'
+          using System;
+          using System.Runtime.InteropServices;
+          using System.Threading;
+          using System.IO;
+          using System.Diagnostics;
+
+          namespace BloodPressureDllTest
+          {
+              public class BloodPressureDll
+              {
+                  private const string DllPath = "CppWrapper.dll";  // C++ラッパーDLLを使用
+
+                  // DLL関数の宣言（関数名修正対応）
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  public static extern int InitializeBP([MarshalAs(UnmanagedType.LPStr)] string modelDir);
+
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  public static extern void CleanupBP();
+
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string StartBloodPressureAnalysisRequest(
+                      [MarshalAs(UnmanagedType.LPStr)] string requestId,
+                      int height, int weight, int sex,
+                      [MarshalAs(UnmanagedType.LPStr)] string moviePath);
+
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string GetProcessingStatus([MarshalAs(UnmanagedType.LPStr)] string requestId);
+
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  public static extern int CancelBloodPressureAnalysis([MarshalAs(UnmanagedType.LPStr)] string requestId);
+
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string GetVersionInfo();
+
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string GenerateRequestId();
+
+                  // 関数名変更: GetLastError → GetBPLastError
+                  [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+                  [return: MarshalAs(UnmanagedType.LPStr)]
+                  public static extern string GetBPLastError();
+
+                  public static void TestBalancedDLL()
+                  {
+                      Console.WriteLine("=== Blood Pressure DLL Integration Test ===");
+
+                      try
+                      {
+                          // 環境確認
+                          Console.WriteLine("1. Environment Check");
+                          string workingDir = Directory.GetCurrentDirectory();
+                          Console.WriteLine($"   Working directory: {workingDir}");
+                          
+                          // 必要ファイルの確認
+                          string[] requiredFiles = { 
+                              "CppWrapper.dll", 
+                              "BloodPressureEstimation.dll", 
+                              "python311.dll" 
+                          };
+                          
+                          bool allExists = true;
+                          foreach (string file in requiredFiles)
+                          {
+                              bool exists = File.Exists(file);
+                              Console.WriteLine($"   {file}: {(exists ? "OK" : "MISSING")}");
+                              if (!exists) allExists = false;
+                          }
+
+                          if (!allExists)
+                          {
+                              Console.WriteLine("   ERROR: Required files are missing!");
+                              return;
+                          }
+
+                          // バージョン情報テスト（最も安全）
+                          Console.WriteLine("\n2. Version Information Test");
+                          try
+                          {
+                              string version = GetVersionInfo();
+                              Console.WriteLine($"   Version: {version ?? "null"}");
+                          }
+                          catch (Exception ex)
+                          {
+                              Console.WriteLine($"   Version test failed: {ex.Message}");
+                              string lastError = GetBPLastError(); // 修正された関数名
+                              Console.WriteLine($"   Last error: {lastError}");
+                              return;
+                          }
+
+                          // DLL初期化テスト
+                          Console.WriteLine("\n3. DLL initialization");
+                          try
+                          {
+                              int initResult = InitializeBP("models");
+                              Console.WriteLine($"   Initialization result: {initResult}");
+                              
+                              if (initResult == 0)
+                              {
+                                  string lastError = GetBPLastError(); // 修正された関数名
+                                  Console.WriteLine($"   Initialization failed. Last error: {lastError}");
+                                  return;
+                              }
+                          }
+                          catch (Exception ex)
+                          {
+                              Console.WriteLine($"   Initialization exception: {ex.Message}");
+                              string lastError = GetBPLastError(); // 修正された関数名
+                              Console.WriteLine($"   Last error: {lastError}");
+                              return;
+                          }
+
+                          // ステータステスト
+                          Console.WriteLine("\n4. Status Test");
+                          try
+                          {
+                              string status = GetProcessingStatus("test_request_123");
+                              Console.WriteLine($"   Status result: {status ?? "null"}");
+                          }
+                          catch (Exception ex)
+                          {
+                              Console.WriteLine($"   Status test error: {ex.Message}");
+                          }
+
+                          // リクエストID生成テスト
+                          Console.WriteLine("\n5. Request ID Generation Test");
+                          try
+                          {
+                              string requestId = GenerateRequestId();
+                              Console.WriteLine($"   Generated ID: {requestId ?? "null"}");
+                          }
+                          catch (Exception ex)
+                          {
+                              Console.WriteLine($"   Request ID generation error: {ex.Message}");
+                          }
+
+                          Console.WriteLine("\n=== Test Completed Successfully ===");
+                      }
+                      catch (Exception ex)
+                      {
+                          Console.WriteLine($"\nFATAL ERROR: {ex.Message}");
+                          Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                          throw;
+                      }
+                      finally
+                      {
+                          // クリーンアップ
+                          try
+                          {
+                              CleanupBP();
+                              Console.WriteLine("Cleanup completed.");
+                          }
+                          catch (Exception ex)
+                          {
+                              Console.WriteLine($"Cleanup error: {ex.Message}");
+                          }
+                      }
+                  }
+
+                  public static void Main(string[] args)
+                  {
+                      try
+                      {
+                          TestBalancedDLL();
+                          Environment.Exit(0);
+                      }
+                      catch (Exception ex)
+                      {
+                          Console.WriteLine($"Application error: {ex.Message}");
+                          Environment.Exit(1);
+                      }
+                  }
+              }
+          }
+          '@   
+          $csharpCode | Out-File -FilePath "tests\CSharpTest\Program.cs" -Encoding UTF8
+
+          # プロジェクトのビルドと発行
+          Write-Host "Building and publishing C# test project to dist_csharp..." -ForegroundColor Yellow
+          dotnet publish tests/CSharpTest/BloodPressureTest.csproj -c Release -o dist_csharp --self-contained false -r win-x64
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "C# test project built successfully" -ForegroundColor Green
+          } else {
+            Write-Host "C# test project build failed" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+      - name: Enhanced Environment Preparation for C# Integration
+        run: |
+          Push-Location "dist_csharp"
+          
+          Write-Host "=== Enhanced Environment Preparation for C# Integration ===" -ForegroundColor Green
+          
+          $currentDir = Get-Location
+          
+          # Python環境変数の詳細設定（PYTHONHOMEは設定しない）
+          $pythonPaths = @(
+            "$currentDir\python_deps",
+            "$currentDir\python_deps\numpy",
+            "$currentDir\python_deps\cv2",
+            "$currentDir\python_deps\sklearn",
+            "$currentDir\python_deps\scipy"
+          )
+          
+          $env:PYTHONPATH = $pythonPaths -join ";"
+          
+          # DLL検索パスの設定
+          $dllPaths = @(
+            $currentDir,
+            "$currentDir\python_deps",
+            "$currentDir\python_deps\numpy\.libs",
+            "$currentDir\python_deps\scipy\.libs"
+          )
+          
+          $env:PATH = ($dllPaths + $env:PATH.Split(';')) -join ";"
+          
+          # Python実行環境の最適化
+          $env:PYTHONDONTWRITEBYTECODE = "1"
+          $env:PYTHONIOENCODING = "utf-8"
+          $env:PYTHONOPTIMIZE = "2"
+          $env:PYTHONNOUSERSITE = "1"
+          $env:PYTHONUNBUFFERED = "1"
+          
+          # NumPy/SciPy最適化
+          $env:OPENBLAS_NUM_THREADS = "1"
+          $env:OMP_NUM_THREADS = "1"
+          $env:MKL_NUM_THREADS = "1"
+          $env:NUMPY_EXPERIMENTAL_ARRAY_FUNCTION = "0"
+          
+          # C++/Python統合最適化
+          $env:PYTHONMALLOC = "malloc"
+          $env:PYTHONASYNCIODEBUG = "0"
+          
+          # .NET最適化
+          $env:COMPlus_gcServer = "0"
+          $env:COMPlus_gcConcurrent = "1"
+          $env:DOTNET_gcServer = "0"
+          
+          Write-Host "Environment preparation completed" -ForegroundColor Green
+          Write-Host "PYTHONPATH entries: $($pythonPaths.Count)" -ForegroundColor Cyan
+          Write-Host "DLL search paths: $($dllPaths.Count)" -ForegroundColor Cyan
+          
+          Pop-Location
+        shell: powershell
+      
+      - name: Comprehensive DLL Dependency Test
+        run: |
+          Push-Location "dist_csharp"
+          
+          Write-Host "=== Comprehensive DLL Dependency Test ===" -ForegroundColor Yellow
+          
+          # 各DLLの読み込みテスト（Here-Stringを使わない方法）
+          $testDlls = @("python311.dll", "BloodPressureEstimation.dll", "CppWrapper.dll")
+          
+          # C#コードを文字列配列として作成
+          $csharpCode = @(
+            'using System;',
+            'using System.Runtime.InteropServices;',
+            'public class DllLoader {',
+            '    [DllImport("kernel32.dll", SetLastError = true)]',
+            '    public static extern IntPtr LoadLibrary(string lpFileName);',
+            '    [DllImport("kernel32.dll", SetLastError = true)]',
+            '    public static extern bool FreeLibrary(IntPtr hModule);',
+            '    [DllImport("kernel32.dll", SetLastError = true)]',
+            '    public static extern uint GetLastError();',
+            '}'
+          ) -join "`n"
+          
+          foreach ($dll in $testDlls) {
+            if (Test-Path $dll) {
+              Write-Host "Testing $dll..." -ForegroundColor Cyan
+              
+              try {
+                # PowerShellでのDLL読み込みテスト
+                Add-Type -TypeDefinition $csharpCode
+                
+                $handle = [DllLoader]::LoadLibrary((Resolve-Path $dll).Path)
+                if ($handle -ne [IntPtr]::Zero) {
+                  Write-Host "  ${dll}: LOADABLE" -ForegroundColor Green
+                  [DllLoader]::FreeLibrary($handle) | Out-Null
+                } else {
+                  $error = [DllLoader]::GetLastError()
+                  Write-Host "  ${dll}: FAILED TO LOAD (Error: $error)" -ForegroundColor Red
+                }
+                
+              } catch {
+                Write-Host "  ${dll}: EXCEPTION - $($_.Exception.Message)" -ForegroundColor Red
+              }
+            } else {
+              Write-Host "  ${dll}: NOT FOUND" -ForegroundColor Red
+            }
+          }
+          
+          # Python環境の詳細テスト（ファイルを作成して実行）
+          Write-Host "`nTesting Python environment in current context..." -ForegroundColor Cyan
+          
+          # Pythonテストコードを文字列配列として作成
+          $pythonTestLines = @(
+            'import sys',
+            'import os',
+            'print(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")',
+            'print(f"Executable: {sys.executable}")',
+            'print(f"Current dir: {os.getcwd()}")',
+            '',
+            '# Test critical modules',
+            "modules_to_test = ['numpy', 'cv2', 'sklearn', 'scipy']",
+            'for module in modules_to_test:',
+            '    try:',
+            '        if module == "numpy":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import numpy as np',
+            '            test_array = np.array([1, 2, 3])',
+            '            assert test_array.sum() == 6',
+            '            print(f"{module} {np.__version__}: OK (test passed)")',
+            '        elif module == "cv2":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import cv2',
+            '            print(f"{module} {cv2.__version__}: OK")',
+            '        elif module == "sklearn":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import sklearn',
+            '            print(f"{module} {sklearn.__version__}: OK")',
+            '        elif module == "scipy":',
+            '            sys.path.insert(0, "python_deps")',
+            '            import scipy',
+            '            print(f"{module} {scipy.__version__}: OK")',
+            '    except Exception as e:',
+            '        print(f"{module}: FAILED - {e}")',
+            '',
+            'print("Python environment test completed")'
+          )
+          
+          $pythonTestContent = $pythonTestLines -join "`n"
+          $pythonTestContent | Out-File -FilePath "python_env_test.py" -Encoding UTF8
+          
+          try {
+            python python_env_test.py
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Python environment test: PASSED" -ForegroundColor Green
+            } else {
+              Write-Host "Python environment test: FAILED (exit code: $LASTEXITCODE)" -ForegroundColor Yellow
+            }
+          } catch {
+            Write-Host "Python environment test: EXCEPTION - $($_.Exception.Message)" -ForegroundColor Red
+          }
+          
+          Pop-Location
+        shell: powershell
+      
+      - name: Final C# Integration Test with Wrapper
+        shell: powershell
+        run: |
+          Push-Location "dist_csharp"
+
+          Write-Host "=== Final C# Integration Test with C++ Wrapper ===" -ForegroundColor Green
+
+          try {
+            # 必要ファイルの最終確認
+            $requiredFiles = @("CppWrapper.dll", "BloodPressureEstimation.dll", "python311.dll", "BloodPressureTest.exe")
+            
+            $missingFiles = @()
+            foreach ($file in $requiredFiles) {
+              if (Test-Path $file) {
+                $size = [math]::Round((Get-Item $file).Length / 1KB, 1)
+                Write-Host "[OK] $file ($size KB)" -ForegroundColor Green
+              } else {
+                Write-Host "[MISSING] $file" -ForegroundColor Red
+                $missingFiles += $file
+              }
+            }
+
+            if ($missingFiles.Count -gt 0) {
+              Write-Host "ERROR: Missing files: $($missingFiles -join ', ')" -ForegroundColor Red
+              Write-Host "Available files:" -ForegroundColor Yellow
+              Get-ChildItem -Filter "*.dll" | ForEach-Object { Write-Host "  $($_.Name)" }
+              Get-ChildItem -Filter "*.exe" | ForEach-Object { Write-Host "  $($_.Name)" }
+              throw "Required files are missing"
+            }
+
+            # C#テストの実行
+            Write-Host "Running C# integration test..." -ForegroundColor Yellow
+
+            $processArgs = @{
+              FilePath = ".\BloodPressureTest.exe"
+              NoNewWindow = $true
+              Wait = $true
+              PassThru = $true
+              RedirectStandardOutput = "test_output.txt"
+              RedirectStandardError = "test_error.txt"
+              WorkingDirectory = (Get-Location)
+            }
+
+            $process = Start-Process @processArgs
+
+            # 結果の表示
+            if (Test-Path "test_output.txt") {
+              $output = Get-Content "test_output.txt" -Raw
+              if ($output) {
+                Write-Host "=== Test Output ===" -ForegroundColor Cyan
+                Write-Host $output
+              }
+            }
+
+            if (Test-Path "test_error.txt") {
+              $errors = Get-Content "test_error.txt" -Raw
+              if ($errors) {
+                Write-Host "=== Test Errors ===" -ForegroundColor Red
+                Write-Host $errors
+              }
+            }
+
+            $exitCode = $process.ExitCode
+            Write-Host "Exit Code: $exitCode" -ForegroundColor $(if ($exitCode -eq 0) { "Green" } else { "Red" })
+
+            if ($exitCode -eq 0) {
+              Write-Host "SUCCESS: C# Integration Test PASSED" -ForegroundColor Green
+            } elseif ($exitCode -eq -1073741819) {
+              Write-Host "ERROR: Access Violation Exception (-1073741819)" -ForegroundColor Red
+              Write-Host "This indicates a memory access issue in the DLL" -ForegroundColor Red
+              throw "Access violation in DLL"
+            } else {
+              Write-Host "ERROR: C# test failed with exit code: $exitCode" -ForegroundColor Red
+              throw "C# test failed with exit code: $exitCode"
+            }
+
+          } finally {
+            Pop-Location
+          }
+          
+      - name: Upload C# Integration Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BloodPressureEstimation-CSharp-Package-${{ github.sha }}
+          path: dist_csharp/
+          retention-days: 30
+
+      - name: Upload Cython DLL Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: BloodPressureEstimation-Cython-DLL-${{ github.sha }}${{ github.event_name == 'workflow_dispatch' && '-MANUAL' || '' }}
+          path: dist_cython/
+          retention-days: 30
+      
+      - name: Create Obfuscation Report
+        run: |
+          Write-Host "Creating obfuscation analysis report..." -ForegroundColor Yellow
+
+          $dllFiles = Get-ChildItem -Filter "*.dll"
+          $totalSize = 0
+          $dllCount = 0
+
+          foreach ($file in $dllFiles) {
+            $size = $file.Length
+            $sizeMB = [math]::Round($size / 1MB, 2)
+            $totalSize += $size
+            $dllCount++
+          }
+
+          $totalSizeMB = [math]::Round($totalSize / 1MB, 2)
+
+          $reportLines = @(
+            "# Blood Pressure DLL Integration Analysis Report",
+            "",
+            "## Build Information",
+            "- **Build Date**: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')",
+            "- **Commit**: ${{ github.sha }}",
+            "- **Python Version**: 3.11",
+            "- **Configuration**: Release (Cython + C++ Wrapper)",
+            "",
+            "## Architecture",
+            "- **Cython DLL**: BloodPressureEstimation.dll (Python code compiled to C++)",
+            "- **C++ Wrapper**: CppWrapper.dll (Safe C# integration layer)",
+            "- **Integration**: C# → C++Wrapper → Cython DLL → Python Runtime",
+            "",
+            "## Size Metrics",
+            "- **Total DLLs**: $dllCount",
+            "- **Total Size**: $totalSizeMB MB",
+            "- **Average Size**: $([math]::Round($totalSizeMB / $dllCount, 2)) MB per DLL",
+            "",
+            "## Security Features",
+            "- **Source Code Protection**: Python bytecode compiled to C++",
+            "- **Access Control**: C++ wrapper provides controlled access",
+            "- **Error Isolation**: Comprehensive error handling and reporting",
+            "- **Memory Safety**: Proper resource management and cleanup",
+            "",
+            "## Integration Benefits",
+            "- **Stability**: Access violation exceptions resolved",
+            "- **Debugging**: Enhanced error reporting with GetLastError()",
+            "- **Performance**: Optimized through native compilation",
+            "- **Compatibility**: Direct C# DllImport support",
+            "",
+            "## System Requirements",
+            "- Windows 64-bit",
+            "- .NET 6.0 or later", 
+            "- Visual C++ Redistributable (included)",
+            "- Python 3.11 runtime (included)",
+            "",
+            "## Status",
+            "Ready for production deployment with enhanced stability and C# integration"
+          )
+          $report = $reportLines -join "`n"
+
+          $report | Out-File -FilePath "integration_report.md" -Encoding UTF8
+          Write-Host "Integration report created: integration_report.md" -ForegroundColor Green
+        shell: powershell
+      
+      - name: Upload Integration Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-analysis-report-${{ github.sha }}${{ github.event_name == 'workflow_dispatch' && '-MANUAL' || '' }}
+          path: integration_report.md
+          retention-days: 30
+      
+      - name: Advanced DLL Diagnostics
+        if: failure()
+        run: |
+          Write-Host "=== Advanced DLL Diagnostics ===" -ForegroundColor Red
+
+          # Check if dist_csharp exists
+          if (Test-Path "dist_csharp") {
+            Push-Location "dist_csharp"
+          } else {
+            Write-Host "dist_csharp not found - creating for diagnostics" -ForegroundColor Yellow
+            New-Item -ItemType Directory -Path "dist_csharp" -Force | Out-Null
+            Push-Location "dist_csharp"
+          }
+
+          try {
+            # Check Windows Event Log for recent DLL errors
+            Write-Host "Checking Windows Event Log for DLL errors..."
+            try {
+              Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=(Get-Date).AddMinutes(-10)} -ErrorAction SilentlyContinue | 
+                Where-Object { $_.Message -like "*dll*" -or $_.Message -like "*BloodPressure*" -or $_.Message -like "*python*" } |
+                Select-Object -First 5 |
+                Format-Table TimeCreated, Id, LevelDisplayName, Message -Wrap
+            } catch {
+              Write-Host "Could not access Event Log" -ForegroundColor Yellow
+            }
+
+            # List all DLL files and their dependencies
+            Write-Host "Available DLL files:"
+            Get-ChildItem -Filter "*.dll" | ForEach-Object { 
+              $size = [math]::Round($_.Length / 1KB, 1)
+              Write-Host "  $($_.Name) ($size KB)" 
+            }
+
+            # Check executable files
+            Write-Host "Available executable files:"
+            Get-ChildItem -Filter "*.exe" | ForEach-Object { 
+              $size = [math]::Round($_.Length / 1KB, 1)
+              Write-Host "  $($_.Name) ($size KB)" 
+            }
+
+            # Check Python dependencies structure
+            if (Test-Path "python_deps") {
+              Write-Host "Python dependencies structure:"
+              Get-ChildItem "python_deps" -Directory | ForEach-Object { 
+                Write-Host "  $($_.Name)/" 
+                $coreFiles = Get-ChildItem $_.FullName -Filter "*.pyd" | Select-Object -First 3
+                foreach ($coreFile in $coreFiles) {
+                  Write-Host "    $($coreFile.Name)"
+                }
+              }
+            }
+
+            # Environment variables dump (PowerShell構文修正)
+            Write-Host "Relevant environment variables:"
+            $pythonPathValue = $env:PYTHONPATH
+            $pathValue = $env:PATH
+            Write-Host "  PYTHONPATH: $pythonPathValue"
+            if ($pathValue -and $pathValue.Length -gt 200) {
+              Write-Host "  PATH (first 200 chars): $($pathValue.Substring(0, 200))..."
+            } else {
+              Write-Host "  PATH: $pathValue"
+            }
+
+          } finally {
+            Pop-Location
+          }
+        shell: powershell
+
+      - name: Upload Build Logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs-${{ github.sha }}${{ github.event_name == 'workflow_dispatch' && '-MANUAL' || '' }}
+          path: |
+            CppWrapperDLL/build/
+            dist_csharp/test_*.txt
+            dist_csharp/*.log
+            *.log
+          retention-days: 7

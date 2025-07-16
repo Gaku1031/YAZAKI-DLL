@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# setup_cython_dll.py
 """
 Setup script to create pure Windows DLL from Cython code
 """
@@ -16,14 +17,18 @@ extensions = [
         include_dirs=[np.get_include()],
         libraries=["python311"],  # Link with Python library
         define_macros=[("MS_WIN64", None)],  # Windows 64-bit
-        extra_compile_args=["/O2", "/MD"],  # Optimize and use MD runtime
-        extra_link_args=["/DLL", "/EXPORT:InitializeDLL",
-                         "/EXPORT:StartBloodPressureAnalysisRequest",
-                         "/EXPORT:GetProcessingStatus",
-                         "/EXPORT:CancelBloodPressureAnalysis",
-                         "/EXPORT:GetVersionInfo",
-                         "/EXPORT:GenerateRequestId",
-                         "/EXPORT:DllMain"]  # Export C functions
+        extra_compile_args=["/O2", "/MD", "/TC"],  # Compile as C
+        language="c",  # Cとしてビルド
+        extra_link_args=[
+            "/DLL",
+            "/EXPORT:InitializeDLL",
+            "/EXPORT:StartBloodPressureAnalysisRequest",
+            "/EXPORT:GetProcessingStatus",
+            "/EXPORT:CancelBloodPressureAnalysis",
+            "/EXPORT:GetVersionInfo",
+            "/EXPORT:GenerateRequestId",
+            "/EXPORT:DllMain"
+        ]  # Export C functions
     )
 ]
 
