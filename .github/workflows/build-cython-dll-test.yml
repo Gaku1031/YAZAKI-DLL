@@ -799,6 +799,9 @@ jobs:
           $numpyDst = "dist_csharp\python_deps\numpy"
 
           if (Test-Path $numpySrc) {
+            # コピー先ディレクトリを必ず作成
+            New-Item -ItemType Directory -Path $numpyDst -Force | Out-Null
+
             # 1. numpy直下の.pyファイルのみコピー
             Get-ChildItem -Path $numpySrc -Filter "*.py" -File | ForEach-Object {
               Copy-Item $_.FullName $numpyDst -Force
