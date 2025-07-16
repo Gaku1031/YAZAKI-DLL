@@ -1337,20 +1337,72 @@ jobs:
                 
                 $handle = [DllLoader]::LoadLibrary((Resolve-Path $dll).Path)
                 if ($handle -ne [IntPtr]::Zero) {
-                  Write-Host "  $dll: LOADABLE" -ForegroundColor Green
+                  Write-Host "  ${dll}: LOADABLE" -ForegroundColor Green
                   [DllLoader]::FreeLibrary($handle) | Out-Null
                 } else {
                   $error = [DllLoader]::GetLastError()
-                  Write-Host "  $dll: FAILED TO LOAD (Error: $error)" -ForegroundColor Red
+                  Write-Host "  ${dll}: FAILED TO LOAD (Error: $error)" -ForegroundColor Red
                 }
                 
               } catch {
-                Write-Host "  $dll: EXCEPTION - $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "  ${dll}: EXCEPTION - $($_.Exception.Message)" -ForegroundColor Red
               }
             } else {
-              Write-Host "  $dll: NOT FOUND" -ForegroundColor Red
+              Write-Host "  ${dll}: NOT FOUND" -ForegroundColor Red
             }
           }
+          
+          # Python環境の詳細テスト
+          Write-Host "`nTesting Python environment in current context..." -ForegroundColor Cyan
+          
+          $pythonTest = @'
+          import sys
+          import os
+          print(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+          print(f"Executable: {sys.executable}")
+          print(f"Current dir: {os.getcwd()}")
+
+          # Test critical modules
+          modules_to_test = ['numpy', 'cv2', 'sklearn', 'scipy']
+          for module in modules_to_test:
+              try:
+                  if module == 'numpy':
+                      sys.path.insert(0, 'python_deps')
+                      import numpy as np
+                      test_array = np.array([1, 2, 3])
+                      assert test_array.sum() == 6
+                      print(f"{module} {np.__version__}: OK (test passed)")
+                  elif module == 'cv2':
+                      sys.path.insert(0, 'python_deps')
+                      import cv2
+                      print(f"{module} {cv2.__version__}: OK")
+                  elif module == 'sklearn':
+                      sys.path.insert(0, 'python_deps')
+                      import sklearn
+                      print(f"{module} {sklearn.__version__}: OK")
+                  elif module == 'scipy':
+                      sys.path.insert(0, 'python_deps')
+                      import scipy
+                      print(f"{module} {scipy.__version__}: OK")
+              except Exception as e:
+                  print(f"{module}: FAILED - {e}")
+
+          print("Python environment test completed")
+          '@
+          
+          $pythonTest | Out-File -FilePath "python_env_test.py" -Encoding UTF8
+          
+          try {
+            python python_env_test.py
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Python environment test: PASSED" -ForegroundColor Green
+            } else {
+              Write-Host "Python environment test: FAILED (exit code: $LASTEXITCODE)" -ForegroundColor Yellow
+            }
+          } catch {
+            Write-Host "Python environment test: EXCEPTION - $($_.Exception.Message)" -ForegroundColor Red
+          }
+          
           Pop-Location
         shell: powershell
       
@@ -1570,10 +1622,16 @@ jobs:
               }
             }
 
-            # Environment variables dump
+            # Environment variables dump (PowerShell構文修正)
             Write-Host "Relevant environment variables:"
-            Write-Host "  PYTHONPATH: $($env:PYTHONPATH)"
-            Write-Host "  PATH (first 200 chars): $($env:PATH.Substring(0, [Math]::Min(200, $env:PATH.Length)))..."
+            $pythonPathValue = $env:PYTHONPATH
+            $pathValue = $env:PATH
+            Write-Host "  PYTHONPATH: $pythonPathValue"
+            if ($pathValue -and $pathValue.Length -gt 200) {
+              Write-Host "  PATH (first 200 chars): $($pathValue.Substring(0, 200))..."
+            } else {
+              Write-Host "  PATH: $pathValue"
+            }
 
           } finally {
             Pop-Location
