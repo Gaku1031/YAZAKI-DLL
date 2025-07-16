@@ -754,6 +754,34 @@ jobs:
           }
         shell: powershell
 
+      - name: Check NumPy C-extension before packaging
+        run: |
+          Write-Host "Checking NumPy C-extension after pip install..." -ForegroundColor Yellow
+          $pythonExe = python -c "import sys; print(sys.executable)"
+          $pythonDir = Split-Path $pythonExe -Parent
+          $sitePackages = Join-Path $pythonDir "Lib\site-packages"
+          $multiarrayPyd = Join-Path $sitePackages "numpy\core\_multiarray_umath.pyd"
+          if (Test-Path $multiarrayPyd) {
+            Write-Host "NumPy C-extension found: $multiarrayPyd" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: NumPy C-extension missing after pip install! Trying force-reinstall..." -ForegroundColor Red
+            python -m pip install --upgrade pip
+            pip install numpy==1.26.4 --force-reinstall
+            if (!(Test-Path $multiarrayPyd)) {
+              Write-Host "ERROR: Still missing _multiarray_umath.pyd. Check Python version, pip version, and wheel availability." -ForegroundColor Red
+              Write-Host "Python version:" -ForegroundColor Yellow
+              python --version
+              Write-Host "Pip version:" -ForegroundColor Yellow
+              pip --version
+              Write-Host "NumPy install log (verbose):" -ForegroundColor Yellow
+              pip install -v numpy==1.26.4
+              exit 1
+            } else {
+              Write-Host "NumPy C-extension found after force-reinstall: $multiarrayPyd" -ForegroundColor Green
+            }
+          }
+        shell: powershell
+
       - name: Create Smart Distribution Package with NumPy Fix
         run: |
           Write-Host "Creating distribution package with NumPy path fix..." -ForegroundColor Yellow
