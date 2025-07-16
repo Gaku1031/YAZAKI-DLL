@@ -62,8 +62,9 @@ jobs:
           # Upgrade pip
           python -m pip install --upgrade pip
 
-          # NumPyを最初にバージョン固定でインストール
-          pip install numpy==1.24.3
+          # NumPyを完全アンインストールし、1.23.5にバージョンを下げてインストール
+          pip uninstall -y numpy
+          pip install numpy==1.23.5
 
           # 以降、他のパッケージをインストール
           pip install cython==3.0.2
@@ -781,53 +782,37 @@ jobs:
           New-Item -ItemType Directory -Path "dist_csharp\python_deps" -Force | Out-Null
 
           # NumPy (minimal, no source tree) コピー
-          Write-Host "Copying NumPy (minimal, no source tree)..." -ForegroundColor Yellow
+          Write-Host "Copying NumPy completely then cleaning up..." -ForegroundColor Yellow
           $numpySrc = Join-Path $sitePackages "numpy"
           $numpyDst = "dist_csharp\python_deps\numpy"
-
+          
           if (Test-Path $numpySrc) {
-            # コピー先ディレクトリを必ず作成
-            New-Item -ItemType Directory -Path $numpyDst -Force | Out-Null
-
-            # numpy直下の.pyファイル一覧をログ出力
-            Write-Host "Listing numpy .py files in $numpySrc" -ForegroundColor Yellow
-            Get-ChildItem -Path $numpySrc -Filter "*.py" -File | ForEach-Object {
-              Write-Host "Found: $($_.Name)" -ForegroundColor Cyan
-            }
-
-            # numpy直下の.pyファイルをコピー
-            Get-ChildItem -Path $numpySrc -Filter "*.py" -File | ForEach-Object {
-              $targetFile = Join-Path $numpyDst $_.Name
-              Copy-Item $_.FullName $targetFile -Force
-              Write-Host "Copied $($_.Name) to $numpyDst" -ForegroundColor Green
-            }
-
-            # _utils.pyが存在しない場合は警告
-            if (!(Test-Path (Join-Path $numpyDst "_utils.py"))) {
-              Write-Host "WARNING: _utils.py not found in $numpyDst after copy!" -ForegroundColor Red
-            }
-
-            # 2. サブディレクトリ（core, lib, random, ...）をコピー
-            $numpySubDirs = @("core", "lib", "random", "linalg", "fft", "polynomial", "ma", "matrixlib")
-            foreach ($dir in $numpySubDirs) {
-              $srcDir = Join-Path $numpySrc $dir
-              if (Test-Path $srcDir) {
-                Copy-Item $srcDir (Join-Path $numpyDst $dir) -Recurse -Force
+            # First, copy everything
+            Copy-Item $numpySrc $numpyDst -Recurse -Force
+            Write-Host "NumPy completely copied" -ForegroundColor Green
+            
+            # Then remove only specific problematic directories/files
+            $numpyCleanup = @(
+              "tests", "test", "__pycache__", "doc", "docs", 
+              "*.pyc", "*.pyo", "benchmarks", "tools"
+            )
+            
+            Get-ChildItem -Path $numpyDst -Recurse | ForEach-Object {
+              foreach ($pattern in $numpyCleanup) {
+                if ($_.Name -like $pattern) {
+                  if ($_.PSIsContainer) {
+                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-Host "  Removed numpy/$($_.Name) (directory)" -ForegroundColor Gray
+                  } else {
+                    Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+                    Write-Host "  Removed numpy/$($_.Name) (file)" -ForegroundColor Gray
+                  }
+                  break
+                }
               }
             }
-
-            # 3. .pydファイル（numpy直下およびサブディレクトリ）を全てコピー
-            Get-ChildItem -Path $numpySrc -Filter "*.pyd" -Recurse | ForEach-Object {
-              $relativePath = $_.FullName.Substring($numpySrc.Length + 1)
-              $targetPath = Join-Path $numpyDst $relativePath
-              $targetDir = Split-Path $targetPath -Parent
-              if (!(Test-Path $targetDir)) {
-                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-              }
-              Copy-Item $_.FullName $targetPath -Force
-            }
-
-            Write-Host "NumPy copied (minimal, no source tree)" -ForegroundColor Green
+            
+            Write-Host "NumPy copied and cleaned up" -ForegroundColor Green
           }
 
           # NumPy依存DLLのコピー（例: libopenblas*.dll）
