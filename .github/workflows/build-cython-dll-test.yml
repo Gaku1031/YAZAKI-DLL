@@ -813,9 +813,9 @@ jobs:
             # まずまるごとコピー
             Copy-Item $numpySrc $numpyDst -Recurse -Force
             Write-Host "NumPy copied (entire pip site-packages directory)" -ForegroundColor Green
-            # 不要な開発用ディレクトリを徹底除去
+            # NumPy不要ファイル・ディレクトリの徹底除去（source tree誤認識防止）
             $cleanupPatterns = @(
-              "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools", "setup.py"
+              "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools", "setup.py", "*.egg-info", "*.dist-info"
             )
             Get-ChildItem -Path $numpyDst -Recurse | ForEach-Object {
               foreach ($pattern in $cleanupPatterns) {
@@ -833,12 +833,26 @@ jobs:
             }
             Write-Host "NumPy cleaned up (pip site-packages version)" -ForegroundColor Green
 
-            # NumPy依存DLL（.libs配下の*.dll）をdist_csharp直下にコピー
+            # NumPy依存DLL（.libs配下の*.dll, openblas, vcruntime, msvcp）をdist_csharp直下にコピー
             $numpyLibs = Join-Path $numpyDst ".libs"
             if (Test-Path $numpyLibs) {
               Get-ChildItem -Path $numpyLibs -Filter "*.dll" | ForEach-Object {
                 Copy-Item $_.FullName "dist_csharp\" -Force
                 Write-Host "Copied NumPy dependency DLL: $($_.Name)" -ForegroundColor Green
+              }
+            }
+            # openblas, vcruntime, msvcpも念のためsite-packages/numpy/coreやpython_dirからコピー
+            $dllPatterns = @("openblas*.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+            foreach ($pattern in $dllPatterns) {
+              $coreDlls = Get-ChildItem -Path (Join-Path $numpyDst "core") -Filter $pattern -ErrorAction SilentlyContinue
+              foreach ($dll in $coreDlls) {
+                Copy-Item $dll.FullName "dist_csharp\" -Force
+                Write-Host "Copied $($dll.Name) from numpy/core to dist_csharp" -ForegroundColor Green
+              }
+              $pythonDirDll = Join-Path $pythonDir $pattern
+              if (Test-Path $pythonDirDll) {
+                Copy-Item $pythonDirDll "dist_csharp\" -Force
+                Write-Host "Copied $pattern from pythonDir to dist_csharp" -ForegroundColor Green
               }
             }
 
