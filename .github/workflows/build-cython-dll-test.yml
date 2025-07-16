@@ -1406,8 +1406,8 @@ jobs:
             "OMP_NUM_THREADS" = "1"
             "MKL_NUM_THREADS" = "1"
           }
-          Write-Host "PYTHONPATH (for test): $($envVars[\"PYTHONPATH\"])"
-          Write-Host "PATH (for test): $($envVars[\"PATH\"])"
+          Write-Host "PYTHONPATH (for test): $($envVars['PYTHONPATH'])"
+          Write-Host "PATH (for test): $($envVars['PATH'])"
 
           $process = Start-Process -FilePath ".\BloodPressureTest.exe" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -Environment $envVars
             
