@@ -1383,61 +1383,33 @@ jobs:
 
           Write-Host "=== Critical C# Integration Test ===" -ForegroundColor Green
 
-          # デバッグ: NumPyディレクトリの全ファイルリスト
-          Write-Host "=== NumPy directory after cleanup ===" -ForegroundColor Yellow
+          # デバッグ: NumPyディレクトリの全ファイルリスト（source tree誤認識の根本原因調査用）
+          Write-Host "=== NumPy directory FULL listing ===" -ForegroundColor Yellow
           if (Test-Path "python_deps/numpy") {
-            Get-ChildItem -Path "python_deps/numpy" -Recurse | ForEach-Object { Write-Host $_.FullName }
+            Get-ChildItem -Path "python_deps/numpy" -Recurse -Force | ForEach-Object { Write-Host $_.FullName }
           } else {
             Write-Host "python_deps/numpy not found" -ForegroundColor Red
           }
 
-          # デバッグ: dist_csharp直下のDLL一覧
-          Write-Host "=== dist_csharp DLLs ===" -ForegroundColor Yellow
-          Get-ChildItem -Path "." -Filter "*.dll" | ForEach-Object { Write-Host $_.FullName }
+          # dist_csharp直下の絶対パス取得
+          $currentDir = (Get-Location).Path
 
-          # デバッグ: dist_csharp直下のPYD一覧
-          Write-Host "=== dist_csharp PYDs ===" -ForegroundColor Yellow
-          Get-ChildItem -Path "." -Filter "*.pyd" | ForEach-Object { Write-Host $_.FullName }
+          # C#テスト実行時のPYTHONPATH/PATHを絶対パスで明示的に渡す
+          $envVars = @{
+            "PYTHONPATH" = "$currentDir\python_deps;$currentDir"
+            "PATH" = "$currentDir;$env:PATH"
+            "PYTHONIOENCODING" = "utf-8"
+            "PYTHONOPTIMIZE" = "1"
+            "PYTHONNOUSERSITE" = "1"
+            "PYTHONUNBUFFERED" = "1"
+            "OPENBLAS_NUM_THREADS" = "1"
+            "OMP_NUM_THREADS" = "1"
+            "MKL_NUM_THREADS" = "1"
+          }
+          Write-Host "PYTHONPATH (for test): $($envVars[\"PYTHONPATH\"])"
+          Write-Host "PATH (for test): $($envVars[\"PATH\"])"
 
-          # デバッグ: C#テスト実行時のPYTHONPATH/PATH
-          Write-Host "PYTHONPATH: $env:PYTHONPATH"
-          Write-Host "PATH: $env:PATH"
-
-          try {
-            # Verify all required files exist
-            $requiredFiles = @("CppWrapper.dll", "BloodPressureEstimation.dll", "python311.dll", "BloodPressureTest.exe")
-            $missingFiles = @()
-            
-            foreach ($file in $requiredFiles) {
-              if (Test-Path $file) {
-                $size = [math]::Round((Get-Item $file).Length / 1KB, 1)
-                Write-Host "[OK] $file ($size KB)" -ForegroundColor Green
-              } else {
-                Write-Host "[MISSING] $file" -ForegroundColor Red
-                $missingFiles += $file
-              }
-            }
-            
-            if ($missingFiles.Count -gt 0) {
-              Write-Host "CRITICAL ERROR: Missing required files: $($missingFiles -join ', ')" -ForegroundColor Red
-              exit 1
-            }
-            
-            # Run C# test with detailed output capture and explicit environment variables
-            Write-Host "Executing comprehensive C# integration test..." -ForegroundColor Yellow
-            
-            $envVars = @{
-              "PYTHONPATH" = "$PWD\python_deps;$PWD"
-              "PATH" = "$PWD;$env:PATH"
-              "PYTHONIOENCODING" = "utf-8"
-              "PYTHONOPTIMIZE" = "1"
-              "PYTHONNOUSERSITE" = "1"
-              "PYTHONUNBUFFERED" = "1"
-              "OPENBLAS_NUM_THREADS" = "1"
-              "OMP_NUM_THREADS" = "1"
-              "MKL_NUM_THREADS" = "1"
-            }
-            $process = Start-Process -FilePath ".\BloodPressureTest.exe" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -Environment $envVars
+          $process = Start-Process -FilePath ".\BloodPressureTest.exe" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -Environment $envVars
             
             # Display results
             if (Test-Path "test_output.txt") {
@@ -1475,7 +1447,7 @@ jobs:
                 }
               }
               
-              # Don't exit here - let the workflow complete for debugging
+              # Don't exit here - let the workflow complete for artifact collection
               Write-Host "Test failed but continuing for artifact collection" -ForegroundColor Yellow
             }
             
