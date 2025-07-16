@@ -832,7 +832,7 @@ jobs:
 
             # 不要なNumPyサブパッケージ・ディレクトリを徹底削除
             $unneededDirs = @(
-              "testing", "distutils", "f2py", "_core", "_pyinstaller", "_typing", "_utils"
+              "testing", "distutils", "f2py", "_core", "_pyinstaller", "_typing"
             )
             foreach ($dir in $unneededDirs) {
               $target = Join-Path $numpyDst $dir
