@@ -125,9 +125,102 @@ namespace BloodPressureDllTest
             }
         }
 
+        public static void TestProductionLikeAnalysis()
+        {
+            Console.WriteLine("=== 本番同等・血圧推定自動テスト ===");
+            string sampleMovie = "100万画素.webm";
+            string requestId = $"{DateTime.Now:yyyyMMddHHmmssfff}_9000000001_0000012345";
+            int height = 170;
+            int weight = 70;
+            int sex = 1; // 男性
+            bool callbackCalled = false;
+            int resultSBP = 0, resultDBP = 0;
+            string resultCSV = null;
+            string resultError = null;
+
+            AnalysisCallback callback = (reqId, sbp, dbp, csvData, errors) =>
+            {
+                callbackCalled = true;
+                resultSBP = sbp;
+                resultDBP = dbp;
+                resultCSV = csvData;
+                resultError = errors;
+                Console.WriteLine($"[Callback] RequestID: {reqId}, SBP: {sbp}, DBP: {dbp}");
+                if (!string.IsNullOrEmpty(errors))
+                {
+                    Console.WriteLine($"[Callback] Error: {errors}");
+                }
+                if (!string.IsNullOrEmpty(csvData))
+                {
+                    Console.WriteLine($"[Callback] CSVデータ長: {csvData.Length}");
+                }
+            };
+
+            // DLL初期化
+            Console.WriteLine("1. DLL初期化");
+            bool initResult = InitializeDLL("models");
+            Console.WriteLine($"    Result: {initResult}");
+            if (!initResult)
+            {
+                Console.WriteLine("DLL初期化失敗");
+                return;
+            }
+
+            // サンプル動画存在確認
+            if (!System.IO.File.Exists(sampleMovie))
+            {
+                Console.WriteLine($"サンプル動画が見つかりません: {sampleMovie}");
+                return;
+            }
+
+            // 血圧推定リクエスト
+            Console.WriteLine("2. 血圧推定リクエスト送信");
+            string errorCode = StartBloodPressureAnalysisRequest(
+                requestId, height, weight, sex, sampleMovie, callback);
+            if (!string.IsNullOrEmpty(errorCode))
+            {
+                Console.WriteLine($"    エラーコード: {errorCode}");
+                return;
+            }
+            Console.WriteLine("    血圧推定開始 成功");
+
+            // ステータス監視・完了待ち
+            Console.WriteLine("3. ステータス監視");
+            int maxWaitSec = 120; // 最大2分待つ
+            int waited = 0;
+            while (waited < maxWaitSec)
+            {
+                string status = GetProcessingStatus(requestId);
+                Console.WriteLine($"    Status: {status}");
+                if (status == "none") break;
+                Thread.Sleep(2000);
+                waited += 2;
+            }
+            if (!callbackCalled)
+            {
+                Console.WriteLine("    [ERROR] コールバックが呼ばれませんでした");
+            }
+            else
+            {
+                Console.WriteLine($"4. 血圧推定結果: SBP={resultSBP}, DBP={resultDBP}");
+                if (!string.IsNullOrEmpty(resultCSV))
+                {
+                    Console.WriteLine($"   CSVデータ長: {resultCSV.Length}");
+                }
+                if (!string.IsNullOrEmpty(resultError))
+                {
+                    Console.WriteLine($"   エラー: {resultError}");
+                }
+            }
+            Console.WriteLine("=== 本番同等テスト終了 ===");
+        }
+
         public static void Main(string[] args)
         {
             TestBalancedDLL();
+            Console.WriteLine("\nPress Enter to run 本番同等テスト...");
+            Console.ReadLine();
+            TestProductionLikeAnalysis();
             Console.WriteLine("\nPress Enter to exit...");
             Console.ReadLine();
         }

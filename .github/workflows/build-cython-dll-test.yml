@@ -1653,3 +1653,15 @@ jobs:
             dist_csharp/*.log
             *.log
           retention-days: 7
+
+      - name: Copy Sample Video to dist_csharp
+        run: |
+          Write-Host "Copying sample video to dist_csharp..." -ForegroundColor Yellow
+          if (Test-Path "sample-data/100万画素.webm") {
+            Copy-Item "sample-data/100万画素.webm" "dist_csharp/100万画素.webm" -Force
+            Write-Host "Sample video copied successfully." -ForegroundColor Green
+          } else {
+            Write-Host "Sample video not found!" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
