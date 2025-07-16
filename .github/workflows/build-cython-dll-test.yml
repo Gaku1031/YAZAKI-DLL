@@ -1656,12 +1656,12 @@ jobs:
 
       - name: Copy Sample Video to dist_csharp
         run: |
-          Write-Host "Copying sample video to dist_csharp..." -ForegroundColor Yellow
-          if (Test-Path "sample-data/100万画素.webm") {
-            Copy-Item "sample-data/100万画素.webm" "dist_csharp/100万画素.webm" -Force
-            Write-Host "Sample video copied successfully." -ForegroundColor Green
+          Write-Host 'Copying sample video to dist_csharp...' -ForegroundColor Yellow
+          if (Test-Path 'sample-data/sample_1M.webm') {
+            Copy-Item -LiteralPath 'sample-data/sample_1M.webm' -Destination 'dist_csharp/sample_1M.webm' -Force
+            Write-Host 'Sample video copied successfully.' -ForegroundColor Green
           } else {
-            Write-Host "Sample video not found!" -ForegroundColor Red
+            Write-Host 'Sample video not found!' -ForegroundColor Red
             exit 1
           }
         shell: powershell

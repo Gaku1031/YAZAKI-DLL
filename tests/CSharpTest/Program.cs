@@ -128,7 +128,7 @@ namespace BloodPressureDllTest
         public static void TestProductionLikeAnalysis()
         {
             Console.WriteLine("=== 本番同等・血圧推定自動テスト ===");
-            string sampleMovie = "100万画素.webm";
+            string sampleMovie = "sample_1M.webm";
             string requestId = $"{DateTime.Now:yyyyMMddHHmmssfff}_9000000001_0000012345";
             int height = 170;
             int weight = 70;
