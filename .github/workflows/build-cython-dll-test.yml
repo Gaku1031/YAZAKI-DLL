@@ -843,7 +843,7 @@ jobs:
             }
 
             # NumPy依存DLL（.libs, core, pythonDir から openblas, vcruntime, msvcp など）をdist_csharp直下に徹底コピー
-            $dllPatterns = @("*.dll", "openblas*.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+            $dllPatterns = @("*.dll", "openblas*.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "*.pyd")
             $searchDirs = @(
               (Join-Path $numpyDst ".libs"),
               (Join-Path $numpyDst "core"),
