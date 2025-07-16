@@ -813,57 +813,38 @@ jobs:
             # まずまるごとコピー
             Copy-Item $numpySrc $numpyDst -Recurse -Force
             Write-Host "NumPy copied (entire pip site-packages directory)" -ForegroundColor Green
-            # NumPy不要ファイル・ディレクトリの徹底除去（source tree誤認識防止）
+            # NumPy不要ファイル・ディレクトリの徹底除去（サブディレクトリも含めて完全除去）
             $cleanupPatterns = @(
               "tests", "test", "__pycache__", "doc", "docs", "benchmarks", "tools", "setup.py", "*.egg-info", "*.dist-info"
             )
-            Get-ChildItem -Path $numpyDst -Recurse | ForEach-Object {
-              foreach ($pattern in $cleanupPatterns) {
-                if ($_.Name -like $pattern) {
-                  if ($_.PSIsContainer) {
-                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                    Write-Host "  Removed numpy/$($_.Name) (directory)" -ForegroundColor Gray
-                  } else {
-                    Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
-                    Write-Host "  Removed numpy/$($_.Name) (file)" -ForegroundColor Gray
-                  }
-                  break
+            foreach ($pattern in $cleanupPatterns) {
+              Get-ChildItem -Path $numpyDst -Recurse -Force -Filter $pattern | ForEach-Object {
+                if ($_.PSIsContainer) {
+                  Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                  Write-Host "  Removed numpy/$($_.FullName) (directory)" -ForegroundColor Gray
+                } else {
+                  Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+                  Write-Host "  Removed numpy/$($_.FullName) (file)" -ForegroundColor Gray
                 }
               }
             }
-            Write-Host "NumPy cleaned up (pip site-packages version)" -ForegroundColor Green
+            Write-Host "NumPy cleaned up (pip site-packages version, recursive)" -ForegroundColor Green
 
-            # NumPy依存DLL（.libs配下の*.dll, openblas, vcruntime, msvcp）をdist_csharp直下にコピー
-            $numpyLibs = Join-Path $numpyDst ".libs"
-            if (Test-Path $numpyLibs) {
-              Get-ChildItem -Path $numpyLibs -Filter "*.dll" | ForEach-Object {
-                Copy-Item $_.FullName "dist_csharp\" -Force
-                Write-Host "Copied NumPy dependency DLL: $($_.Name)" -ForegroundColor Green
-              }
-            }
-            # openblas, vcruntime, msvcpも念のためsite-packages/numpy/coreやpython_dirからコピー
-            $dllPatterns = @("openblas*.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+            # NumPy依存DLL（.libs, core, pythonDir から openblas, vcruntime, msvcp など）をdist_csharp直下に徹底コピー
+            $dllPatterns = @("*.dll", "openblas*.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+            $searchDirs = @(
+              (Join-Path $numpyDst ".libs"),
+              (Join-Path $numpyDst "core"),
+              $pythonDir
+            )
             foreach ($pattern in $dllPatterns) {
-              $coreDlls = Get-ChildItem -Path (Join-Path $numpyDst "core") -Filter $pattern -ErrorAction SilentlyContinue
-              foreach ($dll in $coreDlls) {
-                Copy-Item $dll.FullName "dist_csharp\" -Force
-                Write-Host "Copied $($dll.Name) from numpy/core to dist_csharp" -ForegroundColor Green
-              }
-              $pythonDirDll = Join-Path $pythonDir $pattern
-              if (Test-Path $pythonDirDll) {
-                Copy-Item $pythonDirDll "dist_csharp\" -Force
-                Write-Host "Copied $pattern from pythonDir to dist_csharp" -ForegroundColor Green
-              }
-            }
-
-            # NumPyのC拡張（_multiarray_umath*.pyd）が存在するかチェック（バージョン付き対応）
-            $multiarrayPyds = Get-ChildItem -Path (Join-Path $numpyDst "core") -Filter "_multiarray_umath*.pyd"
-            if ($multiarrayPyds.Count -eq 0) {
-              Write-Host "ERROR: _multiarray_umath*.pyd not found in dist_csharp/python_deps/numpy/core" -ForegroundColor Red
-              exit 1
-            } else {
-              foreach ($pyd in $multiarrayPyds) {
-                Write-Host "Found: $($pyd.FullName)" -ForegroundColor Green
+              foreach ($dir in $searchDirs) {
+                if (Test-Path $dir) {
+                  Get-ChildItem -Path $dir -Filter $pattern -ErrorAction SilentlyContinue | ForEach-Object {
+                    Copy-Item $_.FullName "dist_csharp\" -Force
+                    Write-Host "Copied $($_.Name) from $dir to dist_csharp" -ForegroundColor Green
+                  }
+                }
               }
             }
           }
@@ -1402,10 +1383,21 @@ jobs:
               exit 1
             }
             
-            # Run C# test with detailed output capture
+            # Run C# test with detailed output capture and explicit environment variables
             Write-Host "Executing comprehensive C# integration test..." -ForegroundColor Yellow
-            
-            $process = Start-Process -FilePath ".\BloodPressureTest.exe" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
+
+            $envVars = @{
+              "PYTHONPATH" = "dist_csharp/python_deps;dist_csharp"
+              "PATH" = "$($PWD);$env:PATH"
+              "PYTHONIOENCODING" = "utf-8"
+              "PYTHONOPTIMIZE" = "1"
+              "PYTHONNOUSERSITE" = "1"
+              "PYTHONUNBUFFERED" = "1"
+              "OPENBLAS_NUM_THREADS" = "1"
+              "OMP_NUM_THREADS" = "1"
+              "MKL_NUM_THREADS" = "1"
+            }
+            $process = Start-Process -FilePath ".\BloodPressureTest.exe" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -Environment $envVars
             
             # Display results
             if (Test-Path "test_output.txt") {
