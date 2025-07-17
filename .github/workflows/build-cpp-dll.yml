@@ -1,0 +1,209 @@
+name: Build C++ Blood Pressure DLL
+
+on:
+  push:
+    branches: [main, develop, feature/size-reduction]
+    paths:
+      - "CppBloodPressureDLL/**"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "CppBloodPressureDLL/**"
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build type"
+        required: true
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+
+env:
+  BUILD_TYPE: ${{ github.event.inputs.build_type || 'Release' }}
+
+jobs:
+  build-cpp-dll:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python for model conversion
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+
+      - name: Install Python dependencies for model conversion
+        run: |
+          python -m pip install --upgrade pip
+          pip install scikit-learn numpy joblib onnx onnxmltools onnxruntime
+        shell: powershell
+
+      - name: Convert models to ONNX
+        run: |
+          cd CppBloodPressureDLL/models
+          python convert_to_onnx.py
+          if (!(Test-Path "model_sbp.onnx") -or !(Test-Path "model_dbp.onnx")) {
+            Write-Host "Model conversion failed" -ForegroundColor Red
+            exit 1
+          }
+          Write-Host "Models converted successfully" -ForegroundColor Green
+        shell: powershell
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: "${{ github.workspace }}/vcpkg"
+          vcpkgGitCommitId: "a42af01b72c28a8e1d7b48107b33e4f286a55ef6"
+
+      - name: Install dependencies via vcpkg
+        run: |
+          $vcpkgDir = "${{ github.workspace }}/vcpkg"
+
+          # Install required packages
+          & "$vcpkgDir/vcpkg.exe" install opencv4:x64-windows
+          & "$vcpkgDir/vcpkg.exe" install eigen3:x64-windows
+          & "$vcpkgDir/vcpkg.exe" install onnxruntime:x64-windows
+          & "$vcpkgDir/vcpkg.exe" install mediapipe:x64-windows
+
+          Write-Host "Dependencies installed successfully" -ForegroundColor Green
+        shell: powershell
+
+      - name: Configure CMake
+        run: |
+          cd CppBloodPressureDLL
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+        shell: powershell
+
+      - name: Build DLL
+        run: |
+          cd CppBloodPressureDLL
+          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+          # Check if DLL was built successfully
+          $dllPath = "build/bin/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll"
+          if (!(Test-Path $dllPath)) {
+            $dllPath = "build/lib/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll"
+          }
+
+          if (Test-Path $dllPath) {
+            $size = [math]::Round((Get-Item $dllPath).Length / 1MB, 2)
+            Write-Host "DLL built successfully: $dllPath ($size MB)" -ForegroundColor Green
+            
+            # Copy DLL to test directory
+            Copy-Item $dllPath "test/" -Force
+          } else {
+            Write-Host "DLL build failed" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "6.0.x"
+
+      - name: Build C# Test Application
+        run: |
+          cd CppBloodPressureDLL/test
+          dotnet restore CSharpTest.csproj
+          dotnet build CSharpTest.csproj -c ${{ env.BUILD_TYPE }} --no-restore
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "C# test build failed" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "C# test application built successfully" -ForegroundColor Green
+        shell: powershell
+
+      - name: Copy real sample video for testing
+        run: |
+          cd CppBloodPressureDLL/test
+
+          # Copy the real sample video for testing
+          if (Test-Path "../../sample-data/sample_1M.webm") {
+            Copy-Item "../../sample-data/sample_1M.webm" "sample_video.webm" -Force
+            $size = [math]::Round((Get-Item "sample_video.webm").Length / 1MB, 2)
+            Write-Host "Real sample video copied for testing: sample_video.webm ($size MB)" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: Real sample video not found, creating dummy video" -ForegroundColor Yellow
+            "dummy video content for testing" | Out-File -FilePath "sample_video.webm" -Encoding UTF8
+          }
+        shell: powershell
+
+      - name: Run C# Integration Test
+        run: |
+          cd CppBloodPressureDLL/test
+
+          # Set up environment
+          $env:PATH = "$PWD;" + $env:PATH
+
+          # Run test
+          dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }}
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Integration test failed" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "Integration test passed" -ForegroundColor Green
+        shell: powershell
+
+      - name: Package Distribution
+        run: |
+          Write-Host "Creating distribution package..." -ForegroundColor Yellow
+
+          New-Item -ItemType Directory -Path "dist_cpp" -Force | Out-Null
+
+          # Copy DLL
+          $dllPath = "CppBloodPressureDLL/build/bin/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll"
+          if (!(Test-Path $dllPath)) {
+            $dllPath = "CppBloodPressureDLL/build/lib/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll"
+          }
+
+          if (Test-Path $dllPath) {
+            Copy-Item $dllPath "dist_cpp/" -Force
+          }
+
+          # Copy models
+          Copy-Item "CppBloodPressureDLL/models" "dist_cpp/" -Recurse -Force
+
+          # Copy test application
+          Copy-Item "CppBloodPressureDLL/test/bin/${{ env.BUILD_TYPE }}/net6.0/*" "dist_cpp/" -Force
+
+          # Copy required runtime libraries
+          $vcpkgDir = "${{ github.workspace }}/vcpkg/installed/x64-windows"
+          if (Test-Path "$vcpkgDir/bin") {
+            Get-ChildItem "$vcpkgDir/bin/*.dll" | ForEach-Object {
+              Copy-Item $_.FullName "dist_cpp/" -Force
+            }
+          }
+
+          # Calculate size
+          $totalSize = (Get-ChildItem -Path "dist_cpp" -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          $sizeMB = [math]::Round($totalSize / 1MB, 2)
+
+          Write-Host "Distribution package created: $sizeMB MB" -ForegroundColor Green
+        shell: powershell
+
+      - name: Upload Distribution Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BloodPressureDLL-Cpp-${{ env.BUILD_TYPE }}-${{ github.sha }}
+          path: dist_cpp/
+          retention-days: 30
+
+      - name: Upload Build Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ github.sha }}
+          path: |
+            CppBloodPressureDLL/build/
+            *.log
+          retention-days: 7
