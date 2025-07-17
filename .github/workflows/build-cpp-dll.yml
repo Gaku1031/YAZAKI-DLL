@@ -54,26 +54,32 @@ jobs:
           Write-Host "Models converted successfully" -ForegroundColor Green
         shell: powershell
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgDirectory: "${{ github.workspace }}/vcpkg"
-          # 最新のvcpkgコミットIDに更新
-          vcpkgGitCommitId: "2024.07.12"
-
-      - name: Install dependencies via vcpkg
+      - name: Install OpenCV (Pre-built)
         run: |
-          $vcpkgDir = "${{ github.workspace }}/vcpkg"
+          Write-Host "Installing OpenCV from pre-built binaries..." -ForegroundColor Yellow
 
-          # vcpkgを最新に更新
-          Write-Host "Updating vcpkg to latest version..." -ForegroundColor Yellow
-          & "$vcpkgDir/vcpkg.exe" version
+          # OpenCV公式のWindows向けプリビルドを使用
+          $opencvVersion = "4.8.0"
+          $opencvUrl = "https://github.com/opencv/opencv/releases/download/$opencvVersion/opencv-$opencvVersion-windows.exe"
+          $opencvExe = "opencv-$opencvVersion-windows.exe"
+          $opencvDir = "${{ github.workspace }}/opencv"
 
-          # pkgconfigの問題を回避するために、必要最小限のパッケージをインストール
-          Write-Host "Installing OpenCV core without pkgconfig..." -ForegroundColor Yellow
-          & "$vcpkgDir/vcpkg.exe" install opencv4[core]:x64-windows --no-print-usage
+          Write-Host "Downloading OpenCV v$opencvVersion..." -ForegroundColor Yellow
+          Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvExe
 
-          Write-Host "vcpkg dependencies installed successfully" -ForegroundColor Green
+          Write-Host "Extracting OpenCV..." -ForegroundColor Yellow
+          # 7zipを使用して解凍
+          Start-Process -FilePath $opencvExe -ArgumentList "-o$opencvDir", "-y" -Wait -NoNewWindow
+
+          # 環境変数を設定
+          $env:OpenCV_DIR = "$opencvDir/build"
+          $env:PATH = "$opencvDir/build/x64/vc16/bin;$env:PATH"
+          
+          # CMakeで見つけられるように環境変数を永続化
+          echo "OpenCV_DIR=$opencvDir/build" >> $env:GITHUB_ENV
+          echo "$opencvDir/build/x64/vc16/bin" >> $env:GITHUB_PATH
+
+          Write-Host "OpenCV installed successfully at: $opencvDir" -ForegroundColor Green
         shell: powershell
 
       - name: Install ONNX Runtime
@@ -172,7 +178,8 @@ jobs:
       - name: Configure CMake
         run: |
           cd CppBloodPressureDLL
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows -DONNXRUNTIME_ROOT=${{ github.workspace }}/onnxruntime -DMEDIAPIPE_ROOT=${{ github.workspace }}/mediapipe_build
+          # vcpkgツールチェーンファイルを削除
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DONNXRUNTIME_ROOT=${{ github.workspace }}/onnxruntime -DMEDIAPIPE_ROOT=${{ github.workspace }}/mediapipe_build -DOpenCV_DIR=${{ github.workspace }}/opencv/build
         shell: powershell
 
       - name: Build DLL
