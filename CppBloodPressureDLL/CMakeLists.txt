@@ -72,42 +72,15 @@ else()
 endif()
 
 # Find MediaPipe (required)
-if(DEFINED MEDIAPIPE_ROOT)
-    set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_ROOT}/include")
-    set(MEDIAPIPE_LIB "${MEDIAPIPE_ROOT}/lib/mediapipe_framework.lib")
-    
-    if(EXISTS ${MEDIAPIPE_INCLUDE_DIR})
-        message(STATUS "Found MediaPipe: ${MEDIAPIPE_ROOT}")
-        set(MEDIAPIPE_FOUND TRUE)
-    else()
-        message(WARNING "MediaPipe not found at ${MEDIAPIPE_ROOT}")
-        set(MEDIAPIPE_FOUND FALSE)
-    endif()
-else()
-    # Fallback search
-    find_path(MEDIAPIPE_INCLUDE_DIR
-        NAMES mediapipe/framework/calculator_framework.h
-        PATHS
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mediapipe
-            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/mediapipe
-            ENV MEDIAPIPE_ROOT_PATH
-        PATH_SUFFIXES include
-    )
+set(MEDIAPIPE_ROOT "${CMAKE_SOURCE_DIR}/../libmediapipe/output/libmediapipe-0.8.11-x86_64-windows")
+set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_ROOT}/include")
+set(MEDIAPIPE_LIB "${MEDIAPIPE_ROOT}/lib/mediapipe.lib")
 
-    find_library(MEDIAPIPE_LIB
-        NAMES mediapipe_framework face_landmark_front_cpu
-        PATHS
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mediapipe/lib
-            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/mediapipe/lib
-            ENV MEDIAPIPE_ROOT_PATH
-        PATH_SUFFIXES lib
-    )
-    
-    if(MEDIAPIPE_INCLUDE_DIR AND MEDIAPIPE_LIB)
-        set(MEDIAPIPE_FOUND TRUE)
-    else()
-        set(MEDIAPIPE_FOUND FALSE)
-    endif()
+if(EXISTS ${MEDIAPIPE_INCLUDE_DIR} AND EXISTS ${MEDIAPIPE_LIB})
+    message(STATUS "Found libmediapipe: ${MEDIAPIPE_ROOT}")
+    set(MEDIAPIPE_FOUND TRUE)
+else()
+    message(FATAL_ERROR "libmediapipe is required but not found at ${MEDIAPIPE_ROOT}. Please build libmediapipe and set the correct path.")
 endif()
 
 if(NOT MEDIAPIPE_FOUND)
