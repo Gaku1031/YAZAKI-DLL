@@ -40,7 +40,7 @@ jobs:
       - name: Install Python dependencies for model conversion
         run: |
           python -m pip install --upgrade pip
-          pip install scikit-learn numpy joblib onnx onnxmltools onnxruntime
+          pip install scikit-learn numpy joblib onnx skl2onnx onnxruntime
         shell: powershell
 
       - name: Convert models to ONNX

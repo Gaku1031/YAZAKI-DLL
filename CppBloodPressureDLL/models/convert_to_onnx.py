@@ -7,13 +7,13 @@ import os
 import sys
 import joblib
 import numpy as np
+import onnx
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
-import onnxmltools
-from onnxmltools.convert.sklearn import convert_sklearn
-from onnxmltools.utils import save_model
-from onnxmltools.convert.common.data_types import FloatTensorType
+import skl2onnx
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
 
 def create_sample_models():
     """Create sample models if original models don't exist"""
@@ -85,7 +85,8 @@ def convert_sklearn_to_onnx(model_path, output_path, model_name):
         onnx_model = convert_sklearn(model, initial_types=initial_type)
         
         # Save the ONNX model
-        save_model(onnx_model, output_path)
+        with open(output_path, "wb") as f:
+            f.write(onnx_model.SerializeToString())
         print(f"Successfully converted {model_name} to ONNX: {output_path}")
         
         return True
