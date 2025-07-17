@@ -277,7 +277,7 @@ jobs:
           load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
           protobuf_deps()
           "@
-          $workspaceContent | Set-Content -Path "WORKSPACE" -Encoding UTF8
+          [System.IO.File]::WriteAllLines("WORKSPACE", $workspaceContent)
           Write-Host "MediaPipe OpenCV configuration fixed" -ForegroundColor Green
         shell: powershell
 
