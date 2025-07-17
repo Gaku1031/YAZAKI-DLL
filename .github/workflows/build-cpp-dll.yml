@@ -2,7 +2,7 @@ name: Build C++ Blood Pressure DLL
 
 on:
   push:
-    branches: [main, develop, feature/size-reduction]
+    branches: [main, develop]
     paths:
       - "CppBloodPressureDLL/**"
   pull_request:
