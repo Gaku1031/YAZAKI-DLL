@@ -16,6 +16,15 @@ find_package(OpenCV REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
+  zlib
+  GIT_REPOSITORY https://github.com/madler/zlib.git
+  GIT_TAG v1.3
+)
+FetchContent_MakeAvailable(zlib)
+find_package(ZLIB REQUIRED)
+
+include(FetchContent)
+FetchContent_Declare(
   eigen
   GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
   GIT_TAG 3.4.0
