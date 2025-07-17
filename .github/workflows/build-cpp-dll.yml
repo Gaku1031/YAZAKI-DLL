@@ -39,50 +39,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python for model conversion
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-          architecture: "x64"
-
-      - name: Install Python dependencies for model conversion
+      - name: Clone libmediapipe
         run: |
-          python -m pip install --upgrade pip
-          pip install scikit-learn numpy joblib onnx skl2onnx onnxruntime
-        shell: powershell
-
-      - name: Convert models to ONNX
-        run: |
-          cd CppBloodPressureDLL/models
-          python convert_to_onnx.py
-          if (!(Test-Path "model_sbp.onnx") -or !(Test-Path "model_dbp.onnx")) {
-            Write-Host "Model conversion failed" -ForegroundColor Red
-            exit 1
-          }
-          Write-Host "Models converted successfully" -ForegroundColor Green
-        shell: powershell
+          git clone --depth=1 https://github.com/cpvrlab/libmediapipe.git
 
       - name: Install OpenCV (Pre-built)
         run: |
           Write-Host "Installing OpenCV from pre-built binaries..." -ForegroundColor Yellow
-
-          # OpenCV公式のWindows向けプリビルドを使用
-          $opencvVersion = "4.8.0"
+          $opencvVersion = "4.7.0"
           $opencvUrl = "https://github.com/opencv/opencv/releases/download/$opencvVersion/opencv-$opencvVersion-windows.exe"
           $opencvExe = "opencv-$opencvVersion-windows.exe"
           $opencvDir = "${{ github.workspace }}/opencv"
-
           Write-Host "Downloading OpenCV v$opencvVersion..." -ForegroundColor Yellow
           Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvExe
-
           Write-Host "Extracting OpenCV with 7-Zip..." -ForegroundColor Yellow
-          # 7-Zipをダウンロード
           $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
           $sevenZipExe = "7z-installer.exe"
           Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe
-          # 7-Zipをサイレントインストール
           Start-Process -FilePath $sevenZipExe -ArgumentList "/S" -Wait -NoNewWindow
-          # 7-ZipでOpenCVを解凍
           $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
           if (Test-Path $sevenZipPath) {
             & "$sevenZipPath" x $opencvExe "-o$opencvDir" -y
@@ -90,8 +64,6 @@ jobs:
             Write-Host "Error: Could not extract OpenCV (7-Zip not found)" -ForegroundColor Red
             exit 1
           }
-
-          # buildディレクトリのパスを両方チェック
           $buildPath1 = "$opencvDir/build"
           $buildPath2 = "$opencvDir/opencv/build"
           if (Test-Path $buildPath1) {
@@ -101,31 +73,34 @@ jobs:
           } else {
             $buildPath = $null
           }
-
           if ($buildPath) {
             Write-Host "OpenCV extracted successfully" -ForegroundColor Green
-            Write-Host "Directory structure:" -ForegroundColor Cyan
-            Get-ChildItem $buildPath -Directory | ForEach-Object { Write-Host "  $($_.Name)" }
-            if (Test-Path "$buildPath/x64") {
-              Get-ChildItem "$buildPath/x64" -Directory | ForEach-Object { Write-Host "    x64/$($_.Name)" }
-            }
           } else {
             Write-Host "Error: OpenCV build directory not found after extraction" -ForegroundColor Red
-            Write-Host "Available directories in ${opencvDir}:" -ForegroundColor Yellow
-            if (Test-Path ${opencvDir}) {
-              Get-ChildItem ${opencvDir} | ForEach-Object { Write-Host "  $($_.Name)" }
-            }
             exit 1
           }
-
-          # 環境変数を設定
           $env:OpenCV_DIR = $buildPath
-          $env:PATH = "$buildPath/x64/vc16/bin;$env:PATH"
-          # CMakeで見つけられるように環境変数を永続化
           echo "OpenCV_DIR=${buildPath}" >> $env:GITHUB_ENV
-          echo "${buildPath}/x64/vc16/bin" >> $env:GITHUB_PATH
           Write-Host "OpenCV installed successfully at: ${buildPath}" -ForegroundColor Green
         shell: powershell
+
+      - name: Setup Python for libmediapipe
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+          architecture: "x64"
+
+      - name: Install Python dependencies for libmediapipe
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy
+        shell: powershell
+
+      - name: Build libmediapipe (Windows)
+        run: |
+          cd libmediapipe
+          ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}"
+        shell: pwsh
 
       - name: Create OpenCV symlink for MediaPipe
         run: |
