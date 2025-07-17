@@ -257,38 +257,6 @@ jobs:
           Write-Host "MediaPipe OpenCV configuration fixed" -ForegroundColor Green
         shell: powershell
 
-      - name: Prepare MediaPipe for CMake
-        run: |
-          Write-Host "Preparing MediaPipe for CMake integration..." -ForegroundColor Yellow
-
-          # Create MediaPipe build directory structure
-          $mediapipeDir = "${{ github.workspace }}/mediapipe_build"
-          New-Item -ItemType Directory -Path $mediapipeDir -Force | Out-Null
-          New-Item -ItemType Directory -Path "$mediapipeDir/include" -Force | Out-Null
-          New-Item -ItemType Directory -Path "$mediapipeDir/lib" -Force | Out-Null
-
-          # Copy MediaPipe headers
-          Copy-Item -Path "mediapipe/mediapipe/framework/*.h" -Destination "$mediapipeDir/include/" -Recurse -Force
-          Copy-Item -Path "mediapipe/mediapipe/framework/formats/*.h" -Destination "$mediapipeDir/include/formats/" -Recurse -Force
-          Copy-Item -Path "mediapipe/mediapipe/modules/face_landmark/*.h" -Destination "$mediapipeDir/include/face_landmark/" -Recurse -Force
-
-          # Copy built libraries (they might be in different locations)
-          $bazelBin = "mediapipe/bazel-bin"
-          if (Test-Path "$bazelBin/mediapipe/framework") {
-              Copy-Item -Path "$bazelBin/mediapipe/framework/*.lib" -Destination "$mediapipeDir/lib/" -Force
-          }
-          if (Test-Path "$bazelBin/mediapipe/modules/face_landmark") {
-              Copy-Item -Path "$bazelBin/mediapipe/modules/face_landmark/*.lib" -Destination "$mediapipeDir/lib/" -Force
-          }
-
-          # Set environment variables for CMake
-          $env:MEDIAPIPE_ROOT = $mediapipeDir
-          $env:MEDIAPIPE_INCLUDE_DIR = "$mediapipeDir/include"
-          $env:MEDIAPIPE_LIB_DIR = "$mediapipeDir/lib"
-
-          Write-Host "MediaPipe prepared for CMake at: $mediapipeDir" -ForegroundColor Green
-        shell: powershell
-
       - name: Configure CMake
         run: |
           cd CppBloodPressureDLL
