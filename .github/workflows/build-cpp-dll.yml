@@ -58,14 +58,20 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg"
-          vcpkgGitCommitId: "a42af01b72c28a8e1d7b48107b33e4f286a55ef6"
+          # 最新のvcpkgコミットIDに更新
+          vcpkgGitCommitId: "2024.07.12"
 
       - name: Install dependencies via vcpkg
         run: |
           $vcpkgDir = "${{ github.workspace }}/vcpkg"
 
-          # Install only the core part of OpenCV to avoid flatbuffers dependency
-          & "$vcpkgDir/vcpkg.exe" install opencv4[core]:x64-windows
+          # vcpkgを最新に更新
+          Write-Host "Updating vcpkg to latest version..." -ForegroundColor Yellow
+          & "$vcpkgDir/vcpkg.exe" version
+
+          # pkgconfigの問題を回避するために、必要最小限のパッケージをインストール
+          Write-Host "Installing OpenCV core without pkgconfig..." -ForegroundColor Yellow
+          & "$vcpkgDir/vcpkg.exe" install opencv4[core]:x64-windows --no-print-usage
 
           Write-Host "vcpkg dependencies installed successfully" -ForegroundColor Green
         shell: powershell
