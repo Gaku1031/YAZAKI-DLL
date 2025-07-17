@@ -257,22 +257,6 @@ jobs:
           Write-Host "MediaPipe OpenCV configuration fixed" -ForegroundColor Green
         shell: powershell
 
-      - name: Build MediaPipe C++ Libraries
-        if: ${{ github.event.inputs.skip_mediapipe_build != 'true' }}
-        run: |
-          cd mediapipe
-
-          Write-Host "Building MediaPipe C++ libraries..." -ForegroundColor Yellow
-
-          # Build with improved configuration
-          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/framework:calculator_framework
-          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/modules/face_landmark:face_landmark_front_cpu
-          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/framework/formats:image_frame
-          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/framework/formats:image_frame_opencv
-
-          Write-Host "MediaPipe libraries built successfully" -ForegroundColor Green
-        shell: powershell
-
       - name: Prepare MediaPipe for CMake
         run: |
           Write-Host "Preparing MediaPipe for CMake integration..." -ForegroundColor Yellow
