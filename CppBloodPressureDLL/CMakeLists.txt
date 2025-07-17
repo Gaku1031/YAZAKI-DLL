@@ -13,7 +13,15 @@ endif()
 
 # Find packages
 find_package(OpenCV REQUIRED)
-find_package(Eigen3 REQUIRED)
+
+include(FetchContent)
+FetchContent_Declare(
+  eigen
+  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+  GIT_TAG 3.4.0
+)
+FetchContent_MakeAvailable(eigen)
+find_package(Eigen3 REQUIRED NO_MODULE)
 
 # Try to find ONNX Runtime
 if(DEFINED ONNXRUNTIME_ROOT)
