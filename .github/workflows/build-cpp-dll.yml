@@ -64,11 +64,8 @@ jobs:
         run: |
           $vcpkgDir = "${{ github.workspace }}/vcpkg"
 
-          # Install required packages (only those available in vcpkg)
-          & "$vcpkgDir/vcpkg.exe" install opencv4:x64-windows
-
-          # onnxruntime and mediapipe are not available in vcpkg
-          # We'll handle these separately
+          # Install only the core part of OpenCV to avoid flatbuffers dependency
+          & "$vcpkgDir/vcpkg.exe" install opencv4[core]:x64-windows
 
           Write-Host "vcpkg dependencies installed successfully" -ForegroundColor Green
         shell: powershell
