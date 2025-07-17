@@ -183,6 +183,13 @@ jobs:
           Write-Host "ONNX Runtime installed successfully" -ForegroundColor Green
         shell: powershell
 
+      - name: Install vcpkg and ZLIB
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install zlib:x64-windows
+        shell: powershell
+
       - name: Setup MediaPipe with Bazel
         run: |
           Write-Host "Setting up MediaPipe with Bazel..." -ForegroundColor Yellow
@@ -260,8 +267,7 @@ jobs:
       - name: Configure CMake
         run: |
           cd CppBloodPressureDLL
-          # vcpkgツールチェーンファイルを削除
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DONNXRUNTIME_ROOT=${{ github.workspace }}/onnxruntime -DMEDIAPIPE_ROOT=${{ github.workspace }}/mediapipe_build -DOpenCV_DIR=${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DONNXRUNTIME_ROOT=${{ github.workspace }}/onnxruntime -DMEDIAPIPE_ROOT=${{ github.workspace }}/mediapipe_build -DOpenCV_DIR=${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
         shell: powershell
 
       - name: Build DLL
