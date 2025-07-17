@@ -135,10 +135,10 @@ jobs:
           Write-Host "Building MediaPipe C++ libraries..." -ForegroundColor Yellow
 
           # Build MediaPipe framework and face landmark libraries
-          .\bazel.exe build --config=windows_x86_64 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework:calculator_framework
-          .\bazel.exe build --config=windows_x86_64 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/modules/face_landmark:face_landmark_front_cpu
-          .\bazel.exe build --config=windows_x86_64 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame
-          .\bazel.exe build --config=windows_x86_64 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame_opencv
+          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework:calculator_framework
+          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/modules/face_landmark:face_landmark_front_cpu
+          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame
+          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame_opencv
 
           Write-Host "MediaPipe libraries built successfully" -ForegroundColor Green
         shell: powershell
