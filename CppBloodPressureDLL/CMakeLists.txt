@@ -16,44 +16,86 @@ find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # Try to find ONNX Runtime
-find_path(ONNXRUNTIME_INCLUDE_DIR 
-    NAMES onnxruntime_cxx_api.h
-    PATHS 
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime/include
-        ENV ONNXRUNTIME_ROOT_PATH
-    PATH_SUFFIXES include
-)
+if(DEFINED ONNXRUNTIME_ROOT)
+    set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_ROOT}/include")
+    set(ONNXRUNTIME_LIB "${ONNXRUNTIME_ROOT}/lib/onnxruntime.lib")
+    
+    if(EXISTS ${ONNXRUNTIME_INCLUDE_DIR} AND EXISTS ${ONNXRUNTIME_LIB})
+        message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_ROOT}")
+        set(ONNXRUNTIME_FOUND TRUE)
+    else()
+        message(WARNING "ONNX Runtime not found at ${ONNXRUNTIME_ROOT}")
+        set(ONNXRUNTIME_FOUND FALSE)
+    endif()
+else()
+    # Fallback search
+    find_path(ONNXRUNTIME_INCLUDE_DIR 
+        NAMES onnxruntime_cxx_api.h
+        PATHS 
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime/include
+            ENV ONNXRUNTIME_ROOT_PATH
+        PATH_SUFFIXES include
+    )
 
-find_library(ONNXRUNTIME_LIB
-    NAMES onnxruntime
-    PATHS 
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime/lib
-        ENV ONNXRUNTIME_ROOT_PATH
-    PATH_SUFFIXES lib
-)
+    find_library(ONNXRUNTIME_LIB
+        NAMES onnxruntime
+        PATHS 
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/lib
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime/lib
+            ENV ONNXRUNTIME_ROOT_PATH
+        PATH_SUFFIXES lib
+    )
+    
+    if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIB)
+        set(ONNXRUNTIME_FOUND TRUE)
+    else()
+        set(ONNXRUNTIME_FOUND FALSE)
+    endif()
+endif()
 
 # Find MediaPipe (required)
-find_path(MEDIAPIPE_INCLUDE_DIR
-    NAMES mediapipe/framework/calculator_framework.h
-    PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mediapipe
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/mediapipe
-        ENV MEDIAPIPE_ROOT_PATH
-    PATH_SUFFIXES include
-    REQUIRED
-)
+if(DEFINED MEDIAPIPE_ROOT)
+    set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_ROOT}/include")
+    set(MEDIAPIPE_LIB "${MEDIAPIPE_ROOT}/lib/mediapipe_framework.lib")
+    
+    if(EXISTS ${MEDIAPIPE_INCLUDE_DIR})
+        message(STATUS "Found MediaPipe: ${MEDIAPIPE_ROOT}")
+        set(MEDIAPIPE_FOUND TRUE)
+    else()
+        message(WARNING "MediaPipe not found at ${MEDIAPIPE_ROOT}")
+        set(MEDIAPIPE_FOUND FALSE)
+    endif()
+else()
+    # Fallback search
+    find_path(MEDIAPIPE_INCLUDE_DIR
+        NAMES mediapipe/framework/calculator_framework.h
+        PATHS
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mediapipe
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/mediapipe
+            ENV MEDIAPIPE_ROOT_PATH
+        PATH_SUFFIXES include
+    )
 
-find_library(MEDIAPIPE_LIB
-    NAMES mediapipe_framework
-    PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mediapipe/lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/mediapipe/lib
-        ENV MEDIAPIPE_ROOT_PATH
-    PATH_SUFFIXES lib
-    REQUIRED
-)
+    find_library(MEDIAPIPE_LIB
+        NAMES mediapipe_framework face_landmark_front_cpu
+        PATHS
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mediapipe/lib
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/mediapipe/lib
+            ENV MEDIAPIPE_ROOT_PATH
+        PATH_SUFFIXES lib
+    )
+    
+    if(MEDIAPIPE_INCLUDE_DIR AND MEDIAPIPE_LIB)
+        set(MEDIAPIPE_FOUND TRUE)
+    else()
+        set(MEDIAPIPE_FOUND FALSE)
+    endif()
+endif()
+
+if(NOT MEDIAPIPE_FOUND)
+    message(FATAL_ERROR "MediaPipe is required but not found. Please install MediaPipe or set MEDIAPIPE_ROOT")
+endif()
 
 # Include directories
 include_directories(
@@ -62,11 +104,12 @@ include_directories(
     ${EIGEN3_INCLUDE_DIR}
 )
 
-if(ONNXRUNTIME_INCLUDE_DIR)
+if(ONNXRUNTIME_FOUND)
     include_directories(${ONNXRUNTIME_INCLUDE_DIR})
     message(STATUS "Found ONNX Runtime include: ${ONNXRUNTIME_INCLUDE_DIR}")
+    add_definitions(-DONNXRUNTIME_AVAILABLE)
 else()
-    message(WARNING "ONNX Runtime not found. Please install or set ONNXRUNTIME_ROOT_PATH")
+    message(WARNING "ONNX Runtime not found. Please install or set ONNXRUNTIME_ROOT")
 endif()
 
 # MediaPipe is required
@@ -86,7 +129,7 @@ target_link_libraries(BloodPressureDLL
     Eigen3::Eigen
 )
 
-if(ONNXRUNTIME_LIB)
+if(ONNXRUNTIME_FOUND)
     target_link_libraries(BloodPressureDLL ${ONNXRUNTIME_LIB})
     message(STATUS "Linked ONNX Runtime: ${ONNXRUNTIME_LIB}")
 else()
@@ -96,6 +139,11 @@ endif()
 # MediaPipe is required
 target_link_libraries(BloodPressureDLL ${MEDIAPIPE_LIB})
 message(STATUS "Linked MediaPipe: ${MEDIAPIPE_LIB}")
+
+# Additional MediaPipe dependencies
+if(WIN32)
+    target_link_libraries(BloodPressureDLL ws2_32)
+endif()
 
 # Windows-specific settings
 if(WIN32)
