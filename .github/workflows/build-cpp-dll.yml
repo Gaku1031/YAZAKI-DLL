@@ -212,23 +212,76 @@ jobs:
           Write-Host "Setting up MediaPipe with Bazel..." -ForegroundColor Yellow
 
           # Clone MediaPipe repository
-          git clone https://github.com/google/mediapipe.git
+          git clone --depth=1 https://github.com/google/mediapipe.git
           cd mediapipe
 
           # Install Bazel for Windows
-          $bazelVersion = "6.4.0"
+          $bazelVersion = "6.5.0"
           $bazelUrl = "https://github.com/bazelbuild/bazel/releases/download/$bazelVersion/bazel-$bazelVersion-windows-x86_64.exe"
           $bazelExe = "bazel.exe"
 
           Write-Host "Downloading Bazel v$bazelVersion..." -ForegroundColor Yellow
           Invoke-WebRequest -Uri $bazelUrl -OutFile $bazelExe
 
-          # Set Bazel environment variables
-          $env:BAZEL_SH = "C:\msys64\usr\bin\bash.exe"
-          $env:BAZEL_VS = "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools"
-          $env:BAZEL_VC = "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC"
+          # Set environment variables for proper Visual Studio detection
+          $env:BAZEL_VS = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
+          $env:BAZEL_VC = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC"
+          $env:BAZEL_PYTHON = "C:\hostedtoolcache\windows\Python\3.11.10\x64\python.exe"
 
           Write-Host "Bazel setup completed" -ForegroundColor Green
+        shell: powershell
+
+      - name: Fix MediaPipe OpenCV Configuration
+        run: |
+          cd mediapipe
+          Write-Host "Fixing MediaPipe OpenCV configuration..." -ForegroundColor Yellow
+
+          # Create proper WORKSPACE configuration for OpenCV (no select, always Release lib)
+          $workspaceContent = @"
+          workspace(name = "mediapipe")
+
+          load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+          # OpenCV for Windows
+          new_local_repository(
+              name = "windows_opencv",
+              build_file_content = """
+          package(default_visibility = ["//visibility:public"])
+
+          cc_library(
+              name = "opencv",
+              srcs = ["build/x64/vc16/lib/opencv_world480.lib"],
+              hdrs = glob([
+                  "build/include/**/*.h",
+                  "build/include/**/*.hpp",
+              ]),
+              includes = ["build/include"],
+              linkopts = ["opencv_world480.lib"],
+          )
+          """,
+              path = "${{ github.workspace }}/opencv",
+          )
+
+          # Essential dependencies
+          http_archive(
+              name = "com_google_protobuf",
+              strip_prefix = "protobuf-21.12",
+              urls = ["https://github.com/protocolbuffers/protobuf/archive/v21.12.zip"],
+          )
+
+          http_archive(
+              name = "com_google_absl",
+              strip_prefix = "abseil-cpp-20220623.1",
+              urls = ["https://github.com/abseil/absl-cpp/archive/20220623.1.zip"],
+          )
+
+          load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+          protobuf_deps()
+          "@
+
+          # Replace WORKSPACE file
+          $workspaceContent | Out-File -FilePath "WORKSPACE" -Encoding UTF8
+          Write-Host "MediaPipe OpenCV configuration fixed" -ForegroundColor Green
         shell: powershell
 
       - name: Build MediaPipe C++ Libraries
@@ -238,11 +291,11 @@ jobs:
 
           Write-Host "Building MediaPipe C++ libraries..." -ForegroundColor Yellow
 
-          # Build MediaPipe framework and face landmark libraries
-          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework:calculator_framework
-          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/modules/face_landmark:face_landmark_front_cpu
-          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame
-          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame_opencv
+          # Build with improved configuration
+          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/framework:calculator_framework
+          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/modules/face_landmark:face_landmark_front_cpu
+          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/framework/formats:image_frame
+          .\bazel.exe build --cxxopt=/std:c++17 --define MEDIAPIPE_DISABLE_GPU=1 --action_env=BAZEL_CXXOPTS="-std=c++17" //mediapipe/framework/formats:image_frame_opencv
 
           Write-Host "MediaPipe libraries built successfully" -ForegroundColor Green
         shell: powershell
