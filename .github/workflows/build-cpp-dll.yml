@@ -261,7 +261,7 @@ jobs:
         run: |
           cd CppBloodPressureDLL
           # vcpkgツールチェーンファイルを削除
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DONNXRUNTIME_ROOT=${{ github.workspace }}/onnxruntime -DMEDIAPIPE_ROOT=${{ github.workspace }}/mediapipe_build -DOpenCV_DIR=${{ github.workspace }}/opencv/build
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DONNXRUNTIME_ROOT=${{ github.workspace }}/onnxruntime -DMEDIAPIPE_ROOT=${{ github.workspace }}/mediapipe_build -DOpenCV_DIR=${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib
         shell: powershell
 
       - name: Build DLL
