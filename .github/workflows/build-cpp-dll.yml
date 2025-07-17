@@ -129,14 +129,23 @@ jobs:
 
       - name: Create OpenCV symlink for MediaPipe
         run: |
-          $opencvTarget = "${{ github.workspace }}\opencv\build"
+          # buildディレクトリのパスを両方チェック
+          $opencvTarget1 = "${{ github.workspace }}\opencv\build"
+          $opencvTarget2 = "${{ github.workspace }}\opencv\opencv\build"
+          if (Test-Path $opencvTarget1) {
+            $opencvTarget = $opencvTarget1
+          } elseif (Test-Path $opencvTarget2) {
+            $opencvTarget = $opencvTarget2
+          } else {
+            $opencvTarget = $null
+          }
 
           Write-Host "Creating OpenCV symlink for MediaPipe..." -ForegroundColor Yellow
           Write-Host "Target path: ${opencvTarget}" -ForegroundColor Cyan
 
           # ターゲットパスの存在確認
-          if (!(Test-Path $opencvTarget)) {
-            Write-Host "Error: OpenCV build directory does not exist at: ${opencvTarget}" -ForegroundColor Red
+          if (-not $opencvTarget) {
+            Write-Host "Error: OpenCV build directory does not exist at either expected location." -ForegroundColor Red
             Write-Host "Available paths:" -ForegroundColor Yellow
             $baseDir = "${{ github.workspace }}\opencv"
             if (Test-Path $baseDir) {
