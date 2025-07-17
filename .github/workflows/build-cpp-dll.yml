@@ -1,14 +1,14 @@
 name: Build C++ Blood Pressure DLL
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "CppBloodPressureDLL/**"
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - "CppBloodPressureDLL/**"
+  # push:
+  #   branches: [main, develop]
+  #   paths:
+  #     - "CppBloodPressureDLL/**"
+  # pull_request:
+  #   branches: [main, develop]
+  #   paths:
+  #     - "CppBloodPressureDLL/**"
   workflow_dispatch:
     inputs:
       build_type:
@@ -19,6 +19,14 @@ on:
         options:
           - Release
           - Debug
+      skip_mediapipe_build:
+        description: "Skip MediaPipe build (for faster iteration)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 env:
   BUILD_TYPE: ${{ github.event.inputs.build_type || 'Release' }}
@@ -74,12 +82,22 @@ jobs:
           # 環境変数を設定
           $env:OpenCV_DIR = "$opencvDir/build"
           $env:PATH = "$opencvDir/build/x64/vc16/bin;$env:PATH"
-          
+
           # CMakeで見つけられるように環境変数を永続化
           echo "OpenCV_DIR=$opencvDir/build" >> $env:GITHUB_ENV
           echo "$opencvDir/build/x64/vc16/bin" >> $env:GITHUB_PATH
 
           Write-Host "OpenCV installed successfully at: $opencvDir" -ForegroundColor Green
+        shell: powershell
+
+      - name: Create OpenCV symlink for MediaPipe
+        run: |
+          if (!(Test-Path "C:\opencv")) {
+            New-Item -ItemType Directory -Path "C:\opencv"
+          }
+          if (!(Test-Path "C:\opencv\build")) {
+            New-Item -ItemType Junction -Path "C:\opencv\build" -Target "${{ github.workspace }}\opencv\build"
+          }
         shell: powershell
 
       - name: Install ONNX Runtime
@@ -129,16 +147,17 @@ jobs:
         shell: powershell
 
       - name: Build MediaPipe C++ Libraries
+        if: ${{ github.event.inputs.skip_mediapipe_build != 'true' }}
         run: |
           cd mediapipe
 
           Write-Host "Building MediaPipe C++ libraries..." -ForegroundColor Yellow
 
           # Build MediaPipe framework and face landmark libraries
-          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework:calculator_framework
-          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/modules/face_landmark:face_landmark_front_cpu
-          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame
-          .\bazel.exe build --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame_opencv
+          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework:calculator_framework
+          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/modules/face_landmark:face_landmark_front_cpu
+          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame
+          .\bazel.exe build --cxxopt=/std:c++20 --define MEDIAPIPE_DISABLE_GPU=1 //mediapipe/framework/formats:image_frame_opencv
 
           Write-Host "MediaPipe libraries built successfully" -ForegroundColor Green
         shell: powershell
