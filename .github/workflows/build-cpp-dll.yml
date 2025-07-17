@@ -236,7 +236,6 @@ jobs:
           cd mediapipe
           Write-Host "Fixing MediaPipe OpenCV configuration..." -ForegroundColor Yellow
 
-          # Create proper WORKSPACE configuration for OpenCV (no select, always Release lib)
           $workspaceContent = @"
           workspace(name = "mediapipe")
 
@@ -278,9 +277,7 @@ jobs:
           load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
           protobuf_deps()
           "@
-
-          # Replace WORKSPACE file
-          $workspaceContent | Out-File -FilePath "WORKSPACE" -Encoding UTF8
+          $workspaceContent | Set-Content -Path "WORKSPACE" -Encoding UTF8
           Write-Host "MediaPipe OpenCV configuration fixed" -ForegroundColor Green
         shell: powershell
 
