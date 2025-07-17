@@ -75,58 +75,41 @@ jobs:
           Write-Host "Downloading OpenCV v$opencvVersion..." -ForegroundColor Yellow
           Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvExe
 
-          Write-Host "Extracting OpenCV..." -ForegroundColor Yellow
-          
-          # 自己解凍型実行ファイルを実行して解凍
-          Start-Process -FilePath $opencvExe -ArgumentList "-o$opencvDir", "-y" -Wait -NoNewWindow
-          
-          # 解凍が完了するまで待機
-          $maxWait = 300  # 5分間待機
-          $waited = 0
-          $buildPath = "$opencvDir/build"
-          
-          while (!(Test-Path $buildPath) -and $waited -lt $maxWait) {
-            Start-Sleep -Seconds 5
-            $waited += 5
-            Write-Host "Waiting for extraction to complete... ($waited/$maxWait seconds)" -ForegroundColor Yellow
+          Write-Host "Extracting OpenCV with 7-Zip..." -ForegroundColor Yellow
+          # 7-Zipをダウンロード
+          $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
+          $sevenZipExe = "7z-installer.exe"
+          Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe
+          # 7-Zipをサイレントインストール
+          Start-Process -FilePath $sevenZipExe -ArgumentList "/S" -Wait -NoNewWindow
+          # 7-ZipでOpenCVを解凍
+          $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
+          if (Test-Path $sevenZipPath) {
+            & "$sevenZipPath" x $opencvExe "-o$opencvDir" -y
+          } else {
+            Write-Host "Error: Could not extract OpenCV (7-Zip not found)" -ForegroundColor Red
+            exit 1
           }
-          
-          # 解凍結果の確認
-          if (Test-Path $buildPath) {
+
+          # buildディレクトリのパスを両方チェック
+          $buildPath1 = "$opencvDir/build"
+          $buildPath2 = "$opencvDir/opencv/build"
+          if (Test-Path $buildPath1) {
+            $buildPath = $buildPath1
+          } elseif (Test-Path $buildPath2) {
+            $buildPath = $buildPath2
+          } else {
+            $buildPath = $null
+          }
+
+          if ($buildPath) {
             Write-Host "OpenCV extracted successfully" -ForegroundColor Green
-            
-            # ディレクトリ構造を確認
             Write-Host "Directory structure:" -ForegroundColor Cyan
-            Get-ChildItem $opencvDir -Directory | ForEach-Object { Write-Host "  $($_.Name)" }
-            
+            Get-ChildItem $buildPath -Directory | ForEach-Object { Write-Host "  $($_.Name)" }
             if (Test-Path "$buildPath/x64") {
               Get-ChildItem "$buildPath/x64" -Directory | ForEach-Object { Write-Host "    x64/$($_.Name)" }
             }
           } else {
-            Write-Host "OpenCV extraction failed. Trying alternative method..." -ForegroundColor Red
-            
-            # 代替方法: 7-Zipを使用して手動で解凍
-            Write-Host "Downloading 7-Zip..." -ForegroundColor Yellow
-            $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
-            $sevenZipExe = "7z-installer.exe"
-            Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe
-            
-            # 7-Zipをサイレントインストール
-            Start-Process -FilePath $sevenZipExe -ArgumentList "/S" -Wait -NoNewWindow
-            
-            # 7-Zipを使用してOpenCVを解凍
-            $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
-            if (Test-Path $sevenZipPath) {
-              Write-Host "Extracting OpenCV with 7-Zip..." -ForegroundColor Yellow
-              & "$sevenZipPath" x $opencvExe "-o$opencvDir" -y
-            } else {
-              Write-Host "Error: Could not extract OpenCV" -ForegroundColor Red
-              exit 1
-            }
-          }
-
-          # 最終確認
-          if (!(Test-Path "$opencvDir/build")) {
             Write-Host "Error: OpenCV build directory not found after extraction" -ForegroundColor Red
             Write-Host "Available directories in ${opencvDir}:" -ForegroundColor Yellow
             if (Test-Path ${opencvDir}) {
@@ -136,23 +119,21 @@ jobs:
           }
 
           # 環境変数を設定
-          $env:OpenCV_DIR = "$opencvDir/build"
-          $env:PATH = "$opencvDir/build/x64/vc16/bin;$env:PATH"
-          
+          $env:OpenCV_DIR = $buildPath
+          $env:PATH = "$buildPath/x64/vc16/bin;$env:PATH"
           # CMakeで見つけられるように環境変数を永続化
-          echo "OpenCV_DIR=${opencvDir}/build" >> $env:GITHUB_ENV
-          echo "${opencvDir}/build/x64/vc16/bin" >> $env:GITHUB_PATH
-
-          Write-Host "OpenCV installed successfully at: ${opencvDir}" -ForegroundColor Green
+          echo "OpenCV_DIR=${buildPath}" >> $env:GITHUB_ENV
+          echo "${buildPath}/x64/vc16/bin" >> $env:GITHUB_PATH
+          Write-Host "OpenCV installed successfully at: ${buildPath}" -ForegroundColor Green
         shell: powershell
 
       - name: Create OpenCV symlink for MediaPipe
         run: |
           $opencvTarget = "${{ github.workspace }}\opencv\build"
-          
+
           Write-Host "Creating OpenCV symlink for MediaPipe..." -ForegroundColor Yellow
           Write-Host "Target path: ${opencvTarget}" -ForegroundColor Cyan
-          
+
           # ターゲットパスの存在確認
           if (!(Test-Path $opencvTarget)) {
             Write-Host "Error: OpenCV build directory does not exist at: ${opencvTarget}" -ForegroundColor Red
@@ -165,13 +146,13 @@ jobs:
             }
             exit 1
           }
-          
+
           # C:\opencvディレクトリを作成
           if (!(Test-Path "C:\opencv")) {
             New-Item -ItemType Directory -Path "C:\opencv" -Force | Out-Null
             Write-Host "Created C:\opencv directory" -ForegroundColor Green
           }
-          
+
           # ジャンクション作成
           if (!(Test-Path "C:\opencv\build")) {
             try {
@@ -185,7 +166,7 @@ jobs:
           } else {
             Write-Host "Junction already exists: C:\opencv\build" -ForegroundColor Cyan
           }
-          
+
           # 最終確認
           if (Test-Path "C:\opencv\build") {
             Write-Host "OpenCV symlink created successfully" -ForegroundColor Green
