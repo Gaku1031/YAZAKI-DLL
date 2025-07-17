@@ -1,14 +1,14 @@
 name: Build C++ Blood Pressure DLL
 
 on:
-  # push:
-  #   branches: [main, develop]
-  #   paths:
-  #     - "CppBloodPressureDLL/**"
-  # pull_request:
-  #   branches: [main, develop]
-  #   paths:
-  #     - "CppBloodPressureDLL/**"
+  push:
+    branches: [main, develop]
+    paths:
+      - "CppBloodPressureDLL/**"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "CppBloodPressureDLL/**"
   workflow_dispatch:
     inputs:
       build_type:
