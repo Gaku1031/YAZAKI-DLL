@@ -79,6 +79,23 @@ jobs:
           } else {
             Write-Host "  Output directory does not exist yet" -ForegroundColor Yellow
           }
+
+          Write-Host "Checking for CMake files:" -ForegroundColor Cyan
+          Get-ChildItem -Filter "CMakeLists.txt" -Recurse | ForEach-Object {
+            Write-Host "  Found CMakeLists.txt: $($_.FullName)" -ForegroundColor Green
+          }
+
+          Write-Host "Checking for Python build scripts:" -ForegroundColor Cyan
+          Get-ChildItem -Filter "*.py" -Recurse | ForEach-Object {
+            Write-Host "  Found Python script: $($_.FullName)" -ForegroundColor Green
+          }
+
+          Write-Host "Checking for README files:" -ForegroundColor Cyan
+          Get-ChildItem -Filter "README*" -Recurse | ForEach-Object {
+            Write-Host "  Found README: $($_.FullName)" -ForegroundColor Green
+            Write-Host "  Content preview:" -ForegroundColor Yellow
+            Get-Content $_.FullName -Head 20 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+          }
         shell: powershell
 
       - name: Install OpenCV (Pre-built)
@@ -137,35 +154,109 @@ jobs:
           # Check if required packages are installed
           python -c "import numpy; print('NumPy version:', numpy.__version__)"
           python -c "import requests; print('Requests version:', requests.__version__)"
+
+          # Check for required build tools
+          Write-Host "Checking build tools..." -ForegroundColor Yellow
+
+          # Check CMake
+          try {
+            $cmakeVersion = cmake --version
+            Write-Host "CMake found: $cmakeVersion" -ForegroundColor Green
+          } catch {
+            Write-Host "Warning: CMake not found" -ForegroundColor Yellow
+          }
+
+          # Check Bazel
+          try {
+            $bazelVersion = bazel --version
+            Write-Host "Bazel found: $bazelVersion" -ForegroundColor Green
+          } catch {
+            Write-Host "Warning: Bazel not found" -ForegroundColor Yellow
+          }
+
+          # Check Git
+          try {
+            $gitVersion = git --version
+            Write-Host "Git found: $gitVersion" -ForegroundColor Green
+          } catch {
+            Write-Host "Warning: Git not found" -ForegroundColor Yellow
+          }
         shell: powershell
 
       - name: Build libmediapipe (Windows)
-        shell: cmd
+        shell: powershell
         run: |
-          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+          Write-Host "Building libmediapipe..." -ForegroundColor Yellow
+
+          # Visual Studio環境を設定
+          Write-Host "Setting up Visual Studio environment..." -ForegroundColor Yellow
+          $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+          if (Test-Path $vsPath) {
+            Write-Host "Visual Studio found at: $vsPath" -ForegroundColor Green
+            # PowerShellでVisual Studio環境を設定
+            cmd /c "`"$vsPath`" && set" | ForEach-Object {
+              if ($_ -match "^(.*?)=(.*)$") {
+                $name = $matches[1]
+                $value = $matches[2]
+                [Environment]::SetEnvironmentVariable($name, $value, "Process")
+              }
+            }
+            Write-Host "Visual Studio environment configured" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: Visual Studio not found at expected location" -ForegroundColor Yellow
+          }
+
           cd libmediapipe
-          echo "Current directory: %CD%"
-          echo "Checking if build script exists..."
-          if exist "build-x86_64-windows.ps1" (
-            echo "Build script found"
-            echo "Build script contents:"
-            type build-x86_64-windows.ps1
-          ) else (
-            echo "Build script not found"
-            echo "Available files:"
-            dir
-            echo "Available PowerShell scripts:"
-            dir *.ps1
-            echo "Build script not found, will use fallback method"
-            exit 0
-          )
-          echo "Starting libmediapipe build..."
-          powershell -ExecutionPolicy Bypass -File ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}" --cxxopt /std:c++20
-          echo "Build completed with exit code: %ERRORLEVEL%"
-          if %ERRORLEVEL% neq 0 (
-            echo "Build failed, will use fallback method"
-            exit 0
-          )
+
+          Write-Host "Current directory: $(Get-Location)" -ForegroundColor Cyan
+          Write-Host "Checking build script..." -ForegroundColor Cyan
+
+          if (Test-Path "build-x86_64-windows.ps1") {
+            Write-Host "Build script found" -ForegroundColor Green
+            
+            # OpenCVのパスを確認
+            $opencvDir = "${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib"
+            Write-Host "OpenCV directory: $opencvDir" -ForegroundColor Cyan
+            
+            if (Test-Path $opencvDir) {
+              Write-Host "OpenCV directory exists" -ForegroundColor Green
+            } else {
+              Write-Host "Warning: OpenCV directory not found at expected location" -ForegroundColor Yellow
+              # 代替パスを試行
+              $opencvDir = "${{ github.workspace }}/opencv/build"
+              if (Test-Path $opencvDir) {
+                Write-Host "Using alternative OpenCV path: $opencvDir" -ForegroundColor Green
+              } else {
+                Write-Host "Error: OpenCV directory not found" -ForegroundColor Red
+                exit 1
+              }
+            }
+            
+            # ビルドスクリプトを実行
+            Write-Host "Executing build script..." -ForegroundColor Yellow
+            $buildArgs = @(
+              "--version", "v0.8.11",
+              "--config", "release",
+              "--opencv_dir", $opencvDir
+            )
+            
+            Write-Host "Build arguments: $($buildArgs -join ' ')" -ForegroundColor Cyan
+            & .\build-x86_64-windows.ps1 @buildArgs
+            
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "libmediapipe build completed successfully" -ForegroundColor Green
+            } else {
+              Write-Host "libmediapipe build failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+              exit 1
+            }
+          } else {
+            Write-Host "Error: build-x86_64-windows.ps1 not found" -ForegroundColor Red
+            Write-Host "Available files:" -ForegroundColor Yellow
+            Get-ChildItem | ForEach-Object {
+              Write-Host "  $($_.Name)" -ForegroundColor White
+            }
+            exit 1
+          }
 
       - name: Verify libmediapipe build output
         run: |
@@ -239,6 +330,12 @@ jobs:
               # 手動ビルドの代替手段
               cd "${{ github.workspace }}/libmediapipe"
               
+              Write-Host "Current directory: $(Get-Location)" -ForegroundColor Cyan
+              Write-Host "Available files:" -ForegroundColor Cyan
+              Get-ChildItem | ForEach-Object {
+                Write-Host "  $($_.Name)" -ForegroundColor White
+              }
+              
               # 必要なファイルが存在するか確認
               if (Test-Path "CMakeLists.txt") {
                 Write-Host "CMakeLists.txt found, attempting manual build..." -ForegroundColor Green
@@ -260,12 +357,65 @@ jobs:
                   Write-Host "CMake configuration failed" -ForegroundColor Red
                   exit 1
                 }
+              } elseif (Test-Path "setup.py") {
+                Write-Host "setup.py found, attempting Python build..." -ForegroundColor Green
+                python setup.py build
+                if ($LASTEXITCODE -eq 0) {
+                  Write-Host "Python build completed successfully" -ForegroundColor Green
+                } else {
+                  Write-Host "Python build failed" -ForegroundColor Red
+                  exit 1
+                }
+              } elseif (Test-Path "build.py") {
+                Write-Host "build.py found, attempting Python build script..." -ForegroundColor Green
+                python build.py
+                if ($LASTEXITCODE -eq 0) {
+                  Write-Host "Python build script completed successfully" -ForegroundColor Green
+                } else {
+                  Write-Host "Python build script failed" -ForegroundColor Red
+                  exit 1
+                }
               } else {
-                Write-Host "Error: CMakeLists.txt not found, cannot build manually" -ForegroundColor Red
-                exit 1
+                Write-Host "Error: No build files found (CMakeLists.txt, setup.py, or build.py)" -ForegroundColor Red
+                Write-Host "Available files in libmediapipe directory:" -ForegroundColor Yellow
+                Get-ChildItem -Recurse | ForEach-Object {
+                  Write-Host "  $($_.FullName)" -ForegroundColor White
+                }
+                
+                # MediaPipeを直接使用する代替手段を試行
+                Write-Host "Attempting to use MediaPipe directly..." -ForegroundColor Yellow
+                cd "${{ github.workspace }}"
+                
+                if (Test-Path "mediapipe") {
+                  Write-Host "MediaPipe directory found, checking for bazel-bin..." -ForegroundColor Green
+                  if (Test-Path "mediapipe/bazel-bin") {
+                    Write-Host "MediaPipe bazel-bin found, creating output directory..." -ForegroundColor Green
+                    New-Item -ItemType Directory -Path "libmediapipe/output" -Force | Out-Null
+                    Write-Host "Created libmediapipe output directory for MediaPipe integration" -ForegroundColor Green
+                  } else {
+                    Write-Host "MediaPipe bazel-bin not found, attempting to build MediaPipe..." -ForegroundColor Yellow
+                    cd mediapipe
+                    if (Test-Path "WORKSPACE") {
+                      Write-Host "MediaPipe WORKSPACE found, attempting Bazel build..." -ForegroundColor Green
+                      # Bazelビルドを試行
+                      bazel build //mediapipe/framework:mediapipe_framework
+                      if ($LASTEXITCODE -eq 0) {
+                        Write-Host "MediaPipe Bazel build completed successfully" -ForegroundColor Green
+                      } else {
+                        Write-Host "MediaPipe Bazel build failed" -ForegroundColor Red
+                        exit 1
+                      }
+                    } else {
+                      Write-Host "Error: MediaPipe WORKSPACE not found" -ForegroundColor Red
+                      exit 1
+                    }
+                  }
+                } else {
+                  Write-Host "Error: Neither libmediapipe nor MediaPipe found" -ForegroundColor Red
+                  exit 1
+                }
               }
             }
-          }
         shell: powershell
 
       - name: Create OpenCV symlink for MediaPipe

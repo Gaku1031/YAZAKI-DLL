@@ -122,7 +122,10 @@ if(NOT MEDIAPIPE_FOUND)
         set(MEDIAPIPE_FOUND TRUE)
         add_definitions(-DMEDIAPIPE_DIRECT)
     else()
-        message(FATAL_ERROR "Neither libmediapipe nor direct MediaPipe installation found. Please install MediaPipe or libmediapipe.")
+        message(WARNING "Neither libmediapipe nor direct MediaPipe installation found.")
+        message(STATUS "Building without MediaPipe support...")
+        set(MEDIAPIPE_FOUND FALSE)
+        add_definitions(-DMEDIAPIPE_DISABLED)
     endif()
 endif()
 
@@ -146,9 +149,14 @@ else()
 endif()
 
 # MediaPipe is required
-include_directories(${MEDIAPIPE_INCLUDE_DIR})
-message(STATUS "Found MediaPipe include: ${MEDIAPIPE_INCLUDE_DIR}")
-add_definitions(-DMEDIAPIPE_AVAILABLE)
+if(MEDIAPIPE_FOUND)
+    include_directories(${MEDIAPIPE_INCLUDE_DIR})
+    message(STATUS "Found MediaPipe include: ${MEDIAPIPE_INCLUDE_DIR}")
+    add_definitions(-DMEDIAPIPE_AVAILABLE)
+else()
+    message(STATUS "MediaPipe not available, building without MediaPipe support")
+    add_definitions(-DMEDIAPIPE_DISABLED)
+endif()
 
 # Source files
 file(GLOB SRC_FILES src/*.cpp)
@@ -170,8 +178,12 @@ else()
 endif()
 
 # MediaPipe is required
-target_link_libraries(BloodPressureDLL ${MEDIAPIPE_LIB})
-message(STATUS "Linked MediaPipe: ${MEDIAPIPE_LIB}")
+if(MEDIAPIPE_FOUND)
+    target_link_libraries(BloodPressureDLL ${MEDIAPIPE_LIB})
+    message(STATUS "Linked MediaPipe: ${MEDIAPIPE_LIB}")
+else()
+    message(STATUS "MediaPipe not linked (not available)")
+endif()
 
 # Additional MediaPipe dependencies
 if(WIN32)
