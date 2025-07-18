@@ -42,6 +42,13 @@ if(DEFINED ONNXRUNTIME_ROOT)
         set(ONNXRUNTIME_FOUND TRUE)
     else()
         message(WARNING "ONNX Runtime not found at ${ONNXRUNTIME_ROOT}")
+        message(STATUS "Checking ONNXRUNTIME_ROOT contents:")
+        if(EXISTS ${ONNXRUNTIME_ROOT})
+            file(GLOB ONNX_CONTENTS "${ONNXRUNTIME_ROOT}/*")
+            foreach(item ${ONNX_CONTENTS})
+                message(STATUS "  ${item}")
+            endforeach()
+        endif()
         set(ONNXRUNTIME_FOUND FALSE)
     endif()
 else()
@@ -72,7 +79,25 @@ else()
 endif()
 
 # Find MediaPipe (required)
-set(MEDIAPIPE_ROOT "${CMAKE_SOURCE_DIR}/../libmediapipe/output/libmediapipe-0.8.11-x86_64-windows")
+if(DEFINED MEDIAPIPE_ROOT)
+    # ユーザーが指定したパスを使用
+    set(MEDIAPIPE_BASE_DIR "${MEDIAPIPE_ROOT}")
+else()
+    # デフォルトパス
+    set(MEDIAPIPE_BASE_DIR "${CMAKE_SOURCE_DIR}/../libmediapipe/output")
+endif()
+
+# libmediapipeの出力ディレクトリを検索
+file(GLOB MEDIAPIPE_OUTPUT_DIRS LIST_DIRECTORIES true "${MEDIAPIPE_BASE_DIR}/*")
+list(FILTER MEDIAPIPE_OUTPUT_DIRS INCLUDE REGEX ".*libmediapipe.*")
+
+if(MEDIAPIPE_OUTPUT_DIRS)
+    list(GET MEDIAPIPE_OUTPUT_DIRS 0 MEDIAPIPE_ROOT)
+    message(STATUS "Found libmediapipe output directory: ${MEDIAPIPE_ROOT}")
+else()
+    message(FATAL_ERROR "libmediapipe output directory not found in ${MEDIAPIPE_BASE_DIR}")
+endif()
+
 set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_ROOT}/include")
 set(MEDIAPIPE_LIB "${MEDIAPIPE_ROOT}/lib/mediapipe.lib")
 

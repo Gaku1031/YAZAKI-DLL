@@ -103,6 +103,25 @@ jobs:
           cd libmediapipe
           powershell ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}" --cxxopt /std:c++20
 
+      - name: Verify libmediapipe build output
+        run: |
+          Write-Host "Verifying libmediapipe build output..." -ForegroundColor Yellow
+
+          $outputDir = "${{ github.workspace }}/libmediapipe/output"
+          if (Test-Path $outputDir) {
+            Write-Host "libmediapipe output directory found: $outputDir" -ForegroundColor Green
+            Get-ChildItem $outputDir -Recurse -Directory | ForEach-Object {
+              Write-Host "  Directory: $($_.FullName)" -ForegroundColor Cyan
+            }
+            Get-ChildItem $outputDir -Recurse -File -Include "*.lib", "*.dll", "*.h" | ForEach-Object {
+              Write-Host "  File: $($_.FullName)" -ForegroundColor Cyan
+            }
+          } else {
+            Write-Host "Error: libmediapipe output directory not found" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+
       - name: Create OpenCV symlink for MediaPipe
         run: |
           # buildディレクトリのパスを両方チェック
@@ -179,6 +198,22 @@ jobs:
           $env:ONNXRUNTIME_ROOT = $onnxDir
           $env:ONNXRUNTIME_INCLUDE_DIR = "$onnxDir/include"
           $env:ONNXRUNTIME_LIB_DIR = "$onnxDir/lib"
+
+          # Verify installation
+          Write-Host "Verifying ONNX Runtime installation..." -ForegroundColor Yellow
+          if (Test-Path "$onnxDir/include/onnxruntime_cxx_api.h") {
+            Write-Host "ONNX Runtime headers found" -ForegroundColor Green
+          } else {
+            Write-Host "Error: ONNX Runtime headers not found" -ForegroundColor Red
+            exit 1
+          }
+
+          if (Test-Path "$onnxDir/lib/onnxruntime.lib") {
+            Write-Host "ONNX Runtime library found" -ForegroundColor Green
+          } else {
+            Write-Host "Error: ONNX Runtime library not found" -ForegroundColor Red
+            exit 1
+          }
 
           Write-Host "ONNX Runtime installed successfully" -ForegroundColor Green
         shell: powershell
@@ -267,7 +302,36 @@ jobs:
       - name: Configure CMake
         run: |
           cd CppBloodPressureDLL
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DONNXRUNTIME_ROOT=${{ github.workspace }}/onnxruntime -DMEDIAPIPE_ROOT=${{ github.workspace }}/mediapipe_build -DOpenCV_DIR=${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+          # libmediapipeの実際の出力パスを確認
+          $libmediapipeOutput = "${{ github.workspace }}/libmediapipe/output"
+          Write-Host "Checking libmediapipe output directory: $libmediapipeOutput" -ForegroundColor Yellow
+
+          if (Test-Path $libmediapipeOutput) {
+            Get-ChildItem $libmediapipeOutput -Recurse -Directory | ForEach-Object {
+              Write-Host "Found directory: $($_.FullName)" -ForegroundColor Cyan
+            }
+          } else {
+            Write-Host "libmediapipe output directory not found" -ForegroundColor Red
+          }
+
+          # ONNX Runtimeのパスを確認
+          $onnxRuntimePath = "${{ github.workspace }}/onnxruntime"
+          Write-Host "Checking ONNX Runtime path: $onnxRuntimePath" -ForegroundColor Yellow
+
+          if (Test-Path $onnxRuntimePath) {
+            Write-Host "ONNX Runtime found" -ForegroundColor Green
+          } else {
+            Write-Host "ONNX Runtime not found" -ForegroundColor Red
+          }
+
+          # CMake設定
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime" `
+            -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
+            -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         shell: powershell
 
       - name: Build DLL
