@@ -186,7 +186,7 @@ jobs:
       - name: Build libmediapipe (Windows)
         shell: cmd
         run: |
-          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" && cd libmediapipe && powershell -ExecutionPolicy Bypass -File ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}"
+          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" && where cl.exe && set && cd libmediapipe && powershell -ExecutionPolicy Bypass -File ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}"
 
       - name: Verify libmediapipe build output
         run: |
