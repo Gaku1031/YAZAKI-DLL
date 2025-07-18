@@ -213,10 +213,20 @@ jobs:
           $env:BAZEL_SH = "C:\Program Files\Git\bin\bash.exe"
 
           # Bazel設定ファイルを作成
-          $bazelrcContent = "build --enable_platform_specific_config`nbuild:windows --copt=/std:c++17`nbuild:windows --host_copt=/std:c++17`nbuild:windows --cxxopt=/std:c++17`nbuild:windows --host_cxxopt=/std:c++17`nbuild:windows --cpu=x64_windows`nbuild:windows --host_cpu=x64_windows`nbuild:windows --compiler=msvc-cl`nbuild:windows --host_compiler=msvc-cl`nbuild:windows --extra_toolchains=@bazel_tools//tools/cpp:msvc-x64`nbuild:windows --host_extra_toolchains=@bazel_tools//tools/cpp:msvc-x64"
-
+          $bazelrcLines = @(
+            "build --enable_platform_specific_config",
+            "build:windows --copt=/std:c++17",
+            "build:windows --host_copt=/std:c++17",
+            "build:windows --cxxopt=/std:c++17",
+            "build:windows --host_cxxopt=/std:c++17",
+            "build:windows --cpu=x64_windows",
+            "build:windows --host_cpu=x64_windows",
+            "build:windows --compiler=msvc-cl",
+            "build:windows --host_compiler=msvc-cl",
+            "build:windows --extra_toolchains=@bazel_tools//tools/cpp:msvc-x64"
+          )
           $bazelrcPath = "$env:USERPROFILE\.bazelrc"
-          $bazelrcContent | Out-File -FilePath $bazelrcPath -Encoding UTF8
+          [System.IO.File]::WriteAllLines($bazelrcPath, $bazelrcLines)
           Write-Host "Created Bazel configuration file: $bazelrcPath" -ForegroundColor Green
 
           # Bazelキャッシュをクリア
