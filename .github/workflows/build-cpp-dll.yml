@@ -156,14 +156,15 @@ jobs:
             dir
             echo "Available PowerShell scripts:"
             dir *.ps1
-            exit 1
+            echo "Build script not found, will use fallback method"
+            exit 0
           )
           echo "Starting libmediapipe build..."
           powershell -ExecutionPolicy Bypass -File ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}" --cxxopt /std:c++20
           echo "Build completed with exit code: %ERRORLEVEL%"
           if %ERRORLEVEL% neq 0 (
-            echo "Build failed"
-            exit 1
+            echo "Build failed, will use fallback method"
+            exit 0
           )
 
       - name: Verify libmediapipe build output
@@ -182,24 +183,87 @@ jobs:
           } else {
             Write-Host "Warning: libmediapipe output directory not found, attempting to download pre-built version..." -ForegroundColor Yellow
             
-            # 事前にビルドされたlibmediapipeをダウンロード
-            $prebuiltUrl = "https://github.com/cpvrlab/libmediapipe/releases/download/v0.8.11/libmediapipe-0.8.11-x86_64-windows.zip"
+            # libmediapipeの利用可能なリリースを確認
+            Write-Host "Checking available libmediapipe releases..." -ForegroundColor Yellow
+            try {
+              $releasesUrl = "https://api.github.com/repos/cpvrlab/libmediapipe/releases"
+              $releases = Invoke-RestMethod -Uri $releasesUrl
+              Write-Host "Available releases:" -ForegroundColor Cyan
+              foreach ($release in $releases) {
+                Write-Host "  $($release.tag_name)" -ForegroundColor White
+              }
+            } catch {
+              Write-Host "Could not fetch releases: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+            
+            # 事前にビルドされたlibmediapipeをダウンロード（複数のURLを試行）
+            $prebuiltUrls = @(
+              "https://github.com/cpvrlab/libmediapipe/releases/download/v0.8.11/libmediapipe-0.8.11-x86_64-windows.zip",
+              "https://github.com/cpvrlab/libmediapipe/releases/download/v0.8.11/libmediapipe-windows-x64.zip",
+              "https://github.com/cpvrlab/libmediapipe/releases/download/v0.8.11/windows-x64.zip"
+            )
+            
             $prebuiltZip = "libmediapipe-prebuilt.zip"
             $prebuiltDir = "${{ github.workspace }}/libmediapipe/output"
+            $downloadSuccess = $false
             
-            try {
-              Write-Host "Downloading pre-built libmediapipe..." -ForegroundColor Yellow
-              Invoke-WebRequest -Uri $prebuiltUrl -OutFile $prebuiltZip
+            foreach ($prebuiltUrl in $prebuiltUrls) {
+              try {
+                Write-Host "Trying to download from: $prebuiltUrl" -ForegroundColor Yellow
+                Invoke-WebRequest -Uri $prebuiltUrl -OutFile $prebuiltZip
+                Write-Host "Download successful from: $prebuiltUrl" -ForegroundColor Green
+                $downloadSuccess = $true
+                break
+              } catch {
+                Write-Host "Failed to download from $prebuiltUrl : $($_.Exception.Message)" -ForegroundColor Yellow
+                continue
+              }
+            }
+            
+            if ($downloadSuccess) {
+              try {
+                Write-Host "Extracting pre-built libmediapipe..." -ForegroundColor Yellow
+                New-Item -ItemType Directory -Path $prebuiltDir -Force | Out-Null
+                Expand-Archive -Path $prebuiltZip -DestinationPath $prebuiltDir -Force
+                
+                Write-Host "Pre-built libmediapipe installed successfully" -ForegroundColor Green
+              } catch {
+                Write-Host "Error: Failed to extract pre-built libmediapipe" -ForegroundColor Red
+                Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor Red
+                exit 1
+              }
+            } else {
+              Write-Host "Error: All download attempts failed" -ForegroundColor Red
+              Write-Host "Attempting to build libmediapipe manually..." -ForegroundColor Yellow
               
-              Write-Host "Extracting pre-built libmediapipe..." -ForegroundColor Yellow
-              New-Item -ItemType Directory -Path $prebuiltDir -Force | Out-Null
-              Expand-Archive -Path $prebuiltZip -DestinationPath $prebuiltDir -Force
+              # 手動ビルドの代替手段
+              cd "${{ github.workspace }}/libmediapipe"
               
-              Write-Host "Pre-built libmediapipe installed successfully" -ForegroundColor Green
-            } catch {
-              Write-Host "Error: Failed to download pre-built libmediapipe" -ForegroundColor Red
-              Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor Red
-              exit 1
+              # 必要なファイルが存在するか確認
+              if (Test-Path "CMakeLists.txt") {
+                Write-Host "CMakeLists.txt found, attempting manual build..." -ForegroundColor Green
+                
+                # 手動でCMakeビルドを実行
+                New-Item -ItemType Directory -Path "build" -Force | Out-Null
+                cd build
+                
+                cmake .. -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib"
+                if ($LASTEXITCODE -eq 0) {
+                  cmake --build . --config Release
+                  if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Manual build completed successfully" -ForegroundColor Green
+                  } else {
+                    Write-Host "Manual build failed" -ForegroundColor Red
+                    exit 1
+                  }
+                } else {
+                  Write-Host "CMake configuration failed" -ForegroundColor Red
+                  exit 1
+                }
+              } else {
+                Write-Host "Error: CMakeLists.txt not found, cannot build manually" -ForegroundColor Red
+                exit 1
+              }
             }
           }
         shell: powershell
