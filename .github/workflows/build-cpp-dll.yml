@@ -222,8 +222,7 @@ jobs:
             "build:windows --cpu=x64_windows",
             "build:windows --host_cpu=x64_windows",
             "build:windows --compiler=msvc-cl",
-            "build:windows --host_compiler=msvc-cl",
-            "build:windows --extra_toolchains=@bazel_tools//tools/cpp:msvc-x64"
+            "build:windows --host_compiler=msvc-cl"
           )
           $bazelrcPath = "$env:USERPROFILE\.bazelrc"
           [System.IO.File]::WriteAllLines($bazelrcPath, $bazelrcLines)
