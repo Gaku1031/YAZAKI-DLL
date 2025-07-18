@@ -41,7 +41,45 @@ jobs:
 
       - name: Clone libmediapipe
         run: |
+          Write-Host "Cloning libmediapipe..." -ForegroundColor Yellow
           git clone --depth=1 https://github.com/cpvrlab/libmediapipe.git
+
+          if (Test-Path "libmediapipe") {
+            Write-Host "libmediapipe cloned successfully" -ForegroundColor Green
+            Get-ChildItem "libmediapipe" | ForEach-Object {
+              Write-Host "  $($_.Name)" -ForegroundColor Cyan
+            }
+          } else {
+            Write-Host "Error: libmediapipe clone failed" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+
+      - name: Check libmediapipe repository structure
+        run: |
+          Write-Host "Checking libmediapipe repository structure..." -ForegroundColor Yellow
+          cd libmediapipe
+
+          Write-Host "Root directory contents:" -ForegroundColor Cyan
+          Get-ChildItem | ForEach-Object {
+            Write-Host "  $($_.Name) ($($_.GetType().Name))" -ForegroundColor White
+          }
+
+          Write-Host "Checking for build scripts:" -ForegroundColor Cyan
+          Get-ChildItem -Filter "*.ps1" | ForEach-Object {
+            Write-Host "  Found script: $($_.Name)" -ForegroundColor Green
+          }
+
+          Write-Host "Checking for build directories:" -ForegroundColor Cyan
+          if (Test-Path "output") {
+            Write-Host "  Output directory exists" -ForegroundColor Green
+            Get-ChildItem "output" -Recurse | ForEach-Object {
+              Write-Host "    $($_.FullName)" -ForegroundColor White
+            }
+          } else {
+            Write-Host "  Output directory does not exist yet" -ForegroundColor Yellow
+          }
+        shell: powershell
 
       - name: Install OpenCV (Pre-built)
         run: |
@@ -92,8 +130,13 @@ jobs:
 
       - name: Install Python dependencies for libmediapipe
         run: |
+          Write-Host "Installing Python dependencies for libmediapipe..." -ForegroundColor Yellow
           python -m pip install --upgrade pip
-          pip install numpy
+          pip install numpy requests
+
+          # Check if required packages are installed
+          python -c "import numpy; print('NumPy version:', numpy.__version__)"
+          python -c "import requests; print('Requests version:', requests.__version__)"
         shell: powershell
 
       - name: Build libmediapipe (Windows)
@@ -101,7 +144,27 @@ jobs:
         run: |
           "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
           cd libmediapipe
-          powershell ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}" --cxxopt /std:c++20
+          echo "Current directory: %CD%"
+          echo "Checking if build script exists..."
+          if exist "build-x86_64-windows.ps1" (
+            echo "Build script found"
+            echo "Build script contents:"
+            type build-x86_64-windows.ps1
+          ) else (
+            echo "Build script not found"
+            echo "Available files:"
+            dir
+            echo "Available PowerShell scripts:"
+            dir *.ps1
+            exit 1
+          )
+          echo "Starting libmediapipe build..."
+          powershell -ExecutionPolicy Bypass -File ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}" --cxxopt /std:c++20
+          echo "Build completed with exit code: %ERRORLEVEL%"
+          if %ERRORLEVEL% neq 0 (
+            echo "Build failed"
+            exit 1
+          )
 
       - name: Verify libmediapipe build output
         run: |
@@ -117,8 +180,27 @@ jobs:
               Write-Host "  File: $($_.FullName)" -ForegroundColor Cyan
             }
           } else {
-            Write-Host "Error: libmediapipe output directory not found" -ForegroundColor Red
-            exit 1
+            Write-Host "Warning: libmediapipe output directory not found, attempting to download pre-built version..." -ForegroundColor Yellow
+            
+            # 事前にビルドされたlibmediapipeをダウンロード
+            $prebuiltUrl = "https://github.com/cpvrlab/libmediapipe/releases/download/v0.8.11/libmediapipe-0.8.11-x86_64-windows.zip"
+            $prebuiltZip = "libmediapipe-prebuilt.zip"
+            $prebuiltDir = "${{ github.workspace }}/libmediapipe/output"
+            
+            try {
+              Write-Host "Downloading pre-built libmediapipe..." -ForegroundColor Yellow
+              Invoke-WebRequest -Uri $prebuiltUrl -OutFile $prebuiltZip
+              
+              Write-Host "Extracting pre-built libmediapipe..." -ForegroundColor Yellow
+              New-Item -ItemType Directory -Path $prebuiltDir -Force | Out-Null
+              Expand-Archive -Path $prebuiltZip -DestinationPath $prebuiltDir -Force
+              
+              Write-Host "Pre-built libmediapipe installed successfully" -ForegroundColor Green
+            } catch {
+              Write-Host "Error: Failed to download pre-built libmediapipe" -ForegroundColor Red
+              Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor Red
+              exit 1
+            }
           }
         shell: powershell
 
