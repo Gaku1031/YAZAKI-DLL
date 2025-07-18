@@ -346,6 +346,7 @@ jobs:
                 }
               }
             }
+          }
         shell: powershell
 
       - name: Create OpenCV symlink for MediaPipe
