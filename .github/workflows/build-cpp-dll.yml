@@ -166,14 +166,6 @@ jobs:
             Write-Host "Warning: CMake not found" -ForegroundColor Yellow
           }
 
-          # Check Bazel
-          try {
-            $bazelVersion = bazel --version
-            Write-Host "Bazel found: $bazelVersion" -ForegroundColor Green
-          } catch {
-            Write-Host "Warning: Bazel not found" -ForegroundColor Yellow
-          }
-
           # Check Git
           try {
             $gitVersion = git --version
@@ -183,10 +175,74 @@ jobs:
           }
         shell: powershell
 
-      - name: Build libmediapipe (Windows)
-        shell: cmd
+      - name: Install Bazel
         run: |
-          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -host_arch=x64 -arch=x64 && cd libmediapipe && powershell -ExecutionPolicy Bypass -File ./build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}"
+          Write-Host "Installing Bazel..." -ForegroundColor Yellow
+
+          # Download Bazel
+          $bazelVersion = "6.5.0"
+          $bazelUrl = "https://github.com/bazelbuild/bazel/releases/download/$bazelVersion/bazel-$bazelVersion-windows-x86_64.exe"
+          $bazelExe = "bazel.exe"
+
+          Write-Host "Downloading Bazel v$bazelVersion..." -ForegroundColor Yellow
+          Invoke-WebRequest -Uri $bazelUrl -OutFile $bazelExe
+
+          # Move to a directory in PATH
+          $bazelDir = "C:\bazel"
+          if (!(Test-Path $bazelDir)) {
+            New-Item -ItemType Directory -Path $bazelDir -Force | Out-Null
+          }
+          Move-Item $bazelExe "$bazelDir\bazel.exe" -Force
+
+          # Add to PATH
+          $env:PATH = "$bazelDir;$env:PATH"
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
+          # Verify installation
+          $bazelVersion = & "$bazelDir\bazel.exe" --version
+          Write-Host "Bazel installed: $bazelVersion" -ForegroundColor Green
+        shell: powershell
+
+      - name: Build libmediapipe (Windows)
+        shell: powershell
+        run: |
+          Write-Host "Building libmediapipe..." -ForegroundColor Yellow
+          cd libmediapipe
+
+          # Check if build script exists
+          if (Test-Path "build-x86_64-windows.ps1") {
+            Write-Host "Found build script: build-x86_64-windows.ps1" -ForegroundColor Green
+            
+            # Set environment variables for Visual Studio
+            $env:BAZEL_VS = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
+            $env:BAZEL_VC = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC"
+            $env:BAZEL_PYTHON = "C:\hostedtoolcache\windows\Python\3.9.10\x64\python.exe"
+            
+            # Set additional environment variables for MSVC detection
+            $env:BAZEL_USE_CPP_ONLY_TOOLCHAIN = "1"
+            $env:BAZEL_VC_FULL_VERSION = "14.37.32822"
+            
+            Write-Host "Environment variables set:" -ForegroundColor Cyan
+            Write-Host "  BAZEL_VS: $env:BAZEL_VS" -ForegroundColor White
+            Write-Host "  BAZEL_VC: $env:BAZEL_VC" -ForegroundColor White
+            Write-Host "  BAZEL_PYTHON: $env:BAZEL_PYTHON" -ForegroundColor White
+            
+            # Run the build script
+            Write-Host "Running build script..." -ForegroundColor Yellow
+            & .\build-x86_64-windows.ps1 --version v0.8.11 --config release --opencv_dir "${{ env.OpenCV_DIR }}"
+            
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "libmediapipe build completed successfully" -ForegroundColor Green
+            } else {
+              Write-Host "libmediapipe build failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+              exit $LASTEXITCODE
+            }
+          } else {
+            Write-Host "Error: build-x86_64-windows.ps1 not found" -ForegroundColor Red
+            Write-Host "Available files:" -ForegroundColor Yellow
+            Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor White }
+            exit 1
+          }
 
       - name: Verify libmediapipe build output
         run: |
