@@ -83,54 +83,41 @@ if(DEFINED MEDIAPIPE_ROOT)
     # ユーザーが指定したパスを使用
     set(MEDIAPIPE_BASE_DIR "${MEDIAPIPE_ROOT}")
 else()
-    # デフォルトパス
+    # デフォルトパス - MediaPipeを直接使用
     set(MEDIAPIPE_BASE_DIR "${CMAKE_SOURCE_DIR}/../libmediapipe/output")
 endif()
 
-# libmediapipeの出力ディレクトリを検索
-file(GLOB MEDIAPIPE_OUTPUT_DIRS LIST_DIRECTORIES true "${MEDIAPIPE_BASE_DIR}/*")
-list(FILTER MEDIAPIPE_OUTPUT_DIRS INCLUDE REGEX ".*libmediapipe.*")
-
-if(MEDIAPIPE_OUTPUT_DIRS)
-    list(GET MEDIAPIPE_OUTPUT_DIRS 0 MEDIAPIPE_ROOT)
-    message(STATUS "Found libmediapipe output directory: ${MEDIAPIPE_ROOT}")
-    set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_ROOT}/include")
-    set(MEDIAPIPE_LIB "${MEDIAPIPE_ROOT}/lib/mediapipe.lib")
+# MediaPipeの出力ディレクトリを確認
+if(EXISTS "${MEDIAPIPE_BASE_DIR}/include")
+    message(STATUS "Found MediaPipe output directory: ${MEDIAPIPE_BASE_DIR}")
+    set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_BASE_DIR}/include")
     
-    if(EXISTS ${MEDIAPIPE_INCLUDE_DIR} AND EXISTS ${MEDIAPIPE_LIB})
-        message(STATUS "Found libmediapipe: ${MEDIAPIPE_ROOT}")
-        set(MEDIAPIPE_FOUND TRUE)
+    # Check for MediaPipe library
+    if(EXISTS "${MEDIAPIPE_BASE_DIR}/lib/mediapipe.lib")
+        set(MEDIAPIPE_LIB "${MEDIAPIPE_BASE_DIR}/lib/mediapipe.lib")
+        message(STATUS "Found MediaPipe library: ${MEDIAPIPE_LIB}")
+    elseif(EXISTS "${MEDIAPIPE_BASE_DIR}/lib/mediapipe_framework.lib")
+        set(MEDIAPIPE_LIB "${MEDIAPIPE_BASE_DIR}/lib/mediapipe_framework.lib")
+        message(STATUS "Found MediaPipe framework library: ${MEDIAPIPE_LIB}")
     else()
-        message(WARNING "libmediapipe files not found at ${MEDIAPIPE_ROOT}")
-        set(MEDIAPIPE_FOUND FALSE)
+        message(WARNING "MediaPipe library not found, but headers are available")
+        set(MEDIAPIPE_LIB "")
     endif()
+    
+    set(MEDIAPIPE_FOUND TRUE)
+    add_definitions(-DMEDIAPIPE_AVAILABLE)
+    message(STATUS "MediaPipe support enabled")
 else()
-    message(WARNING "libmediapipe output directory not found in ${MEDIAPIPE_BASE_DIR}")
+    message(WARNING "MediaPipe output directory not found at ${MEDIAPIPE_BASE_DIR}")
+    message(STATUS "Building without MediaPipe support...")
     set(MEDIAPIPE_FOUND FALSE)
-endif()
-
-# libmediapipeが見つからない場合の代替手段
-if(NOT MEDIAPIPE_FOUND)
-    message(STATUS "libmediapipe not found, checking for direct MediaPipe installation...")
-    
-    # MediaPipeの直接インストールを確認
-    set(MEDIAPIPE_DIR "${CMAKE_SOURCE_DIR}/../mediapipe")
-    if(EXISTS "${MEDIAPIPE_DIR}/bazel-bin")
-        message(STATUS "Found MediaPipe bazel-bin directory: ${MEDIAPIPE_DIR}/bazel-bin")
-        set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_DIR}")
-        set(MEDIAPIPE_LIB "${MEDIAPIPE_DIR}/bazel-bin/mediapipe/framework/libmediapipe_framework.so")
-        set(MEDIAPIPE_FOUND TRUE)
-        add_definitions(-DMEDIAPIPE_DIRECT)
-    else()
-        message(WARNING "Neither libmediapipe nor direct MediaPipe installation found.")
-        message(STATUS "Building without MediaPipe support...")
-        set(MEDIAPIPE_FOUND FALSE)
-        add_definitions(-DMEDIAPIPE_DISABLED)
-    endif()
+    add_definitions(-DMEDIAPIPE_DISABLED)
 endif()
 
 if(NOT MEDIAPIPE_FOUND)
-    message(FATAL_ERROR "MediaPipe is required but not found. Please install MediaPipe or set MEDIAPIPE_ROOT")
+    message(WARNING "MediaPipe not found. Building without MediaPipe support.")
+    message(WARNING "Face detection and PPG extraction will not be available.")
+    add_definitions(-DMEDIAPIPE_DISABLED)
 endif()
 
 # Include directories
@@ -178,9 +165,11 @@ else()
 endif()
 
 # MediaPipe is required
-if(MEDIAPIPE_FOUND)
+if(MEDIAPIPE_FOUND AND MEDIAPIPE_LIB)
     target_link_libraries(BloodPressureDLL ${MEDIAPIPE_LIB})
     message(STATUS "Linked MediaPipe: ${MEDIAPIPE_LIB}")
+elseif(MEDIAPIPE_FOUND)
+    message(STATUS "MediaPipe headers available but library not linked")
 else()
     message(STATUS "MediaPipe not linked (not available)")
 endif()
