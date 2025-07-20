@@ -466,18 +466,29 @@ jobs:
           .\vcpkg\vcpkg install zlib:x64-windows
         shell: powershell
 
-      - name: Create Dummy Models
+      - name: Convert PKL Models to ONNX
         run: |
           cd CppBloodPressureDLL
 
-          # Install ONNX for model creation
-          python -m pip install onnx numpy
+          # Install required packages for model conversion
+          python -m pip install onnx numpy scikit-learn joblib
 
-          # Create dummy models
-          python models/create_dummy_models.py
+          # Copy PKL models from root models directory
+          if (Test-Path "../models/model_sbp.pkl") {
+            Copy-Item "../models/model_sbp.pkl" "models/" -Force
+            Write-Host "SBP PKL model copied" -ForegroundColor Green
+          }
+          if (Test-Path "../models/model_dbp.pkl") {
+            Copy-Item "../models/model_dbp.pkl" "models/" -Force
+            Write-Host "DBP PKL model copied" -ForegroundColor Green
+          }
+
+          # Convert PKL models to ONNX
+          Write-Host "Converting PKL models to ONNX..." -ForegroundColor Yellow
+          python models/convert_pkl_to_onnx.py
 
           # Verify models were created
-          Write-Host "Checking model files..." -ForegroundColor Yellow
+          Write-Host "Checking converted model files..." -ForegroundColor Yellow
           Get-ChildItem models/ -Recurse | ForEach-Object {
             Write-Host "  $($_.FullName)" -ForegroundColor Cyan
           }
@@ -589,6 +600,25 @@ jobs:
           # Copy required runtime DLLs
           Write-Host "Copying required runtime DLLs..." -ForegroundColor Yellow
 
+          # Copy main DLL first
+          $mainDllPaths = @(
+            "../build/bin/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll",
+            "../build/lib/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll"
+          )
+          $mainDllFound = $false
+          foreach ($path in $mainDllPaths) {
+            if (Test-Path $path) {
+              Copy-Item $path "." -Force
+              Write-Host "Main DLL copied from: $path" -ForegroundColor Green
+              $mainDllFound = $true
+              break
+            }
+          }
+          if (-not $mainDllFound) {
+            Write-Host "Error: Main DLL not found" -ForegroundColor Red
+            exit 1
+          }
+
           # Copy OpenCV runtime with multiple path attempts
           $opencvPaths = @(
             "../../opencv/opencv/build/x64/vc16/bin/opencv_world480.dll",
@@ -630,7 +660,8 @@ jobs:
           $zlibPaths = @(
             "../build/_deps/zlib-build/Release/zlib.dll",
             "../../vcpkg/installed/x64-windows/bin/zlib.dll",
-            "../../vcpkg/installed/x64-windows/debug/bin/zlib.dll"
+            "../../vcpkg/installed/x64-windows/debug/bin/zlib.dll",
+            "../build/_deps/zlib-build/Debug/zlib.dll"
           )
           $zlibFound = $false
           foreach ($path in $zlibPaths) {
@@ -643,6 +674,14 @@ jobs:
           }
           if (-not $zlibFound) {
             Write-Host "Warning: ZLIB DLL not found in any expected location" -ForegroundColor Yellow
+            Write-Host "Searching for zlib in vcpkg..." -ForegroundColor Yellow
+            $vcpkgSearch = Get-ChildItem -Path "../../vcpkg" -Recurse -Name "zlib.dll" -ErrorAction SilentlyContinue
+            if ($vcpkgSearch) {
+              $zlibPath = "../../vcpkg/$($vcpkgSearch[0])"
+              Copy-Item $zlibPath "." -Force
+              Write-Host "ZLIB DLL found and copied from: $zlibPath" -ForegroundColor Green
+              $zlibFound = $true
+            }
           }
 
           # Copy models directory
@@ -673,6 +712,10 @@ jobs:
           # Set up environment
           $env:PATH = "$PWD;" + $env:PATH
 
+          # Set additional environment variables for DLL loading
+          $env:OPENCV_DIR = "$PWD"
+          $env:ONNXRUNTIME_ROOT = "$PWD"
+
           # Create test results directory
           New-Item -ItemType Directory -Path "test-results" -Force | Out-Null
 
@@ -699,6 +742,16 @@ jobs:
             Get-ChildItem "models/" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
           } else {
             Write-Host "Missing: models directory" -ForegroundColor Red
+          }
+
+          # Try to load DLL manually to test dependencies
+          Write-Host "Testing DLL loading..." -ForegroundColor Yellow
+          try {
+            Add-Type -Path "BloodPressureDLL.dll" -ErrorAction Stop
+            Write-Host "DLL loaded successfully" -ForegroundColor Green
+          } catch {
+            Write-Host "DLL loading failed: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "This may indicate missing dependencies" -ForegroundColor Yellow
           }
 
           # Run test and capture output
@@ -838,7 +891,9 @@ jobs:
             # Try alternative paths
             $altPaths = @(
               "vcpkg/installed/x64-windows/bin/zlib.dll",
-              "vcpkg/installed/x64-windows/debug/bin/zlib.dll"
+              "vcpkg/installed/x64-windows/debug/bin/zlib.dll",
+              "CppBloodPressureDLL/build/_deps/zlib-build/Release/zlib.dll",
+              "CppBloodPressureDLL/build/_deps/zlib-build/Debug/zlib.dll"
             )
             $found = $false
             foreach ($path in $altPaths) {
@@ -851,6 +906,14 @@ jobs:
             }
             if (-not $found) {
               Write-Host "Warning: ZLIB not found in any expected location" -ForegroundColor Yellow
+              Write-Host "Searching for zlib in vcpkg..." -ForegroundColor Yellow
+              $vcpkgSearch = Get-ChildItem -Path "vcpkg" -Recurse -Name "zlib.dll" -ErrorAction SilentlyContinue
+              if ($vcpkgSearch) {
+                $zlibPath = "vcpkg/$($vcpkgSearch[0])"
+                Copy-Item $zlibPath "dist_cpp/" -Force
+                Write-Host "ZLIB found and copied from: $zlibPath" -ForegroundColor Green
+                $found = $true
+              }
             }
           }
 
