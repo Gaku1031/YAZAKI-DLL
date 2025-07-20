@@ -5,10 +5,55 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <opencv2/opencv.hpp>
+#include <opencv2/dnn.hpp>
 
 #ifdef ONNXRUNTIME_AVAILABLE
 #include <onnxruntime_cxx_api.h>
 #endif
+
+// OpenCV DNN fallback implementation
+class BPOpenCVImpl {
+public:
+    cv::dnn::Net sbp_net;
+    cv::dnn::Net dbp_net;
+    bool models_loaded;
+
+    BPOpenCVImpl(const std::string& model_dir)
+        : models_loaded(false)
+    {
+        try {
+            std::string sbp_path = model_dir + "/model_sbp.onnx";
+            std::string dbp_path = model_dir + "/model_dbp.onnx";
+            
+            sbp_net = cv::dnn::readNetFromONNX(sbp_path);
+            dbp_net = cv::dnn::readNetFromONNX(dbp_path);
+            
+            models_loaded = true;
+        } catch (const cv::Exception& e) {
+            throw std::runtime_error("Failed to load ONNX models with OpenCV DNN: " + std::string(e.what()));
+        }
+    }
+
+    float run(const cv::dnn::Net& net, const std::vector<float>& features) {
+        if (!models_loaded) {
+            throw std::runtime_error("Models not loaded");
+        }
+
+        // Create input blob
+        cv::Mat input_blob = cv::Mat(1, features.size(), CV_32F);
+        for (size_t i = 0; i < features.size(); ++i) {
+            input_blob.at<float>(0, i) = features[i];
+        }
+
+        // Set input and run inference
+        net.setInput(input_blob);
+        cv::Mat output = net.forward();
+
+        // Get output value
+        return output.at<float>(0, 0);
+    }
+};
 
 #ifdef ONNXRUNTIME_AVAILABLE
 class BPONNXImpl {
@@ -56,11 +101,14 @@ public:
 #else
 class BPONNXImpl {
 public:
+    // Dummy session type for when ONNX Runtime is not available
+    struct DummySession {};
+    
     BPONNXImpl(const std::string& model_dir) {
         throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
     }
 
-    float run(const Ort::Session& session, const std::vector<float>& features) {
+    float run(const DummySession& session, const std::vector<float>& features) {
         throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
     }
 };
@@ -69,6 +117,8 @@ public:
 struct BloodPressureEstimator::Impl {
 #ifdef ONNXRUNTIME_AVAILABLE
     std::unique_ptr<BPONNXImpl> onnx;
+#else
+    std::unique_ptr<BPOpenCVImpl> opencv;
 #endif
 };
 
@@ -77,6 +127,8 @@ BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
 {
 #ifdef ONNXRUNTIME_AVAILABLE
     pImpl->onnx = std::make_unique<BPONNXImpl>(model_dir);
+#else
+    pImpl->opencv = std::make_unique<BPOpenCVImpl>(model_dir);
 #endif
 }
 
@@ -102,7 +154,8 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
     float sbp = pImpl->onnx->run(pImpl->onnx->sbp_session, features);
     float dbp = pImpl->onnx->run(pImpl->onnx->dbp_session, features);
 #else
-    throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
+    float sbp = pImpl->opencv->run(pImpl->opencv->sbp_net, features);
+    float dbp = pImpl->opencv->run(pImpl->opencv->dbp_net, features);
 #endif
 
     return {int(std::round(sbp)), int(std::round(dbp))};
