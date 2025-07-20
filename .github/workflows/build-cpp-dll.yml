@@ -466,6 +466,23 @@ jobs:
           .\vcpkg\vcpkg install zlib:x64-windows
         shell: powershell
 
+      - name: Create Dummy Models
+        run: |
+          cd CppBloodPressureDLL
+
+          # Install ONNX for model creation
+          python -m pip install onnx numpy
+
+          # Create dummy models
+          python models/create_dummy_models.py
+
+          # Verify models were created
+          Write-Host "Checking model files..." -ForegroundColor Yellow
+          Get-ChildItem models/ -Recurse | ForEach-Object {
+            Write-Host "  $($_.FullName)" -ForegroundColor Cyan
+          }
+        shell: powershell
+
       - name: Configure CMake
         run: |
           cd CppBloodPressureDLL
@@ -572,37 +589,72 @@ jobs:
           # Copy required runtime DLLs
           Write-Host "Copying required runtime DLLs..." -ForegroundColor Yellow
 
-          # Copy OpenCV runtime
-          $opencvDll = "../../opencv/opencv/build/x64/vc16/bin/opencv_world480.dll"
-          if (Test-Path $opencvDll) {
-            Copy-Item $opencvDll "." -Force
-            Write-Host "OpenCV runtime DLL copied" -ForegroundColor Green
-          } else {
-            Write-Host "Warning: OpenCV runtime DLL not found" -ForegroundColor Yellow
+          # Copy OpenCV runtime with multiple path attempts
+          $opencvPaths = @(
+            "../../opencv/opencv/build/x64/vc16/bin/opencv_world480.dll",
+            "../../opencv/build/x64/vc16/bin/opencv_world480.dll",
+            "../../opencv/build/bin/opencv_world480.dll"
+          )
+          $opencvFound = $false
+          foreach ($path in $opencvPaths) {
+            if (Test-Path $path) {
+              Copy-Item $path "." -Force
+              Write-Host "OpenCV runtime DLL copied from: $path" -ForegroundColor Green
+              $opencvFound = $true
+              break
+            }
+          }
+          if (-not $opencvFound) {
+            Write-Host "Warning: OpenCV runtime DLL not found in any expected location" -ForegroundColor Yellow
           }
 
-          # Copy ONNX Runtime
-          $onnxDll = "../../onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll"
-          if (Test-Path $onnxDll) {
-            Copy-Item $onnxDll "." -Force
-            Write-Host "ONNX Runtime DLL copied" -ForegroundColor Green
-          } else {
-            Write-Host "Warning: ONNX Runtime DLL not found" -ForegroundColor Yellow
+          # Copy ONNX Runtime with multiple path attempts
+          $onnxPaths = @(
+            "../../onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll",
+            "../../onnxruntime/lib/onnxruntime.dll"
+          )
+          $onnxFound = $false
+          foreach ($path in $onnxPaths) {
+            if (Test-Path $path) {
+              Copy-Item $path "." -Force
+              Write-Host "ONNX Runtime DLL copied from: $path" -ForegroundColor Green
+              $onnxFound = $true
+              break
+            }
+          }
+          if (-not $onnxFound) {
+            Write-Host "Warning: ONNX Runtime DLL not found in any expected location" -ForegroundColor Yellow
           }
 
-          # Copy ZLIB
-          $zlibDll = "../build/_deps/zlib-build/Release/zlib.dll"
-          if (Test-Path $zlibDll) {
-            Copy-Item $zlibDll "." -Force
-            Write-Host "ZLIB DLL copied" -ForegroundColor Green
-          } else {
-            Write-Host "Warning: ZLIB DLL not found" -ForegroundColor Yellow
+          # Copy ZLIB with multiple path attempts
+          $zlibPaths = @(
+            "../build/_deps/zlib-build/Release/zlib.dll",
+            "../../vcpkg/installed/x64-windows/bin/zlib.dll",
+            "../../vcpkg/installed/x64-windows/debug/bin/zlib.dll"
+          )
+          $zlibFound = $false
+          foreach ($path in $zlibPaths) {
+            if (Test-Path $path) {
+              Copy-Item $path "." -Force
+              Write-Host "ZLIB DLL copied from: $path" -ForegroundColor Green
+              $zlibFound = $true
+              break
+            }
+          }
+          if (-not $zlibFound) {
+            Write-Host "Warning: ZLIB DLL not found in any expected location" -ForegroundColor Yellow
           }
 
           # Copy models directory
           if (Test-Path "../models") {
             Copy-Item "../models" "." -Recurse -Force
             Write-Host "Models directory copied" -ForegroundColor Green
+            
+            # Verify model files
+            Write-Host "Verifying model files..." -ForegroundColor Yellow
+            Get-ChildItem "models/" -Recurse | ForEach-Object {
+              Write-Host "  $($_.FullName)" -ForegroundColor Cyan
+            }
           } else {
             Write-Host "Warning: Models directory not found" -ForegroundColor Yellow
           }
@@ -623,6 +675,31 @@ jobs:
 
           # Create test results directory
           New-Item -ItemType Directory -Path "test-results" -Force | Out-Null
+
+          # Verify all required files are present
+          Write-Host "Verifying test environment..." -ForegroundColor Yellow
+          Write-Host "Current directory: $PWD" -ForegroundColor Cyan
+          Write-Host "Files in current directory:" -ForegroundColor Cyan
+          Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
+
+          # Check for DLL and dependencies
+          $requiredFiles = @("BloodPressureDLL.dll", "opencv_world480.dll", "onnxruntime.dll", "zlib.dll")
+          foreach ($file in $requiredFiles) {
+            if (Test-Path $file) {
+              Write-Host "✓ Found: $file" -ForegroundColor Green
+            } else {
+              Write-Host "✗ Missing: $file" -ForegroundColor Red
+            }
+          }
+
+          # Check for models directory
+          if (Test-Path "models") {
+            Write-Host "✓ Found: models directory" -ForegroundColor Green
+            Write-Host "Models directory contents:" -ForegroundColor Cyan
+            Get-ChildItem "models/" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+          } else {
+            Write-Host "✗ Missing: models directory" -ForegroundColor Red
+          }
 
           # Run test and capture output
           Write-Host "Running integration test..." -ForegroundColor Yellow
@@ -785,14 +862,24 @@ jobs:
             Write-Host "Warning: Model files not found" -ForegroundColor Yellow
           }
 
-          # Copy OpenCV DNN model files
+          # Copy OpenCV DNN model files (from root directory)
           if (Test-Path "opencv_face_detector_uint8.pb") {
             Copy-Item "opencv_face_detector_uint8.pb" "dist_cpp/models/" -Force
-            Write-Host "OpenCV DNN model copied" -ForegroundColor Green
+            Write-Host "OpenCV DNN model copied from root" -ForegroundColor Green
           }
           if (Test-Path "opencv_face_detector.pbtxt") {
             Copy-Item "opencv_face_detector.pbtxt" "dist_cpp/models/" -Force
-            Write-Host "OpenCV DNN config copied" -ForegroundColor Green
+            Write-Host "OpenCV DNN config copied from root" -ForegroundColor Green
+          }
+
+          # Copy OpenCV DNN model files (from models directory)
+          if (Test-Path "CppBloodPressureDLL/models/opencv_face_detector_uint8.pb") {
+            Copy-Item "CppBloodPressureDLL/models/opencv_face_detector_uint8.pb" "dist_cpp/models/" -Force
+            Write-Host "OpenCV DNN model copied from models directory" -ForegroundColor Green
+          }
+          if (Test-Path "CppBloodPressureDLL/models/opencv_face_detector.pbtxt") {
+            Copy-Item "CppBloodPressureDLL/models/opencv_face_detector.pbtxt" "dist_cpp/models/" -Force
+            Write-Host "OpenCV DNN config copied from models directory" -ForegroundColor Green
           }
 
           # Copy sample data
@@ -822,7 +909,24 @@ jobs:
             Copy-Item "CppBloodPressureDLL/test/bin/${{ env.BUILD_TYPE }}/net6.0/*" "dist_cpp/" -Force
             Write-Host "Test application copied" -ForegroundColor Green
           } else {
-            Write-Host "Warning: Test application not found" -ForegroundColor Yellow
+            # Try alternative paths
+            $altPaths = @(
+              "CppBloodPressureDLL/test/bin/${{ env.BUILD_TYPE }}/net6.0",
+              "CppBloodPressureDLL/test/bin/Debug/net6.0",
+              "CppBloodPressureDLL/test/bin/Release/net6.0"
+            )
+            $found = $false
+            foreach ($path in $altPaths) {
+              if (Test-Path $path) {
+                Copy-Item "$path/*" "dist_cpp/" -Force
+                Write-Host "Test application copied from: $path" -ForegroundColor Green
+                $found = $true
+                break
+              }
+            }
+            if (-not $found) {
+              Write-Host "Warning: Test application not found in any expected location" -ForegroundColor Yellow
+            }
           }
 
           # Copy test results
