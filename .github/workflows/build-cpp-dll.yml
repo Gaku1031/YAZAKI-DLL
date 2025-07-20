@@ -483,14 +483,60 @@ jobs:
             Write-Host "DBP PKL model copied" -ForegroundColor Green
           }
 
+          # Verify PKL models exist
+          Write-Host "Verifying PKL models..." -ForegroundColor Yellow
+          if (Test-Path "models/model_sbp.pkl") {
+            $size = [math]::Round((Get-Item "models/model_sbp.pkl").Length / 1KB, 2)
+            Write-Host "SBP PKL model: $size KB" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: SBP PKL model not found" -ForegroundColor Red
+            exit 1
+          }
+          if (Test-Path "models/model_dbp.pkl") {
+            $size = [math]::Round((Get-Item "models/model_dbp.pkl").Length / 1KB, 2)
+            Write-Host "DBP PKL model: $size KB" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: DBP PKL model not found" -ForegroundColor Red
+            exit 1
+          }
+
           # Convert PKL models to ONNX
           Write-Host "Converting PKL models to ONNX..." -ForegroundColor Yellow
-          python models/convert_pkl_to_onnx.py
+          try {
+            # Run conversion from CppBloodPressureDLL directory
+            python models/convert_pkl_to_onnx.py
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "ERROR: ONNX conversion failed" -ForegroundColor Red
+              exit 1
+            }
+          } catch {
+            Write-Host "ERROR: ONNX conversion failed with exception: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
 
-          # Verify models were created
-          Write-Host "Checking converted model files..." -ForegroundColor Yellow
-          Get-ChildItem models/ -Recurse | ForEach-Object {
-            Write-Host "  $($_.FullName)" -ForegroundColor Cyan
+          # Verify ONNX models were created
+          Write-Host "Verifying converted ONNX models..." -ForegroundColor Yellow
+          $onnxFiles = Get-ChildItem "models/" -Filter "*.onnx"
+          if ($onnxFiles.Count -eq 0) {
+            Write-Host "ERROR: No ONNX models were created" -ForegroundColor Red
+            Write-Host "Models directory contents:" -ForegroundColor Yellow
+            Get-ChildItem "models/" -Recurse | ForEach-Object {
+              Write-Host "  $($_.FullName)" -ForegroundColor Cyan
+            }
+            exit 1
+          } else {
+            Write-Host "ONNX models created successfully:" -ForegroundColor Green
+            $onnxFiles | ForEach-Object {
+              $size = [math]::Round($_.Length / 1KB, 2)
+              Write-Host "  $($_.Name) ($size KB)" -ForegroundColor Green
+            }
+          }
+
+          # List all files in models directory
+          Write-Host "All files in models directory:" -ForegroundColor Cyan
+          Get-ChildItem "models/" -Recurse | ForEach-Object {
+            $size = [math]::Round($_.Length / 1KB, 2)
+            Write-Host "  $($_.FullName) ($size KB)" -ForegroundColor Cyan
           }
         shell: powershell
 
