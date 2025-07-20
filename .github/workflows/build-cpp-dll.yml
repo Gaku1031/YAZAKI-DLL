@@ -205,15 +205,15 @@ jobs:
               Write-Host "Error: Failed to extract pre-built MediaPipe" -ForegroundColor Red
               Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor Red
               
-                             # Fallback: Create minimal MediaPipe headers
-               Write-Host "Creating minimal MediaPipe headers as fallback..." -ForegroundColor Yellow
-               $minimalHeaders = @(
-                 "mediapipe/framework/calculator_framework.h",
-                 "mediapipe/framework/formats/image_frame.h",
-                 "mediapipe/framework/formats/landmark.pb.h",
-                 "mediapipe/framework/formats/image_frame_opencv.h",
-                 "mediapipe/framework/port/status.h"
-               )
+              # Fallback: Create minimal MediaPipe headers
+              Write-Host "Creating minimal MediaPipe headers as fallback..." -ForegroundColor Yellow
+              $minimalHeaders = @(
+                "mediapipe/framework/calculator_framework.h",
+                "mediapipe/framework/formats/image_frame.h",
+                "mediapipe/framework/formats/landmark.pb.h",
+                "mediapipe/framework/formats/image_frame_opencv.h",
+                "mediapipe/framework/port/status.h"
+              )
               
               foreach ($header in $minimalHeaders) {
                 $headerPath = "$outputDir/include/$header"
@@ -281,19 +281,20 @@ jobs:
                 "mediapipe/framework/formats/image_frame_opencv.h",
                 "mediapipe/framework/port/status.h"
               )
-            
-            foreach ($header in $minimalHeaders) {
-              $headerPath = "$outputDir/include/$header"
-              $headerDir = Split-Path $headerPath -Parent
-              if (!(Test-Path $headerDir)) {
-                New-Item -ItemType Directory -Path $headerDir -Force | Out-Null
+              
+              foreach ($header in $minimalHeaders) {
+                $headerPath = "$outputDir/include/$header"
+                $headerDir = Split-Path $headerPath -Parent
+                if (!(Test-Path $headerDir)) {
+                  New-Item -ItemType Directory -Path $headerDir -Force | Out-Null
+                }
+                
+                $headerContent = "// Minimal MediaPipe header: $header`n#ifndef MEDIAPIPE_MINIMAL_HEADER`n#define MEDIAPIPE_MINIMAL_HEADER`n`n#define MEDIAPIPE_AVAILABLE 1`n`n#include <opencv2/opencv.hpp>`n`nnamespace mediapipe {`n  namespace framework {`n    namespace formats {`n      class ImageFrame;`n      class NormalizedLandmarkList;`n      namespace {`n        inline cv::Mat MatView(ImageFrame* frame) { return cv::Mat(); }`n      }`n    }`n    class CalculatorGraph;`n    class CalculatorGraphConfig;`n    class Packet;`n    class Timestamp;`n    class GraphRunner;`n    template<typename T> T Adopt(T* ptr) { return T(); }`n  }`n}`n`n#endif"
+                [System.IO.File]::WriteAllText($headerPath, $headerContent)
               }
               
-              $headerContent = "// Minimal MediaPipe header: $header`n#ifndef MEDIAPIPE_MINIMAL_HEADER`n#define MEDIAPIPE_MINIMAL_HEADER`n`n#define MEDIAPIPE_AVAILABLE 1`n`n#include <opencv2/opencv.hpp>`n`nnamespace mediapipe {`n  namespace framework {`n    namespace formats {`n      class ImageFrame;`n      class NormalizedLandmarkList;`n      namespace {`n        inline cv::Mat MatView(ImageFrame* frame) { return cv::Mat(); }`n      }`n    }`n    class CalculatorGraph;`n    class CalculatorGraphConfig;`n    class Packet;`n    class Timestamp;`n    class GraphRunner;`n    template<typename T> T Adopt(T* ptr) { return T(); }`n  }`n}`n`n#endif"
-              [System.IO.File]::WriteAllText($headerPath, $headerContent)
+              Write-Host "Minimal MediaPipe headers created" -ForegroundColor Green
             }
-            
-            Write-Host "Minimal MediaPipe headers created" -ForegroundColor Green
           }
 
       - name: Install ONNX Runtime
