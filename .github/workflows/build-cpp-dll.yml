@@ -523,6 +523,8 @@ jobs:
             Get-ChildItem "models/" -Recurse | ForEach-Object {
               Write-Host "  $($_.FullName)" -ForegroundColor Cyan
             }
+            Write-Host "This will cause DLL initialization failure" -ForegroundColor Red
+            Write-Host "Please check PKL files and scikit-learn version compatibility" -ForegroundColor Red
             exit 1
           } else {
             Write-Host "ONNX models created successfully:" -ForegroundColor Green

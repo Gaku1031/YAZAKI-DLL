@@ -3,36 +3,95 @@
 Convert PKL models to ONNX format for blood pressure estimation
 """
 
-import pickle
-import numpy as np
-import onnx
+from sklearn.svm import SVR
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 from onnx import helper, numpy_helper
 import os
 import sys
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.svm import SVR
-import joblib
+import pickle
+import numpy as np
+import warnings
+
+# Suppress scikit-learn version warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+
+try:
+    import joblib
+    print("Joblib available for model loading")
+except ImportError:
+    print("Warning: Joblib not available, falling back to pickle")
+    joblib = None
+
+try:
+    import onnx
+    print("ONNX available for model conversion")
+except ImportError:
+    print("Error: ONNX not available")
+    sys.exit(1)
 
 
-def load_pkl_model(model_path):
-    """Load PKL model and determine its type"""
+def load_pkl_model(file_path):
+    """Load PKL model with multiple fallback methods"""
+    print(f"Loading model from: {file_path}")
+    print(f"File exists: {os.path.exists(file_path)}")
+    print(f"File size: {os.path.getsize(file_path)} bytes")
+
+    # Try multiple loading methods - prioritize joblib for scikit-learn models
+    loading_methods = []
+
+    if joblib is not None:
+        loading_methods.append(
+            ("Joblib (recommended for scikit-learn)", lambda f: joblib.load(f)))
+
+    loading_methods.extend([
+        ("Standard pickle", lambda f: pickle.load(f)),
+        ("Pickle with protocol 5", lambda f: pickle.load(f, protocol=5)),
+        ("Pickle with protocol 4", lambda f: pickle.load(f, protocol=4)),
+        ("Pickle with protocol 3", lambda f: pickle.load(f, protocol=3)),
+    ])
+
+    for method_name, load_func in loading_methods:
+        try:
+            print(f"Trying {method_name}...")
+
+            # Try different file opening modes
+            for mode in ['rb', 'r+b']:
+                try:
+                    with open(file_path, mode) as f:
+                        model = load_func(f)
+                        print(
+                            f"Successfully loaded with {method_name} (mode: {mode})")
+                        return model
+                except Exception as e:
+                    print(
+                        f"  Failed with mode {mode}: {type(e).__name__}: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"  {method_name} failed: {type(e).__name__}: {e}")
+            continue
+
+    # If all methods fail, analyze the file for debugging
+    print("All loading methods failed. Analyzing file content for debugging...")
     try:
-        print(f"Loading model from: {model_path}")
-        print(f"File exists: {os.path.exists(model_path)}")
-        print(f"File size: {os.path.getsize(model_path)} bytes")
+        with open(file_path, 'rb') as f:
+            content = f.read(100)  # Read first 100 bytes
+            print(f"File header (hex): {content[:20].hex()}")
+            print(f"File header (ascii): {repr(content[:20])}")
 
-        with open(model_path, 'rb') as f:
-            model = pickle.load(f)
+            # Check if it's a text file
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    first_line = f.readline().strip()
+                    print(f"First line: {repr(first_line)}")
+            except:
+                print("File is not readable as text (expected for binary PKL files)")
 
-        print(f"Model loaded successfully: {type(model)}")
-        return model
     except Exception as e:
-        print(f"Error loading {model_path}: {e}")
-        print(f"Exception type: {type(e)}")
-        import traceback
-        traceback.print_exc()
-        return None
+        print(f"File analysis failed: {e}")
+
+    return None
 
 
 def create_onnx_from_sklearn(model, model_name, input_shape=(1, 10)):
@@ -163,6 +222,9 @@ def main():
         ("model_dbp.pkl", "DiastolicBloodPressure")
     ]
 
+    conversion_success = True
+    successful_conversions = 0
+
     for pkl_file, model_name in model_files:
         print(f"\nProcessing {pkl_file}...")
 
@@ -181,16 +243,24 @@ def main():
                 break
 
         if pkl_path is None:
-            print(f"Warning: {pkl_file} not found in any expected location")
+            print(f"Error: {pkl_file} not found in any expected location")
             print("Searched in:")
             for path in possible_paths:
                 print(f"  - {os.path.abspath(path)}")
+            conversion_success = False
             continue
 
         # Load PKL model
         model = load_pkl_model(pkl_path)
         if model is None:
-            print(f"Failed to load {pkl_path}")
+            print(f"Failed to load {pkl_path}. Cannot create ONNX model.")
+            print(
+                f"ERROR: {model_name} model could not be loaded from {pkl_path}")
+            print("This may be due to:")
+            print("  - Corrupted PKL file")
+            print("  - Incompatible scikit-learn version")
+            print("  - File encoding issues")
+            conversion_success = False
             continue
 
         # Print model information
@@ -226,15 +296,18 @@ def main():
             try:
                 onnx.checker.check_model(onnx_model)
                 print(f"ONNX model validation passed for {onnx_file}")
+                successful_conversions += 1
             except Exception as e:
                 print(f"ONNX model validation failed for {onnx_file}: {e}")
                 import traceback
                 traceback.print_exc()
+                conversion_success = False
 
         except Exception as e:
             print(f"Error converting {pkl_path} to ONNX: {e}")
             import traceback
             traceback.print_exc()
+            conversion_success = False
             continue
 
     # Create dummy OpenCV DNN files if they don't exist
@@ -258,14 +331,17 @@ def main():
             f.write("}\n")
         print("OpenCV DNN config created: models/opencv_face_detector.pbtxt")
 
-    print("\nAll models converted successfully!")
-
-    # List all files
-    print("\nFiles in models directory:")
-    for file in os.listdir("models"):
-        file_path = os.path.join("models", file)
-        size = os.path.getsize(file_path)
-        print(f"  {file} ({size} bytes)")
+    # Report conversion results
+    if conversion_success and successful_conversions == len(model_files):
+        print(
+            f"\nAll models converted successfully! ({successful_conversions}/{len(model_files)})")
+    else:
+        print(
+            f"\nModel conversion failed! ({successful_conversions}/{len(model_files)} successful)")
+        print("ERROR: Some models could not be converted to ONNX format.")
+        print("This will prevent the DLL from functioning properly.")
+        print("Please check the PKL files and ensure they are compatible with the current scikit-learn version.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
