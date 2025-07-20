@@ -686,19 +686,19 @@ jobs:
           $requiredFiles = @("BloodPressureDLL.dll", "opencv_world480.dll", "onnxruntime.dll", "zlib.dll")
           foreach ($file in $requiredFiles) {
             if (Test-Path $file) {
-              Write-Host "✓ Found: $file" -ForegroundColor Green
+              Write-Host "Found: $file" -ForegroundColor Green
             } else {
-              Write-Host "✗ Missing: $file" -ForegroundColor Red
+              Write-Host "Missing: $file" -ForegroundColor Red
             }
           }
 
           # Check for models directory
           if (Test-Path "models") {
-            Write-Host "✓ Found: models directory" -ForegroundColor Green
+            Write-Host "Found: models directory" -ForegroundColor Green
             Write-Host "Models directory contents:" -ForegroundColor Cyan
             Get-ChildItem "models/" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
           } else {
-            Write-Host "✗ Missing: models directory" -ForegroundColor Red
+            Write-Host "Missing: models directory" -ForegroundColor Red
           }
 
           # Run test and capture output
