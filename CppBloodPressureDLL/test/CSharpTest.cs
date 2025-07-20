@@ -2,6 +2,8 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace BloodPressureDllTest
 {
