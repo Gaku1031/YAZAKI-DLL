@@ -8,14 +8,8 @@
 #include <algorithm>
 #include <numeric>
 
-// MediaPipeが利用可能な場合のみ定義
-#ifdef MEDIAPIPE_AVAILABLE
-#include <mediapipe/framework/calculator_framework.h>
-#include <mediapipe/framework/formats/image_frame.h>
-#include <mediapipe/framework/formats/landmark.pb.h>
-#include <mediapipe/framework/formats/image_frame_opencv.h>
-#include <mediapipe/framework/graph_runner.h>
-#endif
+// OpenCV DNN for face detection
+#include <opencv2/dnn.hpp>
 
 // 顔のROIのランドマーク番号（MediaPipeの顔メッシュ）
 const std::vector<int> FACE_ROI_LANDMARKS = {
@@ -24,83 +18,6 @@ const std::vector<int> FACE_ROI_LANDMARKS = {
 };
 
 struct RPPGProcessor::Impl {
-#ifdef MEDIAPIPE_AVAILABLE
-    // MediaPipe Face Mesh Graph
-    std::unique_ptr<mediapipe::CalculatorGraph> graph;
-    std::string input_stream_name;
-    std::string output_stream_name;
-    
-    Impl() {
-        // MediaPipe Face Mesh Graphの初期化
-        mediapipe::CalculatorGraphConfig config;
-        config.add_input_stream("input_video");
-        config.add_output_stream("output_video");
-        config.add_output_stream("face_landmarks");
-        
-        // Face Mesh Graphの設定
-        auto* face_mesh_node = config.add_node();
-        face_mesh_node->set_calculator("FaceLandmarkFrontCpu");
-        face_mesh_node->add_input_stream("input_video");
-        face_mesh_node->add_output_stream("output_video");
-        face_mesh_node->add_output_stream("face_landmarks");
-        
-        // Graphの初期化
-        auto status = graph->Initialize(config);
-        if (!status.ok()) {
-            throw std::runtime_error("Failed to initialize MediaPipe Face Mesh Graph: " + status.message());
-        }
-        
-        input_stream_name = "input_video";
-        output_stream_name = "face_landmarks";
-    }
-    
-    std::vector<cv::Point2f> detectFaceLandmarks(const cv::Mat& frame) {
-        std::vector<cv::Point2f> landmarks;
-        
-        // OpenCV MatをMediaPipe ImageFrameに変換
-        cv::Mat rgb_frame;
-        cv::cvtColor(frame, rgb_frame, cv::COLOR_BGR2RGB);
-        
-        auto input_frame = std::make_unique<mediapipe::ImageFrame>(
-            mediapipe::ImageFormat::SRGB, rgb_frame.cols, rgb_frame.rows,
-            mediapipe::ImageFrame::kDefaultAlignmentBoundary);
-        
-        cv::Mat input_frame_mat = mediapipe::formats::MatView(input_frame.get());
-        rgb_frame.copyTo(input_frame_mat);
-        
-        // Graphにフレームを送信
-        size_t frame_timestamp_us = 0; // タイムスタンプ
-        auto status = graph->AddPacketToInputStream(
-            input_stream_name,
-            mediapipe::Adopt(input_frame.release())
-                .At(mediapipe::Timestamp(frame_timestamp_us)));
-        
-        if (!status.ok()) {
-            std::cerr << "Failed to send frame to MediaPipe: " << status.message() << std::endl;
-            return landmarks;
-        }
-        
-        // 結果を取得
-        mediapipe::Packet packet;
-        status = graph->GetOutputStreamPoller(output_stream_name).Next(&packet);
-        
-        if (status.ok() && !packet.IsEmpty()) {
-            const auto& face_landmarks = packet.Get<mediapipe::NormalizedLandmarkList>();
-            
-            // 指定されたランドマークを抽出
-            for (int landmark_id : FACE_ROI_LANDMARKS) {
-                if (landmark_id < face_landmarks.landmark_size()) {
-                    const auto& landmark = face_landmarks.landmark(landmark_id);
-                    float x = landmark.x() * frame.cols;
-                    float y = landmark.y() * frame.rows;
-                    landmarks.push_back(cv::Point2f(x, y));
-                }
-            }
-        }
-        
-        return landmarks;
-    }
-#else
     // OpenCV DNN Face Detection
     cv::dnn::Net face_detector;
     bool dnn_initialized = false;
@@ -160,7 +77,65 @@ struct RPPGProcessor::Impl {
         
         return landmarks;
     }
-#endif
+    // OpenCV DNN Face Detection
+    cv::dnn::Net face_detector;
+    bool dnn_initialized = false;
+    
+    Impl() {
+        // Initialize OpenCV DNN face detector
+        try {
+            face_detector = cv::dnn::readNetFromTensorflow("opencv_face_detector_uint8.pb", "opencv_face_detector.pbtxt");
+            dnn_initialized = true;
+        } catch (const cv::Exception& e) {
+            std::cerr << "Failed to load OpenCV DNN face detector: " << e.what() << std::endl;
+            dnn_initialized = false;
+        }
+    }
+    
+    std::vector<cv::Point2f> detectFaceLandmarks(const cv::Mat& frame) {
+        std::vector<cv::Point2f> landmarks;
+        
+        if (!dnn_initialized) {
+            return landmarks;
+        }
+        
+        // Prepare input blob
+        cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(300, 300), cv::Scalar(104.0, 177.0, 123.0), false, false);
+        face_detector.setInput(blob);
+        
+        // Forward pass
+        cv::Mat detections = face_detector.forward();
+        
+        // Process detections
+        cv::Mat detectionMat(detections.size[2], detections.size[3], CV_32F, detections.ptr<float>());
+        
+        for (int i = 0; i < detectionMat.rows; i++) {
+            float confidence = detectionMat.at<float>(i, 2);
+            
+            if (confidence > 0.5) { // Confidence threshold
+                int x1 = static_cast<int>(detectionMat.at<float>(i, 3) * frame.cols);
+                int y1 = static_cast<int>(detectionMat.at<float>(i, 4) * frame.rows);
+                int x2 = static_cast<int>(detectionMat.at<float>(i, 5) * frame.cols);
+                int y2 = static_cast<int>(detectionMat.at<float>(i, 6) * frame.rows);
+                
+                // Create face ROI landmarks (rectangular)
+                landmarks.push_back(cv::Point2f(x1, y1));
+                landmarks.push_back(cv::Point2f(x2, y1));
+                landmarks.push_back(cv::Point2f(x2, y2));
+                landmarks.push_back(cv::Point2f(x1, y2));
+                
+                // Add more points for better ROI coverage
+                landmarks.push_back(cv::Point2f((x1 + x2) / 2, y1));
+                landmarks.push_back(cv::Point2f((x1 + x2) / 2, y2));
+                landmarks.push_back(cv::Point2f(x1, (y1 + y2) / 2));
+                landmarks.push_back(cv::Point2f(x2, (y1 + y2) / 2));
+                
+                break; // Use first detected face
+            }
+        }
+        
+        return landmarks;
+    }
 };
 
 RPPGProcessor::RPPGProcessor() : pImpl(std::make_unique<Impl>()) {

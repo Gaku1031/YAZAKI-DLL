@@ -41,14 +41,14 @@ public:
         }
 
         // Create input blob
-        cv::Mat input_blob = cv::Mat(1, features.size(), CV_32F);
+        cv::Mat input_blob = cv::Mat(1, static_cast<int>(features.size()), CV_32F);
         for (size_t i = 0; i < features.size(); ++i) {
-            input_blob.at<float>(0, i) = features[i];
+            input_blob.at<float>(0, static_cast<int>(i)) = features[i];
         }
 
         // Set input and run inference
-        net.setInput(input_blob);
-        cv::Mat output = net.forward();
+        const_cast<cv::dnn::Net&>(net).setInput(input_blob);
+        cv::Mat output = const_cast<cv::dnn::Net&>(net).forward();
 
         // Get output value
         return output.at<float>(0, 0);
