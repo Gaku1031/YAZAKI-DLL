@@ -716,7 +716,7 @@ jobs:
           Get-ChildItem | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
 
           # Check for DLL and dependencies
-          $requiredFiles = @("BloodPressureDLL.dll", "opencv_world470.dll", "onnxruntime.dll", "zlib.dll")
+          $requiredFiles = @("BloodPressureDLL.dll", "opencv_world480.dll", "onnxruntime.dll", "zlib.dll")
           foreach ($file in $requiredFiles) {
             if (Test-Path $file) {
               Write-Host "Found: $file" -ForegroundColor Green
@@ -730,6 +730,17 @@ jobs:
             Write-Host "Found: models directory" -ForegroundColor Green
             Write-Host "Models directory contents:" -ForegroundColor Cyan
             Get-ChildItem "models/" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+            
+            # Check for ONNX model files specifically
+            Write-Host "Checking for ONNX model files..." -ForegroundColor Yellow
+            $onnxFiles = Get-ChildItem "models/" -Filter "*.onnx" -Recurse
+            if ($onnxFiles.Count -gt 0) {
+              Write-Host "Found ONNX model files:" -ForegroundColor Green
+              $onnxFiles | ForEach-Object { Write-Host "  $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)" -ForegroundColor Green }
+            } else {
+              Write-Host "WARNING: No ONNX model files found!" -ForegroundColor Red
+              Write-Host "This may be the cause of DLL initialization failure" -ForegroundColor Red
+            }
           } else {
             Write-Host "Missing: models directory" -ForegroundColor Red
           }
@@ -742,6 +753,19 @@ jobs:
           } catch {
             Write-Host "DLL loading failed: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "This may indicate missing dependencies" -ForegroundColor Yellow
+            
+            # Additional DLL diagnostics
+            Write-Host "Additional DLL diagnostics:" -ForegroundColor Yellow
+            Write-Host "- DLL file size: $((Get-Item 'BloodPressureDLL.dll').Length / 1KB) KB" -ForegroundColor Cyan
+            Write-Host "- DLL creation time: $((Get-Item 'BloodPressureDLL.dll').CreationTime)" -ForegroundColor Cyan
+            
+            # Check if DLL is 64-bit
+            try {
+              $dllInfo = Get-Item 'BloodPressureDLL.dll'
+              Write-Host "- DLL architecture check: $($dllInfo.VersionInfo.FileDescription)" -ForegroundColor Cyan
+            } catch {
+              Write-Host "- DLL architecture check: Failed" -ForegroundColor Red
+            }
           }
 
                     # Test DLL loading with detailed error information
@@ -762,6 +786,16 @@ jobs:
           Write-Host "Running integration test..." -ForegroundColor Yellow
           $testOutput = dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }} 2>&1
           $testExitCode = $LASTEXITCODE
+
+          # Check if test output contains error indicators
+          $hasErrors = $false
+          if ($testOutput -match "External component has thrown an exception" -or 
+              $testOutput -match "エラー:" -or 
+              $testOutput -match "ERROR:" -or
+              $testOutput -match "Exception") {
+            $hasErrors = $true
+            Write-Host "Test output contains errors - marking as FAILED" -ForegroundColor Red
+          }
 
           # Save test output to file
           $testOutput | Out-File -FilePath "test-results/integration_test_output.txt" -Encoding UTF8
@@ -793,7 +827,12 @@ jobs:
           Add-Content -Path "test-results/test_summary.txt" -Value "Build Type: ${{ env.BUILD_TYPE }}"
           Add-Content -Path "test-results/test_summary.txt" -Value "Commit: ${{ github.sha }}"
           Add-Content -Path "test-results/test_summary.txt" -Value ""
-          Add-Content -Path "test-results/test_summary.txt" -Value "Test Status: $(if ($testExitCode -eq 0) { 'PASSED' } else { 'FAILED' })"
+
+          # Determine actual test status based on content analysis
+          $actualTestStatus = if ($hasErrors -or $testExitCode -ne 0) { "FAILED" } else { "PASSED" }
+          Add-Content -Path "test-results/test_summary.txt" -Value "Test Status: $actualTestStatus"
+          Add-Content -Path "test-results/test_summary.txt" -Value "Exit Code: $testExitCode"
+          Add-Content -Path "test-results/test_summary.txt" -Value "Has Errors: $hasErrors"
           Add-Content -Path "test-results/test_summary.txt" -Value ""
           Add-Content -Path "test-results/test_summary.txt" -Value "Files Generated:"
           Get-ChildItem -Path "." -Filter "bp_result_*.csv" | ForEach-Object {
@@ -803,8 +842,35 @@ jobs:
           Add-Content -Path "test-results/test_summary.txt" -Value "Test Output:"
           Add-Content -Path "test-results/test_summary.txt" -Value $testOutput
 
-          if ($testExitCode -ne 0) {
+          # Additional diagnostic information
+          Add-Content -Path "test-results/test_summary.txt" -Value ""
+          Add-Content -Path "test-results/test_summary.txt" -Value "=== Diagnostic Information ==="
+          Add-Content -Path "test-results/test_summary.txt" -Value "Current Directory: $PWD"
+          Add-Content -Path "test-results/test_summary.txt" -Value "Environment PATH: $env:PATH"
+          Add-Content -Path "test-results/test_summary.txt" -Value "OpenCV_DIR: $env:OPENCV_DIR"
+          Add-Content -Path "test-results/test_summary.txt" -Value "ONNXRUNTIME_ROOT: $env:ONNXRUNTIME_ROOT"
+
+          # List all DLLs in current directory
+          Add-Content -Path "test-results/test_summary.txt" -Value ""
+          Add-Content -Path "test-results/test_summary.txt" -Value "DLLs in current directory:"
+          Get-ChildItem -Path "." -Filter "*.dll" | ForEach-Object {
+            Add-Content -Path "test-results/test_summary.txt" -Value "- $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+          }
+
+          # List models directory contents
+          Add-Content -Path "test-results/test_summary.txt" -Value ""
+          Add-Content -Path "test-results/test_summary.txt" -Value "Models directory contents:"
+          if (Test-Path "models") {
+            Get-ChildItem -Path "models" -Recurse | ForEach-Object {
+              Add-Content -Path "test-results/test_summary.txt" -Value "- $($_.FullName.Replace($PWD, '')) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+            }
+          } else {
+            Add-Content -Path "test-results/test_summary.txt" -Value "- models directory not found"
+          }
+
+          if ($hasErrors -or $testExitCode -ne 0) {
             Write-Host "Integration test failed" -ForegroundColor Red
+            Write-Host "Test contains errors or exceptions" -ForegroundColor Red
             exit 1
           }
 

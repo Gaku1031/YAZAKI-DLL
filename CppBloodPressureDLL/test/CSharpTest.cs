@@ -165,12 +165,73 @@ namespace BloodPressureDllTest
             {
                 // 1. DLL初期化テスト
                 Console.WriteLine("\n1. DLL初期化テスト");
-                int initResult = InitializeBP("models");
-                Console.WriteLine($"   初期化結果: {initResult}");
                 
-                if (initResult == 0)
+                // 事前チェック
+                Console.WriteLine("   事前チェック:");
+                Console.WriteLine($"   - カレントディレクトリ: {Environment.CurrentDirectory}");
+                Console.WriteLine($"   - DLLファイル存在: {File.Exists("BloodPressureDLL.dll")}");
+                Console.WriteLine($"   - Modelsディレクトリ存在: {Directory.Exists("models")}");
+                
+                if (Directory.Exists("models"))
                 {
-                    Console.WriteLine("   初期化失敗");
+                    Console.WriteLine("   - Modelsディレクトリ内容:");
+                    foreach (var file in Directory.GetFiles("models", "*", SearchOption.AllDirectories))
+                    {
+                        var fileInfo = new FileInfo(file);
+                        Console.WriteLine($"     {file} ({fileInfo.Length / 1024} KB)");
+                    }
+                }
+                
+                // 依存DLLの存在チェック
+                var requiredDlls = new[] { "opencv_world480.dll", "onnxruntime.dll", "zlib.dll" };
+                Console.WriteLine("   - 依存DLLチェック:");
+                foreach (var dll in requiredDlls)
+                {
+                    Console.WriteLine($"     {dll}: {File.Exists(dll)}");
+                }
+                
+                // DLL初期化を試行
+                Console.WriteLine("   DLL初期化を試行中...");
+                try
+                {
+                    int initResult = InitializeBP("models");
+                    Console.WriteLine($"   初期化結果: {initResult}");
+                    
+                    if (initResult == 0)
+                    {
+                        Console.WriteLine("   初期化失敗 - 戻り値が0");
+                        return;
+                    }
+                    
+                    Console.WriteLine("   [SUCCESS] DLL初期化成功");
+                }
+                catch (DllNotFoundException ex)
+                {
+                    Console.WriteLine($"   [ERROR] DLLが見つかりません: {ex.Message}");
+                    Console.WriteLine($"   詳細: {ex}");
+                    return;
+                }
+                catch (BadImageFormatException ex)
+                {
+                    Console.WriteLine($"   [ERROR] DLLの形式が不正です: {ex.Message}");
+                    Console.WriteLine($"   詳細: {ex}");
+                    return;
+                }
+                catch (EntryPointNotFoundException ex)
+                {
+                    Console.WriteLine($"   [ERROR] DLLの関数が見つかりません: {ex.Message}");
+                    Console.WriteLine($"   詳細: {ex}");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"   [ERROR] DLL初期化で予期しないエラー: {ex.Message}");
+                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
+                    Console.WriteLine($"   詳細: {ex}");
+                    if (ex.InnerException != null)
+                    {
+                        Console.WriteLine($"   内部例外: {ex.InnerException.Message}");
+                    }
                     return;
                 }
                 
