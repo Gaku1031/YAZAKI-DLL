@@ -744,6 +744,88 @@ jobs:
             Write-Host "This may indicate missing dependencies" -ForegroundColor Yellow
           }
 
+          # Test DLL functions individually with detailed error handling
+          Write-Host "Testing individual DLL functions..." -ForegroundColor Yellow
+
+          # Create a simple test program to check DLL functions
+          Add-Content -Path "DLLTest.cs" -Value "using System;"
+          Add-Content -Path "DLLTest.cs" -Value "using System.Runtime.InteropServices;"
+          Add-Content -Path "DLLTest.cs" -Value ""
+          Add-Content -Path "DLLTest.cs" -Value "public class DLLTest"
+          Add-Content -Path "DLLTest.cs" -Value "{"
+          Add-Content -Path "DLLTest.cs" -Value "    [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]"
+          Add-Content -Path "DLLTest.cs" -Value "    public static extern int InitializeBP([MarshalAs(UnmanagedType.LPStr)] string modelDir);"
+          Add-Content -Path "DLLTest.cs" -Value "    "
+          Add-Content -Path "DLLTest.cs" -Value "    [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]"
+          Add-Content -Path "DLLTest.cs" -Value "    [return: MarshalAs(UnmanagedType.LPStr)]"
+          Add-Content -Path "DLLTest.cs" -Value "    public static extern string GetVersionInfo();"
+          Add-Content -Path "DLLTest.cs" -Value "    "
+          Add-Content -Path "DLLTest.cs" -Value "    [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]"
+          Add-Content -Path "DLLTest.cs" -Value "    [return: MarshalAs(UnmanagedType.LPStr)]"
+          Add-Content -Path "DLLTest.cs" -Value "    public static extern string GenerateRequestId();"
+          Add-Content -Path "DLLTest.cs" -Value "    "
+          Add-Content -Path "DLLTest.cs" -Value "    public static void Main()"
+          Add-Content -Path "DLLTest.cs" -Value "    {"
+          Add-Content -Path "DLLTest.cs" -Value "        Console.WriteLine(\"=== DLL Function Test ===\");"
+          Add-Content -Path "DLLTest.cs" -Value "        "
+          Add-Content -Path "DLLTest.cs" -Value "        try"
+          Add-Content -Path "DLLTest.cs" -Value "        {"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine(\"1. Testing GetVersionInfo...\");"
+          Add-Content -Path "DLLTest.cs" -Value "            string version = GetVersionInfo();"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine($\"   Version: {version ?? \"null\"}\");"
+          Add-Content -Path "DLLTest.cs" -Value "        }"
+          Add-Content -Path "DLLTest.cs" -Value "        catch (Exception ex)"
+          Add-Content -Path "DLLTest.cs" -Value "        {"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine($\"   ERROR: {ex.Message}\");"
+          Add-Content -Path "DLLTest.cs" -Value "        }"
+          Add-Content -Path "DLLTest.cs" -Value "        "
+          Add-Content -Path "DLLTest.cs" -Value "        try"
+          Add-Content -Path "DLLTest.cs" -Value "        {"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine(\"2. Testing GenerateRequestId...\");"
+          Add-Content -Path "DLLTest.cs" -Value "            string requestId = GenerateRequestId();"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine($\"   Request ID: {requestId ?? \"null\"}\");"
+          Add-Content -Path "DLLTest.cs" -Value "        }"
+          Add-Content -Path "DLLTest.cs" -Value "        catch (Exception ex)"
+          Add-Content -Path "DLLTest.cs" -Value "        {"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine($\"   ERROR: {ex.Message}\");"
+          Add-Content -Path "DLLTest.cs" -Value "        }"
+          Add-Content -Path "DLLTest.cs" -Value "        "
+          Add-Content -Path "DLLTest.cs" -Value "        try"
+          Add-Content -Path "DLLTest.cs" -Value "        {"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine(\"3. Testing InitializeBP...\");"
+          Add-Content -Path "DLLTest.cs" -Value "            int result = InitializeBP(\"models\");"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine($\"   Initialize result: {result}\");"
+          Add-Content -Path "DLLTest.cs" -Value "        }"
+          Add-Content -Path "DLLTest.cs" -Value "        catch (Exception ex)"
+          Add-Content -Path "DLLTest.cs" -Value "        {"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine($\"   ERROR: {ex.Message}\");"
+          Add-Content -Path "DLLTest.cs" -Value "            Console.WriteLine($\"   Exception type: {ex.GetType().Name}\");"
+          Add-Content -Path "DLLTest.cs" -Value "            if (ex.InnerException != null)"
+          Add-Content -Path "DLLTest.cs" -Value "            {"
+          Add-Content -Path "DLLTest.cs" -Value "                Console.WriteLine($\"   Inner exception: {ex.InnerException.Message}\");"
+          Add-Content -Path "DLLTest.cs" -Value "            }"
+          Add-Content -Path "DLLTest.cs" -Value "        }"
+          Add-Content -Path "DLLTest.cs" -Value "    }"
+          Add-Content -Path "DLLTest.cs" -Value "}"
+
+          # Test code file is now created by Add-Content above
+
+          # Compile and run the test
+          Write-Host "Compiling and running DLL function test..." -ForegroundColor Yellow
+          try {
+            csc.exe DLLTest.cs /reference:System.dll
+            if ($LASTEXITCODE -eq 0) {
+              $dllTestOutput = .\DLLTest.exe 2>&1
+              $dllTestOutput | Out-File -FilePath "test-results/dll_function_test.txt" -Encoding UTF8
+              Write-Host "DLL function test output:" -ForegroundColor Cyan
+              $dllTestOutput | ForEach-Object { Write-Host $_ }
+            } else {
+              Write-Host "Failed to compile DLL test" -ForegroundColor Red
+            }
+          } catch {
+            Write-Host "DLL function test failed: $($_.Exception.Message)" -ForegroundColor Red
+          }
+
           # Run test and capture output
           Write-Host "Running integration test..." -ForegroundColor Yellow
           $testOutput = dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }} 2>&1
