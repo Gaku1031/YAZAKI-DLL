@@ -38,13 +38,21 @@ if(DEFINED ONNXRUNTIME_INCLUDE_DIR AND DEFINED ONNXRUNTIME_LIB_DIR)
     set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_INCLUDE_DIR}")
     set(ONNXRUNTIME_LIB "${ONNXRUNTIME_LIB_DIR}/onnxruntime.lib")
     
-    if(EXISTS ${ONNXRUNTIME_INCLUDE_DIR} AND EXISTS ${ONNXRUNTIME_LIB})
-        message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_INCLUDE_DIR}")
+    message(STATUS "ONNX Runtime include dir: ${ONNXRUNTIME_INCLUDE_DIR}")
+    message(STATUS "ONNX Runtime lib: ${ONNXRUNTIME_LIB}")
+    
+    if(EXISTS "${ONNXRUNTIME_INCLUDE_DIR}")
+        message(STATUS "Found ONNX Runtime include directory")
         set(ONNXRUNTIME_FOUND TRUE)
     else()
-        message(WARNING "ONNX Runtime not found at provided paths")
-        message(STATUS "Include dir: ${ONNXRUNTIME_INCLUDE_DIR}")
-        message(STATUS "Lib: ${ONNXRUNTIME_LIB}")
+        message(WARNING "ONNX Runtime include directory not found")
+        set(ONNXRUNTIME_FOUND FALSE)
+    endif()
+    
+    if(EXISTS "${ONNXRUNTIME_LIB}")
+        message(STATUS "Found ONNX Runtime library")
+    else()
+        message(WARNING "ONNX Runtime library not found")
         set(ONNXRUNTIME_FOUND FALSE)
     endif()
 elseif(DEFINED ONNXRUNTIME_ROOT)
@@ -52,45 +60,27 @@ elseif(DEFINED ONNXRUNTIME_ROOT)
     set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_ROOT}/include")
     set(ONNXRUNTIME_LIB "${ONNXRUNTIME_ROOT}/lib/onnxruntime.lib")
     
-    if(EXISTS ${ONNXRUNTIME_INCLUDE_DIR} AND EXISTS ${ONNXRUNTIME_LIB})
-        message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_ROOT}")
+    message(STATUS "ONNX Runtime root: ${ONNXRUNTIME_ROOT}")
+    message(STATUS "ONNX Runtime include dir: ${ONNXRUNTIME_INCLUDE_DIR}")
+    message(STATUS "ONNX Runtime lib: ${ONNXRUNTIME_LIB}")
+    
+    if(EXISTS "${ONNXRUNTIME_INCLUDE_DIR}")
+        message(STATUS "Found ONNX Runtime include directory")
         set(ONNXRUNTIME_FOUND TRUE)
     else()
-        message(WARNING "ONNX Runtime not found at ${ONNXRUNTIME_ROOT}")
-        message(STATUS "Checking ONNXRUNTIME_ROOT contents:")
-        if(EXISTS ${ONNXRUNTIME_ROOT})
-            file(GLOB ONNX_CONTENTS "${ONNXRUNTIME_ROOT}/*")
-            foreach(item ${ONNX_CONTENTS})
-                message(STATUS "  ${item}")
-            endforeach()
-        endif()
+        message(WARNING "ONNX Runtime include directory not found")
+        set(ONNXRUNTIME_FOUND FALSE)
+    endif()
+    
+    if(EXISTS "${ONNXRUNTIME_LIB}")
+        message(STATUS "Found ONNX Runtime library")
+    else()
+        message(WARNING "ONNX Runtime library not found")
         set(ONNXRUNTIME_FOUND FALSE)
     endif()
 else()
-    # Fallback search
-    find_path(ONNXRUNTIME_INCLUDE_DIR 
-        NAMES onnxruntime_cxx_api.h
-        PATHS 
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime/include
-            ENV ONNXRUNTIME_ROOT_PATH
-        PATH_SUFFIXES include
-    )
-
-    find_library(ONNXRUNTIME_LIB
-        NAMES onnxruntime
-        PATHS 
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/lib
-            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime/lib
-            ENV ONNXRUNTIME_ROOT_PATH
-        PATH_SUFFIXES lib
-    )
-    
-    if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIB)
-        set(ONNXRUNTIME_FOUND TRUE)
-    else()
-        set(ONNXRUNTIME_FOUND FALSE)
-    endif()
+    message(WARNING "ONNX Runtime paths not defined")
+    set(ONNXRUNTIME_FOUND FALSE)
 endif()
 
 # Find MediaPipe (required)
