@@ -33,7 +33,22 @@ FetchContent_MakeAvailable(eigen)
 find_package(Eigen3 REQUIRED NO_MODULE)
 
 # Try to find ONNX Runtime
-if(DEFINED ONNXRUNTIME_ROOT)
+if(DEFINED ONNXRUNTIME_INCLUDE_DIR AND DEFINED ONNXRUNTIME_LIB_DIR)
+    # Use explicitly provided paths
+    set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_INCLUDE_DIR}")
+    set(ONNXRUNTIME_LIB "${ONNXRUNTIME_LIB_DIR}/onnxruntime.lib")
+    
+    if(EXISTS ${ONNXRUNTIME_INCLUDE_DIR} AND EXISTS ${ONNXRUNTIME_LIB})
+        message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_INCLUDE_DIR}")
+        set(ONNXRUNTIME_FOUND TRUE)
+    else()
+        message(WARNING "ONNX Runtime not found at provided paths")
+        message(STATUS "Include dir: ${ONNXRUNTIME_INCLUDE_DIR}")
+        message(STATUS "Lib: ${ONNXRUNTIME_LIB}")
+        set(ONNXRUNTIME_FOUND FALSE)
+    endif()
+elseif(DEFINED ONNXRUNTIME_ROOT)
+    # Fallback to ONNXRUNTIME_ROOT
     set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_ROOT}/include")
     set(ONNXRUNTIME_LIB "${ONNXRUNTIME_ROOT}/lib/onnxruntime.lib")
     

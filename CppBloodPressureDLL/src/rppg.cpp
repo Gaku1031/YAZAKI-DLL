@@ -3,6 +3,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/objdetect.hpp>
+#include <opencv2/dnn.hpp>
 #include <Eigen/Dense>
 #include <algorithm>
 #include <numeric>
@@ -23,6 +24,7 @@ const std::vector<int> FACE_ROI_LANDMARKS = {
 };
 
 struct RPPGProcessor::Impl {
+#ifdef MEDIAPIPE_AVAILABLE
     // MediaPipe Face Mesh Graph
     std::unique_ptr<mediapipe::CalculatorGraph> graph;
     std::string input_stream_name;
@@ -98,6 +100,67 @@ struct RPPGProcessor::Impl {
         
         return landmarks;
     }
+#else
+    // OpenCV DNN Face Detection
+    cv::dnn::Net face_detector;
+    bool dnn_initialized = false;
+    
+    Impl() {
+        // Initialize OpenCV DNN face detector
+        try {
+            face_detector = cv::dnn::readNetFromTensorflow("opencv_face_detector_uint8.pb", "opencv_face_detector.pbtxt");
+            dnn_initialized = true;
+        } catch (const cv::Exception& e) {
+            std::cerr << "Failed to load OpenCV DNN face detector: " << e.what() << std::endl;
+            dnn_initialized = false;
+        }
+    }
+    
+    std::vector<cv::Point2f> detectFaceLandmarks(const cv::Mat& frame) {
+        std::vector<cv::Point2f> landmarks;
+        
+        if (!dnn_initialized) {
+            return landmarks;
+        }
+        
+        // Prepare input blob
+        cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(300, 300), cv::Scalar(104.0, 177.0, 123.0), false, false);
+        face_detector.setInput(blob);
+        
+        // Forward pass
+        cv::Mat detections = face_detector.forward();
+        
+        // Process detections
+        cv::Mat detectionMat(detections.size[2], detections.size[3], CV_32F, detections.ptr<float>());
+        
+        for (int i = 0; i < detectionMat.rows; i++) {
+            float confidence = detectionMat.at<float>(i, 2);
+            
+            if (confidence > 0.5) { // Confidence threshold
+                int x1 = static_cast<int>(detectionMat.at<float>(i, 3) * frame.cols);
+                int y1 = static_cast<int>(detectionMat.at<float>(i, 4) * frame.rows);
+                int x2 = static_cast<int>(detectionMat.at<float>(i, 5) * frame.cols);
+                int y2 = static_cast<int>(detectionMat.at<float>(i, 6) * frame.rows);
+                
+                // Create face ROI landmarks (rectangular)
+                landmarks.push_back(cv::Point2f(x1, y1));
+                landmarks.push_back(cv::Point2f(x2, y1));
+                landmarks.push_back(cv::Point2f(x2, y2));
+                landmarks.push_back(cv::Point2f(x1, y2));
+                
+                // Add more points for better ROI coverage
+                landmarks.push_back(cv::Point2f((x1 + x2) / 2, y1));
+                landmarks.push_back(cv::Point2f((x1 + x2) / 2, y2));
+                landmarks.push_back(cv::Point2f(x1, (y1 + y2) / 2));
+                landmarks.push_back(cv::Point2f(x2, (y1 + y2) / 2));
+                
+                break; // Use first detected face
+            }
+        }
+        
+        return landmarks;
+    }
+#endif
 };
 
 RPPGProcessor::RPPGProcessor() : pImpl(std::make_unique<Impl>()) {

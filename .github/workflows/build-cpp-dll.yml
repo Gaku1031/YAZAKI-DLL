@@ -171,13 +171,14 @@ jobs:
               Write-Host "Error: Failed to extract pre-built MediaPipe" -ForegroundColor Red
               Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor Red
               
-              # Fallback: Create minimal MediaPipe headers
-              Write-Host "Creating minimal MediaPipe headers as fallback..." -ForegroundColor Yellow
-              $minimalHeaders = @(
-                "mediapipe/framework/calculator_framework.h",
-                "mediapipe/framework/formats/image_frame.h",
-                "mediapipe/framework/port/status.h"
-              )
+                             # Fallback: Create minimal MediaPipe headers
+               Write-Host "Creating minimal MediaPipe headers as fallback..." -ForegroundColor Yellow
+               $minimalHeaders = @(
+                 "mediapipe/framework/calculator_framework.h",
+                 "mediapipe/framework/formats/image_frame.h",
+                 "mediapipe/framework/formats/landmark.pb.h",
+                 "mediapipe/framework/port/status.h"
+               )
               
               foreach ($header in $minimalHeaders) {
                 $headerPath = "$outputDir/include/$header"
@@ -196,12 +197,13 @@ jobs:
             Write-Host "Error: All download attempts failed" -ForegroundColor Red
             Write-Host "Creating minimal MediaPipe headers as fallback..." -ForegroundColor Yellow
             
-            # Create minimal headers
-            $minimalHeaders = @(
-              "mediapipe/framework/calculator_framework.h",
-              "mediapipe/framework/formats/image_frame.h",
-              "mediapipe/framework/port/status.h"
-            )
+                         # Create minimal headers
+             $minimalHeaders = @(
+               "mediapipe/framework/calculator_framework.h",
+               "mediapipe/framework/formats/image_frame.h",
+               "mediapipe/framework/formats/landmark.pb.h",
+               "mediapipe/framework/port/status.h"
+             )
             
             foreach ($header in $minimalHeaders) {
               $headerPath = "$outputDir/include/$header"
@@ -335,7 +337,9 @@ jobs:
           # CMake設定
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime" `
+            -DONNXRUNTIME_ROOT="${{ env.ONNXRUNTIME_ROOT }}" `
+            -DONNXRUNTIME_INCLUDE_DIR="${{ env.ONNXRUNTIME_INCLUDE_DIR }}" `
+            -DONNXRUNTIME_LIB_DIR="${{ env.ONNXRUNTIME_LIB_DIR }}" `
             -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
@@ -395,6 +399,16 @@ jobs:
           } else {
             Write-Host "Warning: Real sample video not found, creating dummy video" -ForegroundColor Yellow
             "dummy video content for testing" | Out-File -FilePath "sample_video.webm" -Encoding UTF8
+          }
+
+          # Copy OpenCV DNN model files
+          if (Test-Path "../../opencv_face_detector_uint8.pb") {
+            Copy-Item "../../opencv_face_detector_uint8.pb" "opencv_face_detector_uint8.pb" -Force
+            Write-Host "OpenCV DNN model file copied" -ForegroundColor Green
+          }
+          if (Test-Path "../../opencv_face_detector.pbtxt") {
+            Copy-Item "../../opencv_face_detector.pbtxt" "opencv_face_detector.pbtxt" -Force
+            Write-Host "OpenCV DNN config file copied" -ForegroundColor Green
           }
         shell: powershell
 

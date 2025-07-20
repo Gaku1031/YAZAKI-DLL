@@ -4,9 +4,13 @@
 #include <numeric>
 #include <algorithm>
 #include <cmath>
-#include <onnxruntime_cxx_api.h>
 #include <memory>
 
+#ifdef ONNXRUNTIME_AVAILABLE
+#include <onnxruntime_cxx_api.h>
+#endif
+
+#ifdef ONNXRUNTIME_AVAILABLE
 class BPONNXImpl {
 public:
     Ort::Env env;
@@ -49,6 +53,18 @@ public:
         return result;
     }
 };
+#else
+class BPONNXImpl {
+public:
+    BPONNXImpl(const std::string& model_dir) {
+        throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
+    }
+
+    float run(const Ort::Session& session, const std::vector<float>& features) {
+        throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
+    }
+};
+#endif
 
 struct BloodPressureEstimator::Impl {
     std::unique_ptr<BPONNXImpl> onnx;
