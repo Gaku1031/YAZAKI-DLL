@@ -817,6 +817,35 @@ jobs:
             }
           }
 
+          # Ensure OpenCV DNN files are properly copied
+          Write-Host "Ensuring OpenCV DNN files are properly copied..." -ForegroundColor Yellow
+          $requiredOpenCVFiles = @("opencv_face_detector_uint8.pb", "opencv_face_detector.pbtxt")
+          foreach ($opencvFile in $requiredOpenCVFiles) {
+            $sourcePath = "../models/$opencvFile"
+            $destPath = "models/$opencvFile"
+            
+            if (Test-Path $sourcePath) {
+              $sourceSize = (Get-Item $sourcePath).Length
+              Write-Host "Copying $opencvFile (source size: $sourceSize bytes)..." -ForegroundColor Cyan
+              Copy-Item $sourcePath $destPath -Force
+              
+              if (Test-Path $destPath) {
+                $destSize = (Get-Item $destPath).Length
+                Write-Host "  Destination size: $destSize bytes" -ForegroundColor Cyan
+                if ($destSize -eq 0) {
+                  Write-Host "  ERROR: File is still empty after individual copy" -ForegroundColor Red
+                  exit 1
+                }
+              } else {
+                Write-Host "  ERROR: File not found after copy" -ForegroundColor Red
+                exit 1
+              }
+            } else {
+              Write-Host "ERROR: Required OpenCV DNN file not found: $sourcePath" -ForegroundColor Red
+              exit 1
+            }
+          }
+
           # List all files in test directory
           Write-Host "Files in test directory:" -ForegroundColor Cyan
           Get-ChildItem -Recurse | ForEach-Object {
@@ -886,6 +915,31 @@ jobs:
             }
           } else {
             Write-Host "Missing: models directory" -ForegroundColor Red
+          }
+
+          # Check for OpenCV DNN files
+          Write-Host "Checking for OpenCV DNN files..." -ForegroundColor Yellow
+          $opencvFiles = @("opencv_face_detector_uint8.pb", "opencv_face_detector.pbtxt")
+          $hasEmptyOpenCVFiles = $false
+          foreach ($file in $opencvFiles) {
+            $filePath = "models/$file"
+            if (Test-Path $filePath) {
+              $size = (Get-Item $filePath).Length
+              Write-Host "  $file ($([math]::Round($size / 1KB, 2)) KB)" -ForegroundColor Green
+              if ($size -eq 0) {
+                $hasEmptyOpenCVFiles = $true
+                Write-Host "    WARNING: This file is empty (0 bytes)!" -ForegroundColor Red
+              }
+            } else {
+              Write-Host "  $file - NOT FOUND" -ForegroundColor Red
+              $hasEmptyOpenCVFiles = $true
+            }
+          }
+
+          if ($hasEmptyOpenCVFiles) {
+            Write-Host "ERROR: Found empty or missing OpenCV DNN files. Cannot proceed with test." -ForegroundColor Red
+            Write-Host "This will cause DLL initialization failure." -ForegroundColor Red
+            exit 1
           }
 
           # Try to load DLL manually to test dependencies
