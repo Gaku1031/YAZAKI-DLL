@@ -504,11 +504,33 @@ jobs:
           Write-Host "Converting PKL models to ONNX..." -ForegroundColor Yellow
           try {
             # Run conversion from CppBloodPressureDLL directory
-            python models/convert_pkl_to_onnx.py
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "ERROR: ONNX conversion failed" -ForegroundColor Red
+            $conversionOutput = python models/convert_pkl_to_onnx.py 2>&1
+            $conversionExitCode = $LASTEXITCODE
+            
+            # Display conversion output
+            Write-Host "=== ONNX Conversion Output ===" -ForegroundColor Cyan
+            $conversionOutput | ForEach-Object { Write-Host $_ }
+            Write-Host "=== End ONNX Conversion Output ===" -ForegroundColor Cyan
+            Write-Host "Conversion exit code: $conversionExitCode" -ForegroundColor Cyan
+            
+            if ($conversionExitCode -ne 0) {
+              Write-Host "ERROR: ONNX conversion failed with exit code $conversionExitCode" -ForegroundColor Red
               exit 1
             }
+            
+            # Check if ONNX files were actually created and have content
+            Write-Host "Checking ONNX file creation..." -ForegroundColor Yellow
+            $onnxFiles = Get-ChildItem "models/" -Filter "*.onnx"
+            foreach ($onnxFile in $onnxFiles) {
+              $size = $onnxFile.Length
+              Write-Host "ONNX file: $($onnxFile.Name) - Size: $size bytes" -ForegroundColor Cyan
+              if ($size -eq 0) {
+                Write-Host "ERROR: ONNX file $($onnxFile.Name) is empty (0 bytes)" -ForegroundColor Red
+                Write-Host "This indicates ONNX conversion failed despite successful exit code" -ForegroundColor Red
+                exit 1
+              }
+            }
+            
           } catch {
             Write-Host "ERROR: ONNX conversion failed with exception: $($_.Exception.Message)" -ForegroundColor Red
             exit 1
@@ -795,40 +817,43 @@ jobs:
 
           # Try to load DLL manually to test dependencies
           Write-Host "Testing DLL loading..." -ForegroundColor Yellow
+          Write-Host "Note: C++ DLLs cannot be loaded directly in PowerShell" -ForegroundColor Yellow
+          Write-Host "DLL loading will be tested through the C# application" -ForegroundColor Yellow
+
+          # Check DLL file properties instead
+          Write-Host "DLL file properties:" -ForegroundColor Cyan
+          $dllInfo = Get-Item 'BloodPressureDLL.dll'
+          Write-Host "- File size: $([math]::Round($dllInfo.Length / 1KB, 2)) KB" -ForegroundColor Cyan
+          Write-Host "- Creation time: $($dllInfo.CreationTime)" -ForegroundColor Cyan
+          Write-Host "- Last modified: $($dllInfo.LastWriteTime)" -ForegroundColor Cyan
+
+          # Check if DLL is 64-bit (basic check)
           try {
-            Add-Type -Path "BloodPressureDLL.dll" -ErrorAction Stop
-            Write-Host "DLL loaded successfully" -ForegroundColor Green
-          } catch {
-            Write-Host "DLL loading failed: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "This may indicate missing dependencies" -ForegroundColor Yellow
-            
-            # Additional DLL diagnostics
-            Write-Host "Additional DLL diagnostics:" -ForegroundColor Yellow
-            Write-Host "- DLL file size: $((Get-Item 'BloodPressureDLL.dll').Length / 1KB) KB" -ForegroundColor Cyan
-            Write-Host "- DLL creation time: $((Get-Item 'BloodPressureDLL.dll').CreationTime)" -ForegroundColor Cyan
-            
-            # Check if DLL is 64-bit
-            try {
-              $dllInfo = Get-Item 'BloodPressureDLL.dll'
-              Write-Host "- DLL architecture check: $($dllInfo.VersionInfo.FileDescription)" -ForegroundColor Cyan
-            } catch {
-              Write-Host "- DLL architecture check: Failed" -ForegroundColor Red
+            $dllBytes = [System.IO.File]::ReadAllBytes('BloodPressureDLL.dll')
+            if ($dllBytes.Length -gt 64) {
+              $peHeader = $dllBytes[60..63]
+              $peOffset = [System.BitConverter]::ToInt32($peHeader, 0)
+              if ($peOffset -lt $dllBytes.Length - 2) {
+                $machineType = [System.BitConverter]::ToUInt16($dllBytes, $peOffset + 4)
+                if ($machineType -eq 0x8664) {
+                  Write-Host "- Architecture: 64-bit (x64)" -ForegroundColor Green
+                } elseif ($machineType -eq 0x14c) {
+                  Write-Host "- Architecture: 32-bit (x86)" -ForegroundColor Yellow
+                } else {
+                  Write-Host "- Architecture: Unknown ($machineType)" -ForegroundColor Yellow
+                }
+              }
             }
+          } catch {
+            Write-Host "- Architecture check: Failed" -ForegroundColor Red
           }
 
-                    # Test DLL loading with detailed error information
+          # Test DLL loading with detailed error information
           Write-Host "Testing DLL loading with detailed diagnostics..." -ForegroundColor Yellow
 
-          # Check DLL dependencies using dumpbin
-          Write-Host "Checking DLL dependencies..." -ForegroundColor Yellow
-          try {
-            $dumpbinOutput = dumpbin /dependents BloodPressureDLL.dll 2>&1
-            $dumpbinOutput | Out-File -FilePath "test-results/dll_dependencies.txt" -Encoding UTF8
-            Write-Host "DLL dependencies:" -ForegroundColor Cyan
-            $dumpbinOutput | ForEach-Object { Write-Host $_ }
-          } catch {
-            Write-Host "dumpbin not available, skipping dependency analysis" -ForegroundColor Yellow
-          }
+          # Note: dumpbin is not available in GitHub Actions Windows runner
+          Write-Host "Note: dumpbin not available in GitHub Actions environment" -ForegroundColor Yellow
+          Write-Host "DLL dependency analysis will be performed through C# application testing" -ForegroundColor Yellow
 
           # Run test and capture output
           Write-Host "Running integration test..." -ForegroundColor Yellow

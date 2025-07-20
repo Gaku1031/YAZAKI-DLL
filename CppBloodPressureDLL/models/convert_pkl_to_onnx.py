@@ -97,105 +97,111 @@ def load_pkl_model(file_path):
 def create_onnx_from_sklearn(model, model_name, input_shape=(1, 10)):
     """Convert scikit-learn model to ONNX format"""
 
-    print(f"Creating ONNX model for {model_name}")
-    print(f"Model type: {type(model)}")
-    print(f"Input shape: {input_shape}")
+    try:
+        print(f"Creating ONNX model for {model_name}")
+        print(f"Model type: {type(model)}")
+        print(f"Input shape: {input_shape}")
 
-    # Create input
-    input_name = "input"
-    input_type = onnx.TensorProto.FLOAT
-    input_shape = list(input_shape)
+        # Create input
+        input_name = "input"
+        input_type = onnx.TensorProto.FLOAT
+        input_shape = list(input_shape)
 
-    # Create output
-    output_name = "output"
-    output_type = onnx.TensorProto.FLOAT
-    output_shape = [input_shape[0], 1]  # Single output for regression
+        # Create output
+        output_name = "output"
+        output_type = onnx.TensorProto.FLOAT
+        output_shape = [input_shape[0], 1]  # Single output for regression
 
-    # Create nodes based on model type
-    nodes = []
+        # Create nodes based on model type
+        nodes = []
+        initializers = []
 
-    if isinstance(model, RandomForestRegressor):
-        # For Random Forest, we'll create a simplified representation
-        # In practice, you might want to use a more sophisticated approach
-        nodes = [
-            helper.make_node(
-                "Identity",
-                inputs=[input_name],
-                outputs=[output_name],
-                name=f"{model_name}_identity"
-            )
-        ]
-        print(f"RandomForest model detected for {model_name}")
+        if isinstance(model, RandomForestRegressor):
+            # For Random Forest, we'll create a simplified representation
+            # In practice, you might want to use a more sophisticated approach
+            nodes = [
+                helper.make_node(
+                    "Identity",
+                    inputs=[input_name],
+                    outputs=[output_name],
+                    name=f"{model_name}_identity"
+                )
+            ]
+            print(f"RandomForest model detected for {model_name}")
 
-    elif isinstance(model, LinearRegression):
-        # For Linear Regression: y = ax + b
-        coef = model.coef_.astype(np.float32)
-        intercept = model.intercept_.astype(np.float32)
+        elif isinstance(model, LinearRegression):
+            # For Linear Regression: y = ax + b
+            coef = model.coef_.astype(np.float32)
+            intercept = model.intercept_.astype(np.float32)
 
-        print(f"LinearRegression coefficients shape: {coef.shape}")
-        print(f"LinearRegression intercept: {intercept}")
+            print(f"LinearRegression coefficients shape: {coef.shape}")
+            print(f"LinearRegression intercept: {intercept}")
 
-        # Create weight and bias tensors
-        weight_tensor = numpy_helper.from_array(
-            coef.reshape(1, -1), name="weight")
-        bias_tensor = numpy_helper.from_array(
-            intercept.reshape(1), name="bias")
+            # Create weight and bias tensors
+            weight_tensor = numpy_helper.from_array(
+                coef.reshape(1, -1), name="weight")
+            bias_tensor = numpy_helper.from_array(
+                intercept.reshape(1), name="bias")
 
-        nodes = [
-            helper.make_node(
-                "Gemm",
-                inputs=[input_name, "weight", "bias"],
-                outputs=[output_name],
-                name=f"{model_name}_gemm",
-                alpha=1.0,
-                beta=1.0
-            )
-        ]
-        print(f"LinearRegression model detected for {model_name}")
+            nodes = [
+                helper.make_node(
+                    "Gemm",
+                    inputs=[input_name, "weight", "bias"],
+                    outputs=[output_name],
+                    name=f"{model_name}_gemm",
+                    alpha=1.0,
+                    beta=1.0
+                )
+            ]
+            initializers.extend([weight_tensor, bias_tensor])
+            print(f"LinearRegression model detected for {model_name}")
 
-    elif isinstance(model, SVR):
-        # For SVR, we'll create a simplified representation
-        nodes = [
-            helper.make_node(
-                "Identity",
-                inputs=[input_name],
-                outputs=[output_name],
-                name=f"{model_name}_identity"
-            )
-        ]
-        print(f"SVR model detected for {model_name}")
+        elif isinstance(model, SVR):
+            # For SVR, we'll create a simplified representation
+            nodes = [
+                helper.make_node(
+                    "Identity",
+                    inputs=[input_name],
+                    outputs=[output_name],
+                    name=f"{model_name}_identity"
+                )
+            ]
+            print(f"SVR model detected for {model_name}")
 
-    else:
-        # Default fallback
-        nodes = [
-            helper.make_node(
-                "Identity",
-                inputs=[input_name],
-                outputs=[output_name],
-                name=f"{model_name}_identity"
-            )
-        ]
-        print(f"Unknown model type for {model_name}: {type(model)}")
+        else:
+            # Default fallback
+            nodes = [
+                helper.make_node(
+                    "Identity",
+                    inputs=[input_name],
+                    outputs=[output_name],
+                    name=f"{model_name}_identity"
+                )
+            ]
+            print(f"Unknown model type for {model_name}: {type(model)}")
 
-    # Create initializers for weights and biases
-    initializers = []
-    if isinstance(model, LinearRegression):
-        initializers.extend([weight_tensor, bias_tensor])
+        # Create the graph
+        graph = helper.make_graph(
+            nodes,
+            model_name,
+            [helper.make_tensor_value_info(
+                input_name, input_type, input_shape)],
+            [helper.make_tensor_value_info(
+                output_name, output_type, output_shape)],
+            initializers
+        )
 
-    # Create the graph
-    graph = helper.make_graph(
-        nodes,
-        model_name,
-        [helper.make_tensor_value_info(input_name, input_type, input_shape)],
-        [helper.make_tensor_value_info(
-            output_name, output_type, output_shape)],
-        initializers
-    )
+        # Create the model
+        onnx_model = helper.make_model(graph, producer_name="BloodPressureDLL")
 
-    # Create the model
-    onnx_model = helper.make_model(graph, producer_name="BloodPressureDLL")
+        print(f"ONNX model created successfully for {model_name}")
+        return onnx_model
 
-    return onnx_model
+    except Exception as e:
+        print(f"Error creating ONNX model for {model_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def main():
@@ -282,15 +288,50 @@ def main():
 
             print(f"Input shape: {input_shape}")
 
-            onnx_model = create_onnx_from_sklearn(
-                model, model_name, input_shape)
+            try:
+                onnx_model = create_onnx_from_sklearn(
+                    model, model_name, input_shape)
+
+                if onnx_model is None:
+                    print(
+                        f"ERROR: Failed to create ONNX model for {model_name}")
+                    conversion_success = False
+                    continue
+
+                print(f"ONNX model created successfully for {model_name}")
+
+            except Exception as onnx_create_error:
+                print(
+                    f"Error creating ONNX model for {model_name}: {onnx_create_error}")
+                import traceback
+                traceback.print_exc()
+                conversion_success = False
+                continue
 
             # Save ONNX model
             onnx_file = f"{model_name.lower()}.onnx"
             onnx_path = f"models/{onnx_file}"
-            onnx.save(onnx_model, onnx_path)
-            print(f"ONNX model saved: {onnx_path}")
-            print(f"File size: {os.path.getsize(onnx_path)} bytes")
+
+            try:
+                onnx.save(onnx_model, onnx_path)
+                file_size = os.path.getsize(onnx_path)
+                print(f"ONNX model saved: {onnx_path}")
+                print(f"File size: {file_size} bytes")
+
+                if file_size == 0:
+                    print(
+                        f"ERROR: ONNX file {onnx_path} was created but is empty (0 bytes)")
+                    print(
+                        "This indicates a problem with the ONNX model creation or saving")
+                    conversion_success = False
+                    continue
+
+            except Exception as save_error:
+                print(f"Error saving ONNX model to {onnx_path}: {save_error}")
+                import traceback
+                traceback.print_exc()
+                conversion_success = False
+                continue
 
             # Verify the model
             try:
