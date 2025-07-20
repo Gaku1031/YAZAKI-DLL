@@ -754,8 +754,67 @@ jobs:
             Get-ChildItem "models/" -Recurse | ForEach-Object {
               Write-Host "  $($_.FullName)" -ForegroundColor Cyan
             }
+            
+            # Specifically verify ONNX files
+            Write-Host "Verifying ONNX files specifically..." -ForegroundColor Yellow
+            $onnxFiles = Get-ChildItem "models/" -Filter "*.onnx"
+            foreach ($onnxFile in $onnxFiles) {
+              $size = $onnxFile.Length
+              Write-Host "ONNX file: $($onnxFile.Name) - Size: $size bytes" -ForegroundColor Cyan
+              if ($size -eq 0) {
+                Write-Host "ERROR: ONNX file $($onnxFile.Name) is empty after copy" -ForegroundColor Red
+                Write-Host "Attempting to copy again..." -ForegroundColor Yellow
+                
+                # Try to copy the specific file again
+                $sourcePath = "../models/$($onnxFile.Name)"
+                if (Test-Path $sourcePath) {
+                  $sourceSize = (Get-Item $sourcePath).Length
+                  Write-Host "Source file size: $sourceSize bytes" -ForegroundColor Cyan
+                  Copy-Item $sourcePath "models/" -Force
+                  $newSize = (Get-Item "models/$($onnxFile.Name)").Length
+                  Write-Host "After re-copy: $newSize bytes" -ForegroundColor Cyan
+                  
+                  if ($newSize -eq 0) {
+                    Write-Host "ERROR: ONNX file still empty after re-copy" -ForegroundColor Red
+                    exit 1
+                  }
+                } else {
+                  Write-Host "ERROR: Source ONNX file not found: $sourcePath" -ForegroundColor Red
+                  exit 1
+                }
+              }
+            }
           } else {
             Write-Host "Warning: Models directory not found" -ForegroundColor Yellow
+          }
+
+          # Ensure ONNX files are properly copied (individual copy as backup)
+          Write-Host "Ensuring ONNX files are properly copied..." -ForegroundColor Yellow
+          $requiredOnnxFiles = @("systolicbloodpressure.onnx", "diastolicbloodpressure.onnx")
+          foreach ($onnxFile in $requiredOnnxFiles) {
+            $sourcePath = "../models/$onnxFile"
+            $destPath = "models/$onnxFile"
+            
+            if (Test-Path $sourcePath) {
+              $sourceSize = (Get-Item $sourcePath).Length
+              Write-Host "Copying $onnxFile (source size: $sourceSize bytes)..." -ForegroundColor Cyan
+              Copy-Item $sourcePath $destPath -Force
+              
+              if (Test-Path $destPath) {
+                $destSize = (Get-Item $destPath).Length
+                Write-Host "  Destination size: $destSize bytes" -ForegroundColor Cyan
+                if ($destSize -eq 0) {
+                  Write-Host "  ERROR: File is still empty after individual copy" -ForegroundColor Red
+                  exit 1
+                }
+              } else {
+                Write-Host "  ERROR: File not found after copy" -ForegroundColor Red
+                exit 1
+              }
+            } else {
+              Write-Host "ERROR: Required ONNX file not found: $sourcePath" -ForegroundColor Red
+              exit 1
+            }
           }
 
           # List all files in test directory
@@ -806,7 +865,21 @@ jobs:
             $onnxFiles = Get-ChildItem "models/" -Filter "*.onnx" -Recurse
             if ($onnxFiles.Count -gt 0) {
               Write-Host "Found ONNX model files:" -ForegroundColor Green
-              $onnxFiles | ForEach-Object { Write-Host "  $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)" -ForegroundColor Green }
+              $hasEmptyFiles = $false
+              $onnxFiles | ForEach-Object { 
+                $size = $_.Length
+                Write-Host "  $($_.Name) ($([math]::Round($size / 1KB, 2)) KB)" -ForegroundColor Green
+                if ($size -eq 0) {
+                  $hasEmptyFiles = $true
+                  Write-Host "    WARNING: This file is empty (0 bytes)!" -ForegroundColor Red
+                }
+              }
+              
+              if ($hasEmptyFiles) {
+                Write-Host "ERROR: Found empty ONNX files. Cannot proceed with test." -ForegroundColor Red
+                Write-Host "This will cause DLL initialization failure." -ForegroundColor Red
+                exit 1
+              }
             } else {
               Write-Host "WARNING: No ONNX model files found!" -ForegroundColor Red
               Write-Host "This may be the cause of DLL initialization failure" -ForegroundColor Red
