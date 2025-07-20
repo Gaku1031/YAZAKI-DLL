@@ -619,22 +619,12 @@ jobs:
             exit 1
           }
 
-          # Copy OpenCV runtime with multiple path attempts
-          $opencvPaths = @(
-            "../../opencv/opencv/build/x64/vc16/bin/opencv_world480.dll",
-            "../../opencv/build/x64/vc16/bin/opencv_world480.dll",
-            "../../opencv/build/bin/opencv_world480.dll"
-          )
-          $opencvFound = $false
-          foreach ($path in $opencvPaths) {
-            if (Test-Path $path) {
-              Copy-Item $path "." -Force
-              Write-Host "OpenCV runtime DLL copied from: $path" -ForegroundColor Green
-              $opencvFound = $true
-              break
-            }
-          }
-          if (-not $opencvFound) {
+          # OpenCV DLL自動検索・コピー
+          $opencvDll = Get-ChildItem -Path "../../opencv" -Recurse -Filter "opencv_world*.dll" | Select-Object -First 1
+          if ($opencvDll) {
+            Copy-Item $opencvDll.FullName "." -Force
+            Write-Host "OpenCV runtime DLL copied from: $($opencvDll.FullName)" -ForegroundColor Green
+          } else {
             Write-Host "Warning: OpenCV runtime DLL not found in any expected location" -ForegroundColor Yellow
           }
 
@@ -832,29 +822,12 @@ jobs:
           }
 
           # Copy OpenCV runtime DLL
-          $opencvDll = "opencv/opencv/build/x64/vc16/bin/opencv_world480.dll"
-          if (Test-Path $opencvDll) {
-            Copy-Item $opencvDll "dist_cpp/" -Force
-            Write-Host "OpenCV runtime copied: opencv_world480.dll" -ForegroundColor Green
+          $opencvDll = Get-ChildItem -Path "opencv" -Recurse -Filter "opencv_world*.dll" | Select-Object -First 1
+          if ($opencvDll) {
+            Copy-Item $opencvDll.FullName "dist_cpp/" -Force
+            Write-Host "OpenCV runtime DLL copied to dist_cpp/ from: $($opencvDll.FullName)" -ForegroundColor Green
           } else {
-            # Try alternative paths
-            $altPaths = @(
-              "opencv/build/x64/vc16/bin/opencv_world480.dll",
-              "opencv/opencv/build/x64/vc16/bin/opencv_world480.dll",
-              "opencv/build/bin/opencv_world480.dll"
-            )
-            $found = $false
-            foreach ($path in $altPaths) {
-              if (Test-Path $path) {
-                Copy-Item $path "dist_cpp/" -Force
-                Write-Host "OpenCV runtime copied from: $path" -ForegroundColor Green
-                $found = $true
-                break
-              }
-            }
-            if (-not $found) {
-              Write-Host "Warning: OpenCV runtime not found in any expected location" -ForegroundColor Yellow
-            }
+            Write-Host "Warning: OpenCV runtime DLL not found in any expected location" -ForegroundColor Yellow
           }
 
           # Copy ONNX Runtime DLL
