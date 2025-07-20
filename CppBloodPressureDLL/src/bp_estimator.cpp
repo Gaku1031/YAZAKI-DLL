@@ -67,13 +67,17 @@ public:
 #endif
 
 struct BloodPressureEstimator::Impl {
+#ifdef ONNXRUNTIME_AVAILABLE
     std::unique_ptr<BPONNXImpl> onnx;
+#endif
 };
 
 BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
     : pImpl(new Impl)
 {
+#ifdef ONNXRUNTIME_AVAILABLE
     pImpl->onnx = std::make_unique<BPONNXImpl>(model_dir);
+#endif
 }
 
 BloodPressureEstimator::~BloodPressureEstimator() = default;
@@ -94,8 +98,12 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
     int sex_feature = (sex == 1) ? 1 : 0;
     std::vector<float> features = {float(mean), float(stddev), float(min), float(max), float(bmi), float(sex_feature)};
 
+#ifdef ONNXRUNTIME_AVAILABLE
     float sbp = pImpl->onnx->run(pImpl->onnx->sbp_session, features);
     float dbp = pImpl->onnx->run(pImpl->onnx->dbp_session, features);
+#else
+    throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
+#endif
 
     return {int(std::round(sbp)), int(std::round(dbp))};
 } 
