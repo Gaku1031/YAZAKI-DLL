@@ -568,6 +568,50 @@ jobs:
             Copy-Item "../../opencv_face_detector.pbtxt" "opencv_face_detector.pbtxt" -Force
             Write-Host "OpenCV DNN config file copied" -ForegroundColor Green
           }
+
+          # Copy required runtime DLLs
+          Write-Host "Copying required runtime DLLs..." -ForegroundColor Yellow
+
+          # Copy OpenCV runtime
+          $opencvDll = "../../opencv/opencv/build/x64/vc16/bin/opencv_world480.dll"
+          if (Test-Path $opencvDll) {
+            Copy-Item $opencvDll "." -Force
+            Write-Host "OpenCV runtime DLL copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: OpenCV runtime DLL not found" -ForegroundColor Yellow
+          }
+
+          # Copy ONNX Runtime
+          $onnxDll = "../../onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll"
+          if (Test-Path $onnxDll) {
+            Copy-Item $onnxDll "." -Force
+            Write-Host "ONNX Runtime DLL copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: ONNX Runtime DLL not found" -ForegroundColor Yellow
+          }
+
+          # Copy ZLIB
+          $zlibDll = "../build/_deps/zlib-build/Release/zlib.dll"
+          if (Test-Path $zlibDll) {
+            Copy-Item $zlibDll "." -Force
+            Write-Host "ZLIB DLL copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: ZLIB DLL not found" -ForegroundColor Yellow
+          }
+
+          # Copy models directory
+          if (Test-Path "../models") {
+            Copy-Item "../models" "." -Recurse -Force
+            Write-Host "Models directory copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: Models directory not found" -ForegroundColor Yellow
+          }
+
+          # List all files in test directory
+          Write-Host "Files in test directory:" -ForegroundColor Cyan
+          Get-ChildItem -Recurse | ForEach-Object {
+            Write-Host "  $($_.FullName)" -ForegroundColor Cyan
+          }
         shell: powershell
 
       - name: Run C# Integration Test
@@ -588,13 +632,16 @@ jobs:
           Write-Host "Integration test passed" -ForegroundColor Green
         shell: powershell
 
-      - name: Package Distribution
+      - name: Package Complete Distribution
         run: |
-          Write-Host "Creating distribution package..." -ForegroundColor Yellow
+          Write-Host "Creating complete distribution package..." -ForegroundColor Yellow
 
           New-Item -ItemType Directory -Path "dist_cpp" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist_cpp/models" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist_cpp/sample-data" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist_cpp/docs" -Force | Out-Null
 
-          # Copy DLL
+          # Copy main DLL
           $dllPath = "CppBloodPressureDLL/build/bin/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll"
           if (!(Test-Path $dllPath)) {
             $dllPath = "CppBloodPressureDLL/build/lib/${{ env.BUILD_TYPE }}/BloodPressureDLL.dll"
@@ -602,35 +649,218 @@ jobs:
 
           if (Test-Path $dllPath) {
             Copy-Item $dllPath "dist_cpp/" -Force
+            Write-Host "Main DLL copied: BloodPressureDLL.dll" -ForegroundColor Green
+          } else {
+            Write-Host "Error: Main DLL not found" -ForegroundColor Red
+            exit 1
           }
 
-          # Copy models
-          Copy-Item "CppBloodPressureDLL/models" "dist_cpp/" -Recurse -Force
+          # Copy OpenCV runtime DLL
+          $opencvDll = "opencv/opencv/build/x64/vc16/bin/opencv_world480.dll"
+          if (Test-Path $opencvDll) {
+            Copy-Item $opencvDll "dist_cpp/" -Force
+            Write-Host "OpenCV runtime copied: opencv_world480.dll" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: OpenCV runtime not found" -ForegroundColor Yellow
+          }
+
+          # Copy ONNX Runtime DLL
+          $onnxDll = "onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll"
+          if (Test-Path $onnxDll) {
+            Copy-Item $onnxDll "dist_cpp/" -Force
+            Write-Host "ONNX Runtime copied: onnxruntime.dll" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: ONNX Runtime not found" -ForegroundColor Yellow
+          }
+
+          # Copy ZLIB DLL
+          $zlibDll = "vcpkg/installed/x64-windows/bin/zlib.dll"
+          if (Test-Path $zlibDll) {
+            Copy-Item $zlibDll "dist_cpp/" -Force
+            Write-Host "ZLIB copied: zlib.dll" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: ZLIB not found" -ForegroundColor Yellow
+          }
+
+          # Copy model files
+          if (Test-Path "CppBloodPressureDLL/models") {
+            Copy-Item "CppBloodPressureDLL/models/*" "dist_cpp/models/" -Force
+            Write-Host "Model files copied to models/" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: Model files not found" -ForegroundColor Yellow
+          }
+
+          # Copy OpenCV DNN model files
+          if (Test-Path "opencv_face_detector_uint8.pb") {
+            Copy-Item "opencv_face_detector_uint8.pb" "dist_cpp/models/" -Force
+            Write-Host "OpenCV DNN model copied" -ForegroundColor Green
+          }
+          if (Test-Path "opencv_face_detector.pbtxt") {
+            Copy-Item "opencv_face_detector.pbtxt" "dist_cpp/models/" -Force
+            Write-Host "OpenCV DNN config copied" -ForegroundColor Green
+          }
+
+          # Copy sample data
+          if (Test-Path "sample-data/sample_1M.webm") {
+            Copy-Item "sample-data/sample_1M.webm" "dist_cpp/sample-data/" -Force
+            Write-Host "Sample video copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: Sample video not found" -ForegroundColor Yellow
+          }
+
+          # Copy documentation
+          if (Test-Path "CppBloodPressureDLL/INTEGRATION_GUIDE.md") {
+            Copy-Item "CppBloodPressureDLL/INTEGRATION_GUIDE.md" "dist_cpp/docs/" -Force
+            Write-Host "Integration guide copied" -ForegroundColor Green
+          }
+          if (Test-Path "CppBloodPressureDLL/README.md") {
+            Copy-Item "CppBloodPressureDLL/README.md" "dist_cpp/docs/" -Force
+            Write-Host "README copied" -ForegroundColor Green
+          }
+          if (Test-Path "CppBloodPressureDLL/QUICK_START.md") {
+            Copy-Item "CppBloodPressureDLL/QUICK_START.md" "dist_cpp/docs/" -Force
+            Write-Host "Quick start guide copied" -ForegroundColor Green
+          }
 
           # Copy test application
-          Copy-Item "CppBloodPressureDLL/test/bin/${{ env.BUILD_TYPE }}/net6.0/*" "dist_cpp/" -Force
-
-          # Copy required runtime libraries
-          $vcpkgDir = "${{ github.workspace }}/vcpkg/installed/x64-windows"
-          if (Test-Path "$vcpkgDir/bin") {
-            Get-ChildItem "$vcpkgDir/bin/*.dll" | ForEach-Object {
-              Copy-Item $_.FullName "dist_cpp/" -Force
-            }
+          if (Test-Path "CppBloodPressureDLL/test/bin/${{ env.BUILD_TYPE }}/net6.0") {
+            Copy-Item "CppBloodPressureDLL/test/bin/${{ env.BUILD_TYPE }}/net6.0/*" "dist_cpp/" -Force
+            Write-Host "Test application copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: Test application not found" -ForegroundColor Yellow
           }
 
-          # Calculate size
+          # Create README for distribution
+          Add-Content -Path "dist_cpp/README.txt" -Value "# Blood Pressure DLL Distribution Package"
+          Add-Content -Path "dist_cpp/README.txt" -Value ""
+          Add-Content -Path "dist_cpp/README.txt" -Value "## 概要"
+          Add-Content -Path "dist_cpp/README.txt" -Value "このパッケージには、C++で作成された血圧推定DLLとその依存ファイルが含まれています。"
+          Add-Content -Path "dist_cpp/README.txt" -Value ""
+          Add-Content -Path "dist_cpp/README.txt" -Value "## ファイル構成"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- BloodPressureDLL.dll - メインの血圧推定DLL"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- opencv_world480.dll - OpenCVランタイム"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- onnxruntime.dll - ONNX Runtime"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- zlib.dll - ZLIBライブラリ"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- models/ - 機械学習モデルファイル"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- sample-data/ - サンプル動画ファイル"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- docs/ - ドキュメント"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- CSharpTest.exe - テストアプリケーション"
+          Add-Content -Path "dist_cpp/README.txt" -Value ""
+          Add-Content -Path "dist_cpp/README.txt" -Value "## 使用方法"
+          Add-Content -Path "dist_cpp/README.txt" -Value "1. すべてのファイルを同じディレクトリに配置"
+          Add-Content -Path "dist_cpp/README.txt" -Value "2. C#アプリケーションからDLLを呼び出し"
+          Add-Content -Path "dist_cpp/README.txt" -Value "3. 詳細は docs/INTEGRATION_GUIDE.md を参照"
+          Add-Content -Path "dist_cpp/README.txt" -Value ""
+          Add-Content -Path "dist_cpp/README.txt" -Value "## システム要件"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- Windows 10/11 (64bit)"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- .NET 6.0 以上"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- 最低4GB RAM"
+          Add-Content -Path "dist_cpp/README.txt" -Value ""
+          Add-Content -Path "dist_cpp/README.txt" -Value "## ビルド情報"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- ビルドタイプ: ${{ env.BUILD_TYPE }}"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- ビルド日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- コミット: ${{ github.sha }}"
+          Add-Content -Path "dist_cpp/README.txt" -Value ""
+          Add-Content -Path "dist_cpp/README.txt" -Value "## ライセンス"
+          Add-Content -Path "dist_cpp/README.txt" -Value "研究・開発目的での使用を想定しています。"
+          Add-Content -Path "dist_cpp/README.txt" -Value "商用利用の場合は別途ライセンス契約が必要です。"
+
+          Write-Host "Distribution README created" -ForegroundColor Green
+
+          # Create file list
+          Write-Host "Creating file list..." -ForegroundColor Yellow
+          $fileList = "dist_cpp/FILE_LIST.txt"
+          "Blood Pressure DLL Distribution - File List" | Out-File -FilePath $fileList -Encoding UTF8
+          "Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Add-Content -Path $fileList -Encoding UTF8
+          "" | Add-Content -Path $fileList -Encoding UTF8
+
+          Get-ChildItem -Path "dist_cpp" -Recurse -File | ForEach-Object {
+            $relativePath = $_.FullName.Replace("$PWD\dist_cpp\", "")
+            $sizeKB = [math]::Round($_.Length / 1KB, 2)
+            "$relativePath ($sizeKB KB)" | Add-Content -Path $fileList -Encoding UTF8
+          }
+
+          # Calculate total size
           $totalSize = (Get-ChildItem -Path "dist_cpp" -Recurse -File | Measure-Object -Property Length -Sum).Sum
           $sizeMB = [math]::Round($totalSize / 1MB, 2)
 
-          Write-Host "Distribution package created: $sizeMB MB" -ForegroundColor Green
+          Write-Host "Complete distribution package created: $sizeMB MB" -ForegroundColor Green
+          Write-Host "Package location: dist_cpp/" -ForegroundColor Cyan
+
+          # Show package contents
+          Write-Host "Package contents:" -ForegroundColor Cyan
+          Get-ChildItem -Path "dist_cpp" -Recurse | ForEach-Object {
+            $indent = "  " * ($_.FullName.Split("\").Count - $PWD.ToString().Split("\").Count - 1)
+            Write-Host "$indent$($_.Name)" -ForegroundColor Cyan
+          }
         shell: powershell
 
-      - name: Upload Distribution Package
+      - name: Upload Complete Distribution Package
         uses: actions/upload-artifact@v4
         with:
-          name: BloodPressureDLL-Cpp-${{ env.BUILD_TYPE }}-${{ github.sha }}
+          name: BloodPressureDLL-Complete-${{ env.BUILD_TYPE }}-${{ github.sha }}
           path: dist_cpp/
           retention-days: 30
+          if-no-files-found: error
+
+      - name: Create Deployment Package
+        run: |
+          Write-Host "Creating deployment package..." -ForegroundColor Yellow
+
+          # Create deployment directory
+          New-Item -ItemType Directory -Path "deployment" -Force | Out-Null
+
+          # Copy distribution files
+          Copy-Item "dist_cpp/*" "deployment/" -Recurse -Force
+
+          # Create deployment script
+          Add-Content -Path "deployment/deploy.bat" -Value "@echo off"
+          Add-Content -Path "deployment/deploy.bat" -Value "echo Blood Pressure DLL Deployment Script"
+          Add-Content -Path "deployment/deploy.bat" -Value "echo ================================="
+          Add-Content -Path "deployment/deploy.bat" -Value ""
+          Add-Content -Path "deployment/deploy.bat" -Value "echo Checking system requirements..."
+          Add-Content -Path "deployment/deploy.bat" -Value "if not exist BloodPressureDLL.dll ("
+          Add-Content -Path "deployment/deploy.bat" -Value "    echo ERROR: BloodPressureDLL.dll not found"
+          Add-Content -Path "deployment/deploy.bat" -Value "    pause"
+          Add-Content -Path "deployment/deploy.bat" -Value "    exit /b 1"
+          Add-Content -Path "deployment/deploy.bat" -Value ")"
+          Add-Content -Path "deployment/deploy.bat" -Value ""
+          Add-Content -Path "deployment/deploy.bat" -Value "echo Checking dependencies..."
+          Add-Content -Path "deployment/deploy.bat" -Value "if not exist opencv_world480.dll echo WARNING: opencv_world480.dll not found"
+          Add-Content -Path "deployment/deploy.bat" -Value "if not exist onnxruntime.dll echo WARNING: onnxruntime.dll not found"
+          Add-Content -Path "deployment/deploy.bat" -Value "if not exist zlib.dll echo WARNING: zlib.dll not found"
+          Add-Content -Path "deployment/deploy.bat" -Value ""
+          Add-Content -Path "deployment/deploy.bat" -Value "echo Checking models..."
+          Add-Content -Path "deployment/deploy.bat" -Value "if not exist models ("
+          Add-Content -Path "deployment/deploy.bat" -Value "    echo ERROR: models directory not found"
+          Add-Content -Path "deployment/deploy.bat" -Value "    pause"
+          Add-Content -Path "deployment/deploy.bat" -Value "    exit /b 1"
+          Add-Content -Path "deployment/deploy.bat" -Value ")"
+          Add-Content -Path "deployment/deploy.bat" -Value ""
+          Add-Content -Path "deployment/deploy.bat" -Value "echo Running test application..."
+          Add-Content -Path "deployment/deploy.bat" -Value "if exist CSharpTest.exe ("
+          Add-Content -Path "deployment/deploy.bat" -Value "    CSharpTest.exe"
+          Add-Content -Path "deployment/deploy.bat" -Value "    echo."
+          Add-Content -Path "deployment/deploy.bat" -Value "    echo Test completed. Check the output above."
+          Add-Content -Path "deployment/deploy.bat" -Value ") else ("
+          Add-Content -Path "deployment/deploy.bat" -Value "    echo WARNING: Test application not found"
+          Add-Content -Path "deployment/deploy.bat" -Value ")"
+          Add-Content -Path "deployment/deploy.bat" -Value ""
+          Add-Content -Path "deployment/deploy.bat" -Value "echo."
+          Add-Content -Path "deployment/deploy.bat" -Value "echo Deployment check completed."
+          Add-Content -Path "deployment/deploy.bat" -Value "echo For integration guide, see docs/INTEGRATION_GUIDE.md"
+          Add-Content -Path "deployment/deploy.bat" -Value "pause"
+
+          Write-Host "Deployment package created" -ForegroundColor Green
+        shell: powershell
+
+      - name: Upload Deployment Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BloodPressureDLL-Deployment-${{ env.BUILD_TYPE }}-${{ github.sha }}
+          path: deployment/
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Upload Build Logs
         if: failure()
