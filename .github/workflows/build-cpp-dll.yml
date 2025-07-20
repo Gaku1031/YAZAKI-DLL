@@ -621,15 +621,61 @@ jobs:
           # Set up environment
           $env:PATH = "$PWD;" + $env:PATH
 
-          # Run test
-          dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }}
+          # Create test results directory
+          New-Item -ItemType Directory -Path "test-results" -Force | Out-Null
 
-          if ($LASTEXITCODE -ne 0) {
+          # Run test and capture output
+          Write-Host "Running integration test..." -ForegroundColor Yellow
+          $testOutput = dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }} 2>&1
+          $testExitCode = $LASTEXITCODE
+
+          # Save test output to file
+          $testOutput | Out-File -FilePath "test-results/integration_test_output.txt" -Encoding UTF8
+
+          # Display test output in GitHub Actions log
+          Write-Host "=== Integration Test Output ===" -ForegroundColor Cyan
+          $testOutput | ForEach-Object { Write-Host $_ }
+
+          # Check for test results
+          $csvFiles = Get-ChildItem -Path "." -Filter "bp_result_*.csv" | Sort-Object LastWriteTime -Descending
+          if ($csvFiles.Count -gt 0) {
+            $latestCsv = $csvFiles[0]
+            Write-Host "=== Latest Blood Pressure Results ===" -ForegroundColor Green
+            Write-Host "CSV File: $($latestCsv.Name)" -ForegroundColor Green
+            
+            # Read and display CSV content
+            $csvContent = Get-Content $latestCsv.FullName -Encoding UTF8
+            $csvContent | ForEach-Object { Write-Host $_ }
+            
+            # Copy CSV to test results
+            Copy-Item $latestCsv.FullName "test-results/latest_bp_results.csv" -Force
+          } else {
+            Write-Host "No blood pressure results CSV found" -ForegroundColor Yellow
+          }
+
+          # Create test summary
+          Add-Content -Path "test-results/test_summary.txt" -Value "=== Blood Pressure DLL Integration Test Summary ==="
+          Add-Content -Path "test-results/test_summary.txt" -Value "Test Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          Add-Content -Path "test-results/test_summary.txt" -Value "Build Type: ${{ env.BUILD_TYPE }}"
+          Add-Content -Path "test-results/test_summary.txt" -Value "Commit: ${{ github.sha }}"
+          Add-Content -Path "test-results/test_summary.txt" -Value ""
+          Add-Content -Path "test-results/test_summary.txt" -Value "Test Status: $(if ($testExitCode -eq 0) { 'PASSED' } else { 'FAILED' })"
+          Add-Content -Path "test-results/test_summary.txt" -Value ""
+          Add-Content -Path "test-results/test_summary.txt" -Value "Files Generated:"
+          Get-ChildItem -Path "." -Filter "bp_result_*.csv" | ForEach-Object {
+            Add-Content -Path "test-results/test_summary.txt" -Value "- $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+          }
+          Add-Content -Path "test-results/test_summary.txt" -Value ""
+          Add-Content -Path "test-results/test_summary.txt" -Value "Test Output:"
+          Add-Content -Path "test-results/test_summary.txt" -Value $testOutput
+
+          if ($testExitCode -ne 0) {
             Write-Host "Integration test failed" -ForegroundColor Red
             exit 1
           }
 
           Write-Host "Integration test passed" -ForegroundColor Green
+          Write-Host "Test results saved to test-results/" -ForegroundColor Green
         shell: powershell
 
       - name: Package Complete Distribution
@@ -661,7 +707,24 @@ jobs:
             Copy-Item $opencvDll "dist_cpp/" -Force
             Write-Host "OpenCV runtime copied: opencv_world480.dll" -ForegroundColor Green
           } else {
-            Write-Host "Warning: OpenCV runtime not found" -ForegroundColor Yellow
+            # Try alternative paths
+            $altPaths = @(
+              "opencv/build/x64/vc16/bin/opencv_world480.dll",
+              "opencv/opencv/build/x64/vc16/bin/opencv_world480.dll",
+              "opencv/build/bin/opencv_world480.dll"
+            )
+            $found = $false
+            foreach ($path in $altPaths) {
+              if (Test-Path $path) {
+                Copy-Item $path "dist_cpp/" -Force
+                Write-Host "OpenCV runtime copied from: $path" -ForegroundColor Green
+                $found = $true
+                break
+              }
+            }
+            if (-not $found) {
+              Write-Host "Warning: OpenCV runtime not found in any expected location" -ForegroundColor Yellow
+            }
           }
 
           # Copy ONNX Runtime DLL
@@ -670,7 +733,23 @@ jobs:
             Copy-Item $onnxDll "dist_cpp/" -Force
             Write-Host "ONNX Runtime copied: onnxruntime.dll" -ForegroundColor Green
           } else {
-            Write-Host "Warning: ONNX Runtime not found" -ForegroundColor Yellow
+            # Try alternative paths
+            $altPaths = @(
+              "onnxruntime/lib/onnxruntime.dll",
+              "onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll"
+            )
+            $found = $false
+            foreach ($path in $altPaths) {
+              if (Test-Path $path) {
+                Copy-Item $path "dist_cpp/" -Force
+                Write-Host "ONNX Runtime copied from: $path" -ForegroundColor Green
+                $found = $true
+                break
+              }
+            }
+            if (-not $found) {
+              Write-Host "Warning: ONNX Runtime not found in any expected location" -ForegroundColor Yellow
+            }
           }
 
           # Copy ZLIB DLL
@@ -679,7 +758,23 @@ jobs:
             Copy-Item $zlibDll "dist_cpp/" -Force
             Write-Host "ZLIB copied: zlib.dll" -ForegroundColor Green
           } else {
-            Write-Host "Warning: ZLIB not found" -ForegroundColor Yellow
+            # Try alternative paths
+            $altPaths = @(
+              "vcpkg/installed/x64-windows/bin/zlib.dll",
+              "vcpkg/installed/x64-windows/debug/bin/zlib.dll"
+            )
+            $found = $false
+            foreach ($path in $altPaths) {
+              if (Test-Path $path) {
+                Copy-Item $path "dist_cpp/" -Force
+                Write-Host "ZLIB copied from: $path" -ForegroundColor Green
+                $found = $true
+                break
+              }
+            }
+            if (-not $found) {
+              Write-Host "Warning: ZLIB not found in any expected location" -ForegroundColor Yellow
+            }
           }
 
           # Copy model files
@@ -730,40 +825,48 @@ jobs:
             Write-Host "Warning: Test application not found" -ForegroundColor Yellow
           }
 
-          # Create README for distribution
+          # Copy test results
+          if (Test-Path "CppBloodPressureDLL/test/test-results") {
+            Copy-Item "CppBloodPressureDLL/test/test-results" "dist_cpp/" -Recurse -Force
+            Write-Host "Test results copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: Test results not found" -ForegroundColor Yellow
+          }
+
+          # Create README for distribution (English only to avoid encoding issues)
           Add-Content -Path "dist_cpp/README.txt" -Value "# Blood Pressure DLL Distribution Package"
           Add-Content -Path "dist_cpp/README.txt" -Value ""
-          Add-Content -Path "dist_cpp/README.txt" -Value "## 概要"
-          Add-Content -Path "dist_cpp/README.txt" -Value "このパッケージには、C++で作成された血圧推定DLLとその依存ファイルが含まれています。"
+          Add-Content -Path "dist_cpp/README.txt" -Value "## Overview"
+          Add-Content -Path "dist_cpp/README.txt" -Value "This package contains the C++ blood pressure estimation DLL and its dependencies."
           Add-Content -Path "dist_cpp/README.txt" -Value ""
-          Add-Content -Path "dist_cpp/README.txt" -Value "## ファイル構成"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- BloodPressureDLL.dll - メインの血圧推定DLL"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- opencv_world480.dll - OpenCVランタイム"
+          Add-Content -Path "dist_cpp/README.txt" -Value "## File Structure"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- BloodPressureDLL.dll - Main blood pressure estimation DLL"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- opencv_world480.dll - OpenCV runtime"
           Add-Content -Path "dist_cpp/README.txt" -Value "- onnxruntime.dll - ONNX Runtime"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- zlib.dll - ZLIBライブラリ"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- models/ - 機械学習モデルファイル"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- sample-data/ - サンプル動画ファイル"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- docs/ - ドキュメント"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- CSharpTest.exe - テストアプリケーション"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- zlib.dll - ZLIB library"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- models/ - Machine learning model files"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- sample-data/ - Sample video files"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- docs/ - Documentation"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- CSharpTest.exe - Test application"
           Add-Content -Path "dist_cpp/README.txt" -Value ""
-          Add-Content -Path "dist_cpp/README.txt" -Value "## 使用方法"
-          Add-Content -Path "dist_cpp/README.txt" -Value "1. すべてのファイルを同じディレクトリに配置"
-          Add-Content -Path "dist_cpp/README.txt" -Value "2. C#アプリケーションからDLLを呼び出し"
-          Add-Content -Path "dist_cpp/README.txt" -Value "3. 詳細は docs/INTEGRATION_GUIDE.md を参照"
+          Add-Content -Path "dist_cpp/README.txt" -Value "## Usage"
+          Add-Content -Path "dist_cpp/README.txt" -Value "1. Place all files in the same directory"
+          Add-Content -Path "dist_cpp/README.txt" -Value "2. Call DLL from C# application"
+          Add-Content -Path "dist_cpp/README.txt" -Value "3. See docs/INTEGRATION_GUIDE.md for details"
           Add-Content -Path "dist_cpp/README.txt" -Value ""
-          Add-Content -Path "dist_cpp/README.txt" -Value "## システム要件"
+          Add-Content -Path "dist_cpp/README.txt" -Value "## System Requirements"
           Add-Content -Path "dist_cpp/README.txt" -Value "- Windows 10/11 (64bit)"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- .NET 6.0 以上"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- 最低4GB RAM"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- .NET 6.0 or higher"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- Minimum 4GB RAM"
           Add-Content -Path "dist_cpp/README.txt" -Value ""
-          Add-Content -Path "dist_cpp/README.txt" -Value "## ビルド情報"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- ビルドタイプ: ${{ env.BUILD_TYPE }}"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- ビルド日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-          Add-Content -Path "dist_cpp/README.txt" -Value "- コミット: ${{ github.sha }}"
+          Add-Content -Path "dist_cpp/README.txt" -Value "## Build Information"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- Build Type: ${{ env.BUILD_TYPE }}"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          Add-Content -Path "dist_cpp/README.txt" -Value "- Commit: ${{ github.sha }}"
           Add-Content -Path "dist_cpp/README.txt" -Value ""
-          Add-Content -Path "dist_cpp/README.txt" -Value "## ライセンス"
-          Add-Content -Path "dist_cpp/README.txt" -Value "研究・開発目的での使用を想定しています。"
-          Add-Content -Path "dist_cpp/README.txt" -Value "商用利用の場合は別途ライセンス契約が必要です。"
+          Add-Content -Path "dist_cpp/README.txt" -Value "## License"
+          Add-Content -Path "dist_cpp/README.txt" -Value "Intended for research and development purposes."
+          Add-Content -Path "dist_cpp/README.txt" -Value "Commercial use requires separate license agreement."
 
           Write-Host "Distribution README created" -ForegroundColor Green
 
@@ -861,6 +964,14 @@ jobs:
           path: deployment/
           retention-days: 30
           if-no-files-found: error
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: BloodPressureDLL-TestResults-${{ env.BUILD_TYPE }}-${{ github.sha }}
+          path: CppBloodPressureDLL/test/test-results/
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Upload Build Logs
         if: failure()

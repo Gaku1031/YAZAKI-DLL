@@ -58,6 +58,11 @@ namespace BloodPressureDllTest
             if (maxBP > 0 && minBP > 0 && maxBP >= minBP)
             {
                 Console.WriteLine("[SUCCESS] 血圧推定成功 - 妥当な値が取得されました");
+                Console.WriteLine($"[RESULT] 推定血圧: SBP={maxBP} mmHg, DBP={minBP} mmHg");
+                
+                // 血圧分類
+                string sbpCategory = GetBloodPressureCategory(maxBP, minBP);
+                Console.WriteLine($"[CLASSIFICATION] 血圧分類: {sbpCategory}");
             }
             else if (maxBP == 0 && minBP == 0)
             {
@@ -93,6 +98,37 @@ namespace BloodPressureDllTest
                     {
                         Console.WriteLine($"   CSV行数: {lines.Length - 1} (ヘッダー除く)");
                         Console.WriteLine($"   データ期間: {lines[1].Split(',')[0]} - {lines[lines.Length - 2].Split(',')[0]} 秒");
+                        
+                        // CSVデータの統計情報を表示
+                        if (lines.Length > 2)
+                        {
+                            var sbpValues = new List<float>();
+                            var dbpValues = new List<float>();
+                            
+                            for (int i = 1; i < lines.Length; i++)
+                            {
+                                if (!string.IsNullOrEmpty(lines[i]))
+                                {
+                                    var parts = lines[i].Split(',');
+                                    if (parts.Length >= 3)
+                                    {
+                                        if (float.TryParse(parts[1], out float sbp))
+                                            sbpValues.Add(sbp);
+                                        if (float.TryParse(parts[2], out float dbp))
+                                            dbpValues.Add(dbp);
+                                    }
+                                }
+                            }
+                            
+                            if (sbpValues.Count > 0)
+                            {
+                                Console.WriteLine($"   SBP統計: 平均={sbpValues.Average():F1}, 最小={sbpValues.Min():F1}, 最大={sbpValues.Max():F1}");
+                            }
+                            if (dbpValues.Count > 0)
+                            {
+                                Console.WriteLine($"   DBP統計: 平均={dbpValues.Average():F1}, 最小={dbpValues.Min():F1}, 最大={dbpValues.Max():F1}");
+                            }
+                        }
                     }
                 }
                 catch (Exception e)
@@ -100,6 +136,23 @@ namespace BloodPressureDllTest
                     Console.WriteLine($"[ERROR] CSVファイル保存エラー: {e.Message}");
                 }
             }
+        }
+
+        // 血圧分類を取得するヘルパーメソッド
+        private static string GetBloodPressureCategory(int sbp, int dbp)
+        {
+            if (sbp < 120 && dbp < 80)
+                return "正常血圧";
+            else if (sbp < 130 && dbp < 80)
+                return "正常高値血圧";
+            else if (sbp < 140 && dbp < 90)
+                return "正常高値血圧";
+            else if (sbp < 160 && dbp < 100)
+                return "軽症高血圧";
+            else if (sbp < 180 && dbp < 110)
+                return "中等症高血圧";
+            else
+                return "重症高血圧";
         }
 
         public static void TestComprehensiveDLL()
