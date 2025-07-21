@@ -21,13 +21,25 @@ namespace {
     std::map<std::string, std::string> g_status;
     std::atomic<bool> initialized{false};
     BloodPressureEstimator* g_estimator = nullptr;
-    // DLLの戻り値用グローバルバッファ
-    static std::string g_return_str;
-    static std::string g_error_str;
-    static std::string g_status_str;
-    static std::string g_id_str;
-    static std::string g_csv_str;
-    static std::string g_errors_str;
+    
+    // Thread-safe string buffer management with longer lifetime
+    thread_local std::string tl_return_str;
+    thread_local std::string tl_error_str;
+    thread_local std::string tl_status_str;
+    thread_local std::string tl_id_str;
+    thread_local std::string tl_version_str;
+    
+    // Global buffers for callback data (protected by mutex)
+    std::string g_csv_str;
+    std::string g_errors_str;
+    std::mutex g_callback_mutex;
+    
+    // Constants for common responses
+    const char* const STATUS_NONE = "none";
+    const char* const STATUS_PROCESSING = "processing";
+    const char* const VERSION_INFO = "BloodPressureDLL v1.0.0";
+    const char* const EMPTY_JSON = "[]";
+    const char* const EMPTY_STRING = "";
 }
 
 // CSV生成用のヘルパー関数
@@ -67,8 +79,6 @@ std::string generateCSV(const std::vector<double>& rppg_signal,
 
 extern "C" {
 
-static std::string empty_str = "";
-
 int InitializeBP(const char* modelDir) {
     printf("[DLL] InitializeBP called\n"); fflush(stdout);
     try {
@@ -78,6 +88,10 @@ int InitializeBP(const char* modelDir) {
             g_estimator = nullptr;
         }
         std::string modelPath = modelDir ? modelDir : "models";
+        
+        // Add detailed logging for debugging
+        printf("[DLL] InitializeBP: Creating estimator with model path: %s\n", modelPath.c_str()); fflush(stdout);
+        
         g_estimator = new BloodPressureEstimator(modelPath);
         initialized = true;
         printf("[DLL] InitializeBP success\n"); fflush(stdout);
@@ -86,11 +100,15 @@ int InitializeBP(const char* modelDir) {
         printf("[DLL] InitializeBP std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "InitializeBP exception: " << e.what() << std::endl;
+        log.close();
+        initialized = false;
         return 0;
     } catch (...) {
         printf("[DLL] InitializeBP unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "InitializeBP unknown exception" << std::endl;
+        log.close();
+        initialized = false;
         return 0;
     }
 }
@@ -102,19 +120,19 @@ const char* StartBloodPressureAnalysisRequest(
     printf("[DLL] StartBloodPressureAnalysisRequest called\n"); fflush(stdout);
     try {
         if (!initialized) {
-            g_error_str = "1001: DLL_NOT_INITIALIZED";
+            tl_error_str = "1001: DLL_NOT_INITIALIZED";
             printf("[DLL] StartBloodPressureAnalysisRequest not initialized\n"); fflush(stdout);
-            return g_error_str.c_str();
+            return tl_error_str.c_str();
         }
-        std::string reqId(requestId);
+        std::string reqId(requestId ? requestId : "");
         {
             std::lock_guard<std::mutex> lock(g_mutex);
             if (g_threads.count(reqId)) {
-                g_error_str = "1005: REQUEST_DURING_PROCESSING";
+                tl_error_str = "1005: REQUEST_DURING_PROCESSING";
                 printf("[DLL] StartBloodPressureAnalysisRequest already processing\n"); fflush(stdout);
-                return g_error_str.c_str();
+                return tl_error_str.c_str();
             }
-            g_status[reqId] = "processing";
+            g_status[reqId] = STATUS_PROCESSING;
         }
         std::string thread_request_id = requestId ? std::string(requestId) : "";
         RPPGProcessor rppg;
@@ -124,37 +142,50 @@ const char* StartBloodPressureAnalysisRequest(
             printf("[DLL] StartBloodPressureAnalysisRequest: processVideo end\n"); fflush(stdout);
             auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
             printf("[DLL] StartBloodPressureAnalysisRequest: estimate_bp end\n"); fflush(stdout);
-            g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-            g_errors_str = "[]";
-            if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+            
+            // Thread-safe callback data preparation
+            {
+                std::lock_guard<std::mutex> lock(g_callback_mutex);
+                g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+                g_errors_str = EMPTY_JSON;
+                if (callback) {
+                    callback(thread_request_id.c_str(), bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+                }
+            }
             printf("[DLL] StartBloodPressureAnalysisRequest: callback end\n"); fflush(stdout);
         } catch (const std::exception& e) {
             printf("[DLL] StartBloodPressureAnalysisRequest inner std::exception: %s\n", e.what()); fflush(stdout);
             std::ofstream log("dll_error.log", std::ios::app);
             log << "StartBloodPressureAnalysisRequest inner exception: " << e.what() << std::endl;
+            log.close();
+            
+            std::lock_guard<std::mutex> lock(g_callback_mutex);
             g_errors_str = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-            if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), g_errors_str.c_str());
+            if (callback) {
+                callback(thread_request_id.c_str(), 0, 0, EMPTY_STRING, g_errors_str.c_str());
+            }
         }
         {
             std::lock_guard<std::mutex> lock(g_mutex);
-            g_status[reqId] = "none";
+            g_status[reqId] = STATUS_NONE;
             g_threads.erase(reqId);
         }
-        g_return_str = "";
         printf("[DLL] StartBloodPressureAnalysisRequest end\n"); fflush(stdout);
-        return g_return_str.c_str();
+        return EMPTY_STRING;
     } catch (const std::exception& e) {
         printf("[DLL] StartBloodPressureAnalysisRequest std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "StartBloodPressureAnalysisRequest exception: " << e.what() << std::endl;
-        g_error_str = std::string("StartBloodPressureAnalysisRequest failed: ") + e.what();
-        return g_error_str.c_str();
+        log.close();
+        tl_error_str = std::string("StartBloodPressureAnalysisRequest failed: ") + e.what();
+        return tl_error_str.c_str();
     } catch (...) {
         printf("[DLL] StartBloodPressureAnalysisRequest unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "StartBloodPressureAnalysisRequest unknown exception" << std::endl;
-        g_error_str = "StartBloodPressureAnalysisRequest failed: unknown error";
-        return g_error_str.c_str();
+        log.close();
+        tl_error_str = "StartBloodPressureAnalysisRequest failed: unknown error";
+        return tl_error_str.c_str();
     }
 }
 
@@ -162,26 +193,39 @@ const char* GetProcessingStatus(const char* requestId) {
     printf("[DLL] GetProcessingStatus called\n"); fflush(stdout);
     try {
         if (!requestId) {
-            g_status_str = "none";
             printf("[DLL] GetProcessingStatus: requestId is null\n"); fflush(stdout);
-            return g_status_str.c_str();
+            return STATUS_NONE;
         }
-        g_status_str = "none";
-        std::string debug_msg = "GetProcessingStatus called with requestId: " + std::string(requestId);
-        printf("[DLL] GetProcessingStatus: returning status\n"); fflush(stdout);
-        return g_status_str.c_str();
+        
+        std::string reqId(requestId);
+        printf("[DLL] GetProcessingStatus: requestId=%s\n", reqId.c_str()); fflush(stdout);
+        
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            auto it = g_status.find(reqId);
+            if (it != g_status.end()) {
+                tl_status_str = it->second;
+                printf("[DLL] GetProcessingStatus: returning status=%s\n", tl_status_str.c_str()); fflush(stdout);
+                return tl_status_str.c_str();
+            }
+        }
+        
+        printf("[DLL] GetProcessingStatus: returning default status\n"); fflush(stdout);
+        return STATUS_NONE;
     } catch (const std::exception& e) {
         printf("[DLL] GetProcessingStatus std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetProcessingStatus exception: " << e.what() << std::endl;
-        g_status_str = std::string("GetProcessingStatus failed: ") + e.what();
-        return g_status_str.c_str();
+        log.close();
+        tl_status_str = std::string("GetProcessingStatus failed: ") + e.what();
+        return tl_status_str.c_str();
     } catch (...) {
         printf("[DLL] GetProcessingStatus unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetProcessingStatus unknown exception" << std::endl;
-        g_status_str = "GetProcessingStatus failed: unknown error";
-        return g_status_str.c_str();
+        log.close();
+        tl_status_str = "GetProcessingStatus failed: unknown error";
+        return tl_status_str.c_str();
     }
 }
 
@@ -193,21 +237,22 @@ int CancelBloodPressureAnalysis(const char* requestId) {
 const char* GetVersionInfo() {
     printf("[DLL] GetVersionInfo called\n"); fflush(stdout);
     try {
-        g_return_str = "BloodPressureDLL v1.0.0";
         printf("[DLL] GetVersionInfo returning version\n"); fflush(stdout);
-        return g_return_str.c_str();
+        return VERSION_INFO;
     } catch (const std::exception& e) {
         printf("[DLL] GetVersionInfo std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetVersionInfo exception: " << e.what() << std::endl;
-        g_error_str = std::string("GetVersionInfo failed: ") + e.what();
-        return g_error_str.c_str();
+        log.close();
+        tl_error_str = std::string("GetVersionInfo failed: ") + e.what();
+        return tl_error_str.c_str();
     } catch (...) {
         printf("[DLL] GetVersionInfo unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetVersionInfo unknown exception" << std::endl;
-        g_error_str = "GetVersionInfo failed: unknown error";
-        return g_error_str.c_str();
+        log.close();
+        tl_error_str = "GetVersionInfo failed: unknown error";
+        return tl_error_str.c_str();
     }
 }
 
@@ -218,59 +263,90 @@ const char* GenerateRequestId() {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
         std::ostringstream oss;
         oss << ms << "_CUSTOMER_DRIVER";
-        g_id_str = oss.str();
-        printf("[DLL] GenerateRequestId returning id\n"); fflush(stdout);
-        return g_id_str.c_str();
+        tl_id_str = oss.str();
+        printf("[DLL] GenerateRequestId returning id: %s\n", tl_id_str.c_str()); fflush(stdout);
+        return tl_id_str.c_str();
     } catch (const std::exception& e) {
         printf("[DLL] GenerateRequestId std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GenerateRequestId exception: " << e.what() << std::endl;
-        g_error_str = std::string("GenerateRequestId failed: ") + e.what();
-        return g_error_str.c_str();
+        log.close();
+        tl_error_str = std::string("GenerateRequestId failed: ") + e.what();
+        return tl_error_str.c_str();
     } catch (...) {
         printf("[DLL] GenerateRequestId unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GenerateRequestId unknown exception" << std::endl;
-        g_error_str = "GenerateRequestId failed: unknown error";
-        return g_error_str.c_str();
+        log.close();
+        tl_error_str = "GenerateRequestId failed: unknown error";
+        return tl_error_str.c_str();
     }
 }
 
 int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback) {
-    printf("[DLL] AnalyzeBloodPressureFromImages called\n"); fflush(stdout);
+    printf("[DLL] AnalyzeBloodPressureFromImages called with %d images\n", numImages); fflush(stdout);
     try {
         if (!initialized) {
             printf("[DLL] AnalyzeBloodPressureFromImages not initialized\n"); fflush(stdout);
             return 1001;
         }
+        if (!g_estimator) {
+            printf("[DLL] AnalyzeBloodPressureFromImages estimator is null\n"); fflush(stdout);
+            return 1001;
+        }
+        
         std::vector<std::string> paths;
         for (int i = 0; i < numImages; ++i) {
-            if (imagePaths[i]) paths.emplace_back(imagePaths[i]);
+            if (imagePaths[i]) {
+                paths.emplace_back(imagePaths[i]);
+                if (i < 5 || i == numImages - 1) {
+                    printf("[DLL] Image[%d]: %s\n", i, imagePaths[i]); fflush(stdout);
+                }
+            }
         }
+        printf("[DLL] Total valid images: %zu\n", paths.size()); fflush(stdout);
+        
         RPPGProcessor rppg;
         printf("[DLL] AnalyzeBloodPressureFromImages: processImagesFromPaths start\n"); fflush(stdout);
         RPPGResult r = rppg.processImagesFromPaths(paths);
         printf("[DLL] AnalyzeBloodPressureFromImages: processImagesFromPaths end\n"); fflush(stdout);
         auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-        printf("[DLL] AnalyzeBloodPressureFromImages: estimate_bp end\n"); fflush(stdout);
-        g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-        g_errors_str = "[]";
-        if (callback) callback("", bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+        printf("[DLL] AnalyzeBloodPressureFromImages: estimate_bp end (SBP=%d, DBP=%d)\n", bp.first, bp.second); fflush(stdout);
+        
+        // Thread-safe callback data preparation
+        {
+            std::lock_guard<std::mutex> lock(g_callback_mutex);
+            g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+            g_errors_str = EMPTY_JSON;
+            if (callback) {
+                callback(EMPTY_STRING, bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+            }
+        }
         printf("[DLL] AnalyzeBloodPressureFromImages: callback end\n"); fflush(stdout);
         return 0;
     } catch (const std::exception& e) {
         printf("[DLL] AnalyzeBloodPressureFromImages std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "AnalyzeBloodPressureFromImages exception: " << e.what() << std::endl;
+        log.close();
+        
+        std::lock_guard<std::mutex> lock(g_callback_mutex);
         g_errors_str = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-        if (callback) callback("", 0, 0, empty_str.c_str(), g_errors_str.c_str());
+        if (callback) {
+            callback(EMPTY_STRING, 0, 0, EMPTY_STRING, g_errors_str.c_str());
+        }
         return 1006;
     } catch (...) {
         printf("[DLL] AnalyzeBloodPressureFromImages unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "AnalyzeBloodPressureFromImages unknown exception" << std::endl;
+        log.close();
+        
+        std::lock_guard<std::mutex> lock(g_callback_mutex);
         g_errors_str = "[{\"code\":\"1006\",\"message\":\"unknown error\",\"isRetriable\":false}]";
-        if (callback) callback("", 0, 0, empty_str.c_str(), g_errors_str.c_str());
+        if (callback) {
+            callback(EMPTY_STRING, 0, 0, EMPTY_STRING, g_errors_str.c_str());
+        }
         return 1006;
     }
 }
