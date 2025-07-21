@@ -381,6 +381,26 @@ namespace BloodPressureDllTest
                     var fileInfo = new FileInfo(sampleVideo);
                     Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
 
+                    // webm→mp4一時変換
+                    string tempMp4 = Path.GetTempFileName().Replace(".tmp", ".mp4");
+                    Console.WriteLine($"   ffmpegでmp4に一時変換: {tempMp4}");
+                    var ffmpegProc = new System.Diagnostics.Process();
+                    ffmpegProc.StartInfo.FileName = "ffmpeg";
+                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v libx264 -c:a aac \"{tempMp4}\"";
+                    ffmpegProc.StartInfo.UseShellExecute = false;
+                    ffmpegProc.StartInfo.RedirectStandardOutput = true;
+                    ffmpegProc.StartInfo.RedirectStandardError = true;
+                    ffmpegProc.Start();
+                    string ffmpegOut = ffmpegProc.StandardOutput.ReadToEnd();
+                    string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
+                    ffmpegProc.WaitForExit();
+                    if (!File.Exists(tempMp4) || new FileInfo(tempMp4).Length < 1000)
+                    {
+                        Console.WriteLine($"   [ERROR] ffmpeg変換失敗: {ffmpegErr}");
+                        return;
+                    }
+                    Console.WriteLine("   ffmpeg変換成功");
+
                     // リクエストIDを生成
                     IntPtr requestIdPtr = GenerateRequestId();
                     string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
@@ -421,7 +441,7 @@ namespace BloodPressureDllTest
                     };
 
                     Console.WriteLine("   血圧推定リクエスト送信中...");
-                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, sampleVideo, callback);
+                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, tempMp4, callback);
                     string result = Marshal.PtrToStringAnsi(resultPtr);
                     Console.WriteLine($"   StartBloodPressureAnalysisRequest戻り値: {result}");
 
@@ -438,6 +458,9 @@ namespace BloodPressureDllTest
                     {
                         Console.WriteLine("   [SUCCESS] 血圧推定テスト完了");
                     }
+
+                    // 一時ファイル削除
+                    try { File.Delete(tempMp4); } catch { }
                 }
                 catch (Exception ex)
                 {
