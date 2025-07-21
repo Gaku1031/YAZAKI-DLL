@@ -377,8 +377,19 @@ namespace BloodPressureDllTest
                 try
                 {
                     string status = GetProcessingStatus("test_request");
+                    if (string.IsNullOrEmpty(status))
+                    {
+                        Console.WriteLine("   [ERROR] 処理状況が空です");
+                        return;
+                    }
                     Console.WriteLine($"   処理状況: {status}");
                     Console.WriteLine("   [SUCCESS] 処理状況取得成功");
+                }
+                catch (AccessViolationException ex)
+                {
+                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
+                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
+                    return;
                 }
                 catch (Exception ex)
                 {
@@ -426,6 +437,11 @@ namespace BloodPressureDllTest
                     {
                         Console.WriteLine("   サンプル動画が見つかりません。スキップします。");
                     }
+                }
+                catch (AccessViolationException ex)
+                {
+                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
+                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
                 }
                 catch (Exception ex)
                 {
