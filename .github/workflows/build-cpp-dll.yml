@@ -976,8 +976,29 @@ jobs:
 
           # Run test and capture output
           Write-Host "Running integration test..." -ForegroundColor Yellow
+          
+          # Clear any existing log files before test
+          if (Test-Path "dll_load.log") { Remove-Item "dll_load.log" -Force }
+          if (Test-Path "dll_error.log") { Remove-Item "dll_error.log" -Force }
+          
           $testOutput = dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }} 2>&1
           $testExitCode = $LASTEXITCODE
+          
+          # Check for DLL loading logs immediately after test
+          Write-Host "Checking for DLL debug logs..." -ForegroundColor Yellow
+          if (Test-Path "dll_load.log") {
+            Write-Host "=== DLL Loading Log ===" -ForegroundColor Cyan
+            Get-Content "dll_load.log" | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
+            Copy-Item "dll_load.log" "test-results/" -Force -ErrorAction SilentlyContinue
+          } else {
+            Write-Host "No dll_load.log found - DLL may not have been loaded at all" -ForegroundColor Red
+          }
+          
+          if (Test-Path "dll_error.log") {
+            Write-Host "=== DLL Error Log ===" -ForegroundColor Red
+            Get-Content "dll_error.log" | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+            Copy-Item "dll_error.log" "test-results/" -Force -ErrorAction SilentlyContinue
+          }
 
           # Check if test output contains error indicators
           $hasErrors = $false

@@ -211,6 +211,10 @@ namespace BloodPressureDllTest
                 
                 Console.WriteLine("   DLL初期化を試行中...");
                 
+                // Critical: Add safety wrapper for DLL initialization
+                Console.WriteLine("   Step 1: Attempting to call InitializeBP");
+                Console.Out.Flush();
+                
                 // 初期化前ファイル確認
                 Console.WriteLine("   - 初期化前ファイル確認:");
                 string[] requiredFiles = {
@@ -233,7 +237,30 @@ namespace BloodPressureDllTest
                     }
                 }
                 
-                int initResult = InitializeBP("models");
+                Console.WriteLine("   Step 2: Calling InitializeBP function");
+                Console.Out.Flush();
+                
+                int initResult;
+                try 
+                {
+                    initResult = InitializeBP("models");
+                    Console.WriteLine("   Step 3: InitializeBP call completed successfully");
+                    Console.Out.Flush();
+                }
+                catch (AccessViolationException ex)
+                {
+                    Console.WriteLine($"   [FATAL] AccessViolationException during InitializeBP: {ex.Message}");
+                    Console.WriteLine($"   This indicates memory corruption in the DLL initialization");
+                    Console.WriteLine($"   Stack trace: {ex.StackTrace}");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"   [ERROR] Exception during InitializeBP: {ex.GetType().Name}: {ex.Message}");
+                    Console.WriteLine($"   Stack trace: {ex.StackTrace}");
+                    return;
+                }
+                
                 Console.WriteLine($"   初期化結果: {initResult}");
                 if (initResult == 1)
                 {
@@ -247,6 +274,12 @@ namespace BloodPressureDllTest
                         Console.WriteLine("--- dll_error.log ---");
                         Console.WriteLine(File.ReadAllText("dll_error.log"));
                         Console.WriteLine("--- end of dll_error.log ---");
+                    }
+                    if (File.Exists("dll_load.log"))
+                    {
+                        Console.WriteLine("--- dll_load.log ---");
+                        Console.WriteLine(File.ReadAllText("dll_load.log"));
+                        Console.WriteLine("--- end of dll_load.log ---");
                     }
                     return;
                 }

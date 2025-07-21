@@ -14,11 +14,28 @@
 #include <fstream>
 #include <cstdio>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace {
+    // Safe initialization helper to avoid static initialization order fiasco
+    template<typename T>
+    T& getSafeStatic() {
+        static T instance;
+        return instance;
+    }
+    
     std::string version = "1.0.0";
-    std::mutex g_mutex;
-    std::map<std::string, std::thread> g_threads;
-    std::map<std::string, std::string> g_status;
+    
+    // Lazy initialization for complex objects
+    std::mutex& getSafeMutex() { return getSafeStatic<std::mutex>(); }
+    std::map<std::string, std::thread>& getSafeThreads() { return getSafeStatic<std::map<std::string, std::thread>>(); }
+    std::map<std::string, std::string>& getSafeStatus() { return getSafeStatic<std::map<std::string, std::string>>(); }
+    std::mutex& getSafeCallbackMutex() { return getSafeStatic<std::mutex>(); }
+    std::string& getSafeCSVStr() { return getSafeStatic<std::string>(); }
+    std::string& getSafeErrorsStr() { return getSafeStatic<std::string>(); }
+    
     std::atomic<bool> initialized{false};
     BloodPressureEstimator* g_estimator = nullptr;
     
@@ -28,11 +45,6 @@ namespace {
     thread_local std::string tl_status_str;
     thread_local std::string tl_id_str;
     thread_local std::string tl_version_str;
-    
-    // Global buffers for callback data (protected by mutex)
-    std::string g_csv_str;
-    std::string g_errors_str;
-    std::mutex g_callback_mutex;
     
     // Constants for common responses
     const char* const STATUS_NONE = "none";
@@ -82,7 +94,7 @@ extern "C" {
 int InitializeBP(const char* modelDir) {
     printf("[DLL] InitializeBP called\n"); fflush(stdout);
     try {
-        std::lock_guard<std::mutex> lock(g_mutex);
+        std::lock_guard<std::mutex> lock(getSafeMutex());
         if (g_estimator) {
             delete g_estimator;
             g_estimator = nullptr;
@@ -126,13 +138,13 @@ const char* StartBloodPressureAnalysisRequest(
         }
         std::string reqId(requestId ? requestId : "");
         {
-            std::lock_guard<std::mutex> lock(g_mutex);
-            if (g_threads.count(reqId)) {
+            std::lock_guard<std::mutex> lock(getSafeMutex());
+            if (getSafeThreads().count(reqId)) {
                 tl_error_str = "1005: REQUEST_DURING_PROCESSING";
                 printf("[DLL] StartBloodPressureAnalysisRequest already processing\n"); fflush(stdout);
                 return tl_error_str.c_str();
             }
-            g_status[reqId] = STATUS_PROCESSING;
+            getSafeStatus()[reqId] = STATUS_PROCESSING;
         }
         std::string thread_request_id = requestId ? std::string(requestId) : "";
         RPPGProcessor rppg;
@@ -145,11 +157,11 @@ const char* StartBloodPressureAnalysisRequest(
             
             // Thread-safe callback data preparation
             {
-                std::lock_guard<std::mutex> lock(g_callback_mutex);
-                g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-                g_errors_str = EMPTY_JSON;
+                std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
+                getSafeCSVStr() = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+                getSafeErrorsStr() = EMPTY_JSON;
                 if (callback) {
-                    callback(thread_request_id.c_str(), bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+                    callback(thread_request_id.c_str(), bp.first, bp.second, getSafeCSVStr().c_str(), getSafeErrorsStr().c_str());
                 }
             }
             printf("[DLL] StartBloodPressureAnalysisRequest: callback end\n"); fflush(stdout);
@@ -160,15 +172,15 @@ const char* StartBloodPressureAnalysisRequest(
             log.close();
             
             std::lock_guard<std::mutex> lock(g_callback_mutex);
-            g_errors_str = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
+            getSafeErrorsStr() = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
             if (callback) {
-                callback(thread_request_id.c_str(), 0, 0, EMPTY_STRING, g_errors_str.c_str());
+                callback(thread_request_id.c_str(), 0, 0, EMPTY_STRING, getSafeErrorsStr().c_str());
             }
         }
         {
-            std::lock_guard<std::mutex> lock(g_mutex);
-            g_status[reqId] = STATUS_NONE;
-            g_threads.erase(reqId);
+            std::lock_guard<std::mutex> lock(getSafeMutex());
+            getSafeStatus()[reqId] = STATUS_NONE;
+            getSafeThreads().erase(reqId);
         }
         printf("[DLL] StartBloodPressureAnalysisRequest end\n"); fflush(stdout);
         return EMPTY_STRING;
@@ -201,9 +213,9 @@ const char* GetProcessingStatus(const char* requestId) {
         printf("[DLL] GetProcessingStatus: requestId=%s\n", reqId.c_str()); fflush(stdout);
         
         {
-            std::lock_guard<std::mutex> lock(g_mutex);
-            auto it = g_status.find(reqId);
-            if (it != g_status.end()) {
+            std::lock_guard<std::mutex> lock(getSafeMutex());
+            auto it = getSafeStatus().find(reqId);
+            if (it != getSafeStatus().end()) {
                 tl_status_str = it->second;
                 printf("[DLL] GetProcessingStatus: returning status=%s\n", tl_status_str.c_str()); fflush(stdout);
                 return tl_status_str.c_str();
@@ -316,10 +328,10 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         // Thread-safe callback data preparation
         {
             std::lock_guard<std::mutex> lock(g_callback_mutex);
-            g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-            g_errors_str = EMPTY_JSON;
+            getSafeCSVStr() = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+            getSafeErrorsStr() = EMPTY_JSON;
             if (callback) {
-                callback(EMPTY_STRING, bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+                callback(EMPTY_STRING, bp.first, bp.second, getSafeCSVStr().c_str(), getSafeErrorsStr().c_str());
             }
         }
         printf("[DLL] AnalyzeBloodPressureFromImages: callback end\n"); fflush(stdout);
@@ -331,9 +343,9 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         log.close();
         
         std::lock_guard<std::mutex> lock(g_callback_mutex);
-        g_errors_str = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
+        getSafeErrorsStr() = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
         if (callback) {
-            callback(EMPTY_STRING, 0, 0, EMPTY_STRING, g_errors_str.c_str());
+            callback(EMPTY_STRING, 0, 0, EMPTY_STRING, getSafeErrorsStr().c_str());
         }
         return 1006;
     } catch (...) {
@@ -343,12 +355,64 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         log.close();
         
         std::lock_guard<std::mutex> lock(g_callback_mutex);
-        g_errors_str = "[{\"code\":\"1006\",\"message\":\"unknown error\",\"isRetriable\":false}]";
+        getSafeErrorsStr() = "[{\"code\":\"1006\",\"message\":\"unknown error\",\"isRetriable\":false}]";
         if (callback) {
-            callback(EMPTY_STRING, 0, 0, EMPTY_STRING, g_errors_str.c_str());
+            callback(EMPTY_STRING, 0, 0, EMPTY_STRING, getSafeErrorsStr().c_str());
         }
         return 1006;
     }
 }
+
+#ifdef _WIN32
+// DLL Entry Point - Critical for detecting early loading issues
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    switch (ul_reason_for_call) {
+    case DLL_PROCESS_ATTACH:
+        {
+            // Create a log file immediately upon DLL loading
+            FILE* log = fopen("dll_load.log", "w");
+            if (log) {
+                fprintf(log, "[DLL_MAIN] DLL_PROCESS_ATTACH - DLL loading started\n");
+                fprintf(log, "[DLL_MAIN] Module handle: %p\n", hModule);
+                fclose(log);
+            }
+            
+            // Disable thread library calls to prevent threading issues during startup
+            DisableThreadLibraryCalls(hModule);
+            
+            // Basic environment check
+            try {
+                FILE* log2 = fopen("dll_load.log", "a");
+                if (log2) {
+                    fprintf(log2, "[DLL_MAIN] Environment check passed\n");
+                    fclose(log2);
+                }
+            } catch (...) {
+                // Even basic operations are failing
+                FILE* log2 = fopen("dll_load.log", "a");
+                if (log2) {
+                    fprintf(log2, "[DLL_MAIN] ERROR: Exception during basic environment check\n");
+                    fclose(log2);
+                }
+                return FALSE;
+            }
+        }
+        break;
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+        break;
+    case DLL_PROCESS_DETACH:
+        {
+            FILE* log = fopen("dll_load.log", "a");
+            if (log) {
+                fprintf(log, "[DLL_MAIN] DLL_PROCESS_DETACH - DLL unloading\n");
+                fclose(log);
+            }
+        }
+        break;
+    }
+    return TRUE;
+}
+#endif
 
 } 
