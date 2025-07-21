@@ -885,6 +885,36 @@ jobs:
               exit 1
             }
           }
+      
+      - name: Download ffmpeg.exe for distribution
+        run: |
+          $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          $zipPath = "ffmpeg.zip"
+          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath "ffmpeg"
+          # ffmpeg.exeのパスを自動検出
+          $ffmpegExe = Get-ChildItem -Path "ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+          if ($ffmpegExe) {
+            Copy-Item $ffmpegExe.FullName "dist_cpp/" -Force
+            Write-Host "ffmpeg.exe copied to dist_cpp/" -ForegroundColor Green
+            Copy-Item $ffmpegExe.FullName "deployment/" -Force
+            Write-Host "ffmpeg.exe copied to deployment/" -ForegroundColor Green
+          } else {
+            Write-Host "ffmpeg.exe not found after extraction" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+  
+      - name: Copy ffmpeg.exe to test directory for integration test
+        run: |
+          if (Test-Path "dist_cpp/ffmpeg.exe") {
+            Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
+            Write-Host "ffmpeg.exe copied to CppBloodPressureDLL/test/" -ForegroundColor Green
+          } else {
+            Write-Host "ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
 
       - name: Run C# Integration Test
         run: |
@@ -1452,33 +1482,3 @@ jobs:
             CppBloodPressureDLL/build/
             *.log
           retention-days: 7
-
-      - name: Download ffmpeg.exe for distribution
-        run: |
-          $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-          $zipPath = "ffmpeg.zip"
-          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath
-          Expand-Archive -Path $zipPath -DestinationPath "ffmpeg"
-          # ffmpeg.exeのパスを自動検出
-          $ffmpegExe = Get-ChildItem -Path "ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-          if ($ffmpegExe) {
-            Copy-Item $ffmpegExe.FullName "dist_cpp/" -Force
-            Write-Host "ffmpeg.exe copied to dist_cpp/" -ForegroundColor Green
-            Copy-Item $ffmpegExe.FullName "deployment/" -Force
-            Write-Host "ffmpeg.exe copied to deployment/" -ForegroundColor Green
-          } else {
-            Write-Host "ffmpeg.exe not found after extraction" -ForegroundColor Red
-            exit 1
-          }
-        shell: powershell
-
-      - name: Copy ffmpeg.exe to test directory for integration test
-        run: |
-          if (Test-Path "dist_cpp/ffmpeg.exe") {
-            Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
-            Write-Host "ffmpeg.exe copied to CppBloodPressureDLL/test/" -ForegroundColor Green
-          } else {
-            Write-Host "ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
-            exit 1
-          }
-        shell: powershell
