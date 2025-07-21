@@ -5,72 +5,33 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <opencv2/opencv.hpp>
-#include <opencv2/dnn.hpp>
-#include <fstream> // Added for file existence check
-
-#ifdef ONNXRUNTIME_AVAILABLE
+#include <fstream>
 #include <onnxruntime_cxx_api.h>
-#endif
 
-// OpenCV DNN fallback implementation
-class BPOpenCVImpl {
-public:
-    cv::dnn::Net sbp_net;
-    cv::dnn::Net dbp_net;
-    bool models_loaded;
-
-    BPOpenCVImpl(const std::string& model_dir)
-        : models_loaded(false)
-    {
-        try {
-            std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
-            std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
-            
-            sbp_net = cv::dnn::readNetFromONNX(sbp_path);
-            dbp_net = cv::dnn::readNetFromONNX(dbp_path);
-            
-            models_loaded = true;
-        } catch (const cv::Exception& e) {
-            throw std::runtime_error("Failed to load ONNX models with OpenCV DNN: " + std::string(e.what()));
-        }
-    }
-
-    float run(const cv::dnn::Net& net, const std::vector<float>& features) {
-        if (!models_loaded) {
-            throw std::runtime_error("Models not loaded");
-        }
-
-        // Create input blob
-        cv::Mat input_blob = cv::Mat(1, static_cast<int>(features.size()), CV_32F);
-        for (size_t i = 0; i < features.size(); ++i) {
-            input_blob.at<float>(0, static_cast<int>(i)) = features[i];
-        }
-
-        // Set input and run inference
-        const_cast<cv::dnn::Net&>(net).setInput(input_blob);
-        cv::Mat output = const_cast<cv::dnn::Net&>(net).forward();
-
-        // Get output value
-        return output.at<float>(0, 0);
-    }
-};
-
-#ifdef ONNXRUNTIME_AVAILABLE
-class BPONNXImpl {
-public:
+struct BloodPressureEstimator::Impl {
     Ort::Env env;
     Ort::Session sbp_session;
     Ort::Session dbp_session;
     Ort::SessionOptions session_options;
 
-    BPONNXImpl(const std::string& model_dir)
+    Impl(const std::string& model_dir)
         : env(ORT_LOGGING_LEVEL_WARNING, "bp"),
           sbp_session(nullptr), dbp_session(nullptr)
     {
         session_options.SetIntraOpNumThreads(1);
         std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
         std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
+        // ファイル存在チェック
+        std::ifstream sbp_file(sbp_path, std::ios::binary);
+        std::ifstream dbp_file(dbp_path, std::ios::binary);
+        if (!sbp_file.good()) {
+            throw std::runtime_error("Systolic blood pressure model file not found: " + sbp_path);
+        }
+        if (!dbp_file.good()) {
+            throw std::runtime_error("Diastolic blood pressure model file not found: " + dbp_path);
+        }
+        sbp_file.close();
+        dbp_file.close();
         sbp_session = Ort::Session(env, sbp_path.c_str(), session_options);
         dbp_session = Ort::Session(env, dbp_path.c_str(), session_options);
     }
@@ -99,65 +60,11 @@ public:
         return result;
     }
 };
-#else
-class BPONNXImpl {
-public:
-    // Dummy session type for when ONNX Runtime is not available
-    struct DummySession {};
-    
-    BPONNXImpl(const std::string& model_dir) {
-        throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
-    }
-
-    float run(const DummySession& session, const std::vector<float>& features) {
-        throw std::runtime_error("ONNX Runtime is required for blood pressure estimation");
-    }
-};
-#endif
-
-struct BloodPressureEstimator::Impl {
-#ifdef ONNXRUNTIME_AVAILABLE
-    std::unique_ptr<BPONNXImpl> onnx;
-#else
-    std::unique_ptr<BPOpenCVImpl> opencv;
-#endif
-};
 
 BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
-    : pImpl(new Impl)
+    : pImpl(new Impl(model_dir))
 {
-    try {
-        // Check if model directory exists
-        if (model_dir.empty()) {
-            throw std::runtime_error("Model directory path is empty");
-        }
-        
-        // Check if required ONNX files exist
-        std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
-        std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
-        
-        // Simple file existence check (this is a basic check, in production you might want more robust validation)
-        std::ifstream sbp_file(sbp_path, std::ios::binary);
-        std::ifstream dbp_file(dbp_path, std::ios::binary);
-        
-        if (!sbp_file.good()) {
-            throw std::runtime_error("Systolic blood pressure model file not found: " + sbp_path);
-        }
-        if (!dbp_file.good()) {
-            throw std::runtime_error("Diastolic blood pressure model file not found: " + dbp_path);
-        }
-        
-        sbp_file.close();
-        dbp_file.close();
-        
-#ifdef ONNXRUNTIME_AVAILABLE
-        pImpl->onnx = std::make_unique<BPONNXImpl>(model_dir);
-#else
-        pImpl->opencv = std::make_unique<BPOpenCVImpl>(model_dir);
-#endif
-    } catch (const std::exception& e) {
-        throw std::runtime_error("Failed to initialize BloodPressureEstimator: " + std::string(e.what()));
-    }
+    // ファイル存在チェック等はImplのコンストラクタで行う
 }
 
 BloodPressureEstimator::~BloodPressureEstimator() = default;
@@ -178,13 +85,8 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
     int sex_feature = (sex == 1) ? 1 : 0;
     std::vector<float> features = {float(mean), float(stddev), float(min), float(max), float(bmi), float(sex_feature)};
 
-#ifdef ONNXRUNTIME_AVAILABLE
-    float sbp = pImpl->onnx->run(pImpl->onnx->sbp_session, features);
-    float dbp = pImpl->onnx->run(pImpl->onnx->dbp_session, features);
-#else
-    float sbp = pImpl->opencv->run(pImpl->opencv->sbp_net, features);
-    float dbp = pImpl->opencv->run(pImpl->opencv->dbp_net, features);
-#endif
+    float sbp = pImpl->run(pImpl->sbp_session, features);
+    float dbp = pImpl->run(pImpl->dbp_session, features);
 
     return {int(std::round(sbp)), int(std::round(dbp))};
 } 
