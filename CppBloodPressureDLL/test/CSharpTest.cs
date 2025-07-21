@@ -320,7 +320,13 @@ namespace BloodPressureDllTest
                     Console.WriteLine("   Step 1: 関数呼び出し前の状態確認");
                     Console.WriteLine("   Step 2: GetProcessingStatus関数呼び出し開始");
                     
-                    string status = GetProcessingStatus("test_request");
+                    // より詳細なデバッグ情報
+                    Console.WriteLine("   Step 2.1: 関数ポインタの確認");
+                    Console.WriteLine("   Step 2.2: 引数の準備");
+                    string testArg = "test_request";
+                    Console.WriteLine($"   Step 2.3: 引数値: {testArg}");
+                    
+                    string status = GetProcessingStatus(testArg);
                     
                     Console.WriteLine("   Step 3: GetProcessingStatus関数呼び出し完了");
                     Console.WriteLine("   Step 4: 戻り値の確認");
@@ -349,6 +355,11 @@ namespace BloodPressureDllTest
                 catch (EntryPointNotFoundException ex)
                 {
                     Console.WriteLine($"   [ERROR] 関数が見つかりません: {ex.Message}");
+                    return;
+                }
+                catch (BadImageFormatException ex)
+                {
+                    Console.WriteLine($"   [ERROR] DLLの形式が不正です: {ex.Message}");
                     return;
                 }
                 catch (Exception ex)

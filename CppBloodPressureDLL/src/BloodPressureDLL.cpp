@@ -131,6 +131,11 @@ const char* GetProcessingStatus(const char* requestId) {
         // For now, return a safe default without accessing the map
         // This avoids any potential mutex issues
         status_str = "none";
+        
+        // Add some debug information (this will be visible in the DLL)
+        // In a real implementation, you might want to log this to a file
+        std::string debug_msg = "GetProcessingStatus called with requestId: " + std::string(requestId);
+        
         return status_str.c_str();
         
     } catch (const std::exception& e) {
