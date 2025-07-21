@@ -32,55 +32,22 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(eigen)
 find_package(Eigen3 REQUIRED NO_MODULE)
 
-# Try to find ONNX Runtime
+# Find ONNX Runtime (必須)
 if(DEFINED ONNXRUNTIME_INCLUDE_DIR AND DEFINED ONNXRUNTIME_LIB_DIR)
-    # Use explicitly provided paths
     set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_INCLUDE_DIR}")
     set(ONNXRUNTIME_LIB "${ONNXRUNTIME_LIB_DIR}/onnxruntime.lib")
-    
-    message(STATUS "ONNX Runtime include dir: ${ONNXRUNTIME_INCLUDE_DIR}")
-    message(STATUS "ONNX Runtime lib: ${ONNXRUNTIME_LIB}")
-    
-    if(EXISTS "${ONNXRUNTIME_INCLUDE_DIR}")
-        message(STATUS "Found ONNX Runtime include directory")
-        set(ONNXRUNTIME_FOUND TRUE)
-    else()
-        message(WARNING "ONNX Runtime include directory not found")
-        set(ONNXRUNTIME_FOUND FALSE)
-    endif()
-    
-    if(EXISTS "${ONNXRUNTIME_LIB}")
-        message(STATUS "Found ONNX Runtime library")
-    else()
-        message(WARNING "ONNX Runtime library not found")
-        set(ONNXRUNTIME_FOUND FALSE)
-    endif()
 elseif(DEFINED ONNXRUNTIME_ROOT)
-    # Fallback to ONNXRUNTIME_ROOT
     set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_ROOT}/include")
     set(ONNXRUNTIME_LIB "${ONNXRUNTIME_ROOT}/lib/onnxruntime.lib")
-    
-    message(STATUS "ONNX Runtime root: ${ONNXRUNTIME_ROOT}")
-    message(STATUS "ONNX Runtime include dir: ${ONNXRUNTIME_INCLUDE_DIR}")
-    message(STATUS "ONNX Runtime lib: ${ONNXRUNTIME_LIB}")
-    
-    if(EXISTS "${ONNXRUNTIME_INCLUDE_DIR}")
-        message(STATUS "Found ONNX Runtime include directory")
-        set(ONNXRUNTIME_FOUND TRUE)
-    else()
-        message(WARNING "ONNX Runtime include directory not found")
-        set(ONNXRUNTIME_FOUND FALSE)
-    endif()
-    
-    if(EXISTS "${ONNXRUNTIME_LIB}")
-        message(STATUS "Found ONNX Runtime library")
-    else()
-        message(WARNING "ONNX Runtime library not found")
-        set(ONNXRUNTIME_FOUND FALSE)
-    endif()
 else()
-    message(WARNING "ONNX Runtime paths not defined")
-    set(ONNXRUNTIME_FOUND FALSE)
+    message(FATAL_ERROR "ONNX Runtime paths not defined. Set ONNXRUNTIME_ROOT or ONNXRUNTIME_INCLUDE_DIR/ONNXRUNTIME_LIB_DIR.")
+endif()
+
+if(NOT EXISTS "${ONNXRUNTIME_INCLUDE_DIR}/onnxruntime_cxx_api.h")
+    message(FATAL_ERROR "ONNX Runtime header not found: ${ONNXRUNTIME_INCLUDE_DIR}/onnxruntime_cxx_api.h")
+endif()
+if(NOT EXISTS "${ONNXRUNTIME_LIB}")
+    message(FATAL_ERROR "ONNX Runtime library not found: ${ONNXRUNTIME_LIB}")
 endif()
 
 # Find MediaPipe (required)
@@ -130,15 +97,10 @@ include_directories(
     include
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
+    ${ONNXRUNTIME_INCLUDE_DIR}
 )
 
-if(ONNXRUNTIME_FOUND)
-    include_directories(${ONNXRUNTIME_INCLUDE_DIR})
-    message(STATUS "Found ONNX Runtime include: ${ONNXRUNTIME_INCLUDE_DIR}")
-    add_definitions(-DONNXRUNTIME_AVAILABLE)
-else()
-    message(WARNING "ONNX Runtime not found. Please install or set ONNXRUNTIME_ROOT")
-endif()
+add_definitions(-DONNXRUNTIME_AVAILABLE)
 
 # MediaPipe is required
 if(MEDIAPIPE_FOUND)
@@ -157,17 +119,22 @@ file(GLOB SRC_FILES src/*.cpp)
 add_library(BloodPressureDLL SHARED ${SRC_FILES})
 
 # Link libraries
-target_link_libraries(BloodPressureDLL
+# 必ずONNX Runtimeをリンク
+set(ALL_LIBS
     ${OpenCV_LIBS}
     Eigen3::Eigen
+    ${ONNXRUNTIME_LIB}
 )
 
-if(ONNXRUNTIME_FOUND)
-    target_link_libraries(BloodPressureDLL ${ONNXRUNTIME_LIB})
-    message(STATUS "Linked ONNX Runtime: ${ONNXRUNTIME_LIB}")
-else()
-    message(WARNING "ONNX Runtime library not found")
+if(MEDIAPIPE_FOUND AND MEDIAPIPE_LIB)
+    list(APPEND ALL_LIBS ${MEDIAPIPE_LIB})
 endif()
+
+if(WIN32)
+    list(APPEND ALL_LIBS ws2_32)
+endif()
+
+target_link_libraries(BloodPressureDLL ${ALL_LIBS})
 
 # MediaPipe is required
 if(MEDIAPIPE_FOUND AND MEDIAPIPE_LIB)
