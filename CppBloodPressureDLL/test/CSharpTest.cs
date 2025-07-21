@@ -42,6 +42,10 @@ namespace BloodPressureDllTest
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern IntPtr GenerateRequestId();
 
+        [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+        public static extern int AnalyzeBloodPressureFromImages(
+            [In] string[] imagePaths, int numImages, int height, int weight, int sex, BPCallback callback);
+
         // コールバック関数の実装
         public static void TestCallback(string requestId, int maxBP, int minBP, string csvData, string errorsJson)
         {
@@ -430,19 +434,8 @@ namespace BloodPressureDllTest
                     }
                     Console.WriteLine($"   ffmpeg変換成功（{frameFiles.Length}フレーム）");
 
-                    // ここでOpenCVで画像を順次解析する処理を呼び出す（例: EstimateFromImages(frameFiles)）
-                    // 既存のStartBloodPressureAnalysisRequest等が動画ファイル名を受け取る場合は、
-                    // 画像シーケンスを仮のaviに再変換するか、画像解析用の関数を用意する必要あり
-
-                    // 一時ディレクトリ削除
-                    try { Directory.Delete(tempDir, true); } catch { }
-
-                    // リクエストIDを生成
-                    IntPtr requestIdPtr = GenerateRequestId();
-                    string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
-                    Console.WriteLine($"   リクエストID: {requestId}");
-
-                    // コールバックで推定値を必ずログ出力
+                    // 画像ファイルを1枚ずつimreadして解析 → DLLの新APIで推定
+                    int height = 170, weight = 70, sex = 1;
                     bool callbackCalled = false;
                     AutoResetEvent callbackEvent = new AutoResetEvent(false);
                     BPCallback callback = (cbRequestId, maxBP, minBP, csvData, errorsJson) =>
@@ -475,13 +468,8 @@ namespace BloodPressureDllTest
                         }
                         callbackEvent.Set();
                     };
-
-                    Console.WriteLine("   血圧推定リクエスト送信中...");
-                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, sampleVideo, callback);
-                    string result = Marshal.PtrToStringAnsi(resultPtr);
-                    Console.WriteLine($"   StartBloodPressureAnalysisRequest戻り値: {result}");
-
-                    // コールバックが呼ばれるまで最大30秒待機
+                    Console.WriteLine("   血圧推定リクエスト送信中（画像配列）...");
+                    int resultCode = AnalyzeBloodPressureFromImages(frameFiles, frameFiles.Length, height, weight, sex, callback);
                     if (!callbackEvent.WaitOne(30000))
                     {
                         Console.WriteLine("   [ERROR] コールバックが30秒以内に呼ばれませんでした");
@@ -494,6 +482,8 @@ namespace BloodPressureDllTest
                     {
                         Console.WriteLine("   [SUCCESS] 血圧推定テスト完了");
                     }
+                    try { Directory.Delete(tempDir, true); } catch { }
+                    return;
 
                 }
                 catch (Exception ex)

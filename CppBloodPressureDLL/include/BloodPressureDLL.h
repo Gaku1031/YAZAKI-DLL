@@ -28,4 +28,6 @@ DLL_EXPORT int CancelBloodPressureAnalysis(const char* requestId);
 DLL_EXPORT const char* GetVersionInfo();
 // リクエストID生成
 DLL_EXPORT const char* GenerateRequestId();
+// 画像配列から血圧推定（C#から呼び出し用）
+DLL_EXPORT int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback);
 } 

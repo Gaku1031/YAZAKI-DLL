@@ -15,6 +15,7 @@ public:
     RPPGProcessor();
     ~RPPGProcessor();
     RPPGResult processVideo(const std::string& videoPath);
+    RPPGResult processImagesFromPaths(const std::vector<std::string>& imagePaths, double fps = 30.0);
     
 private:
     struct Impl;

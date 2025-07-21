@@ -169,4 +169,25 @@ const char* GenerateRequestId() {
     return id.c_str();
 }
 
+int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback) {
+    if (!initialized) return 1001;
+    try {
+        std::vector<std::string> paths;
+        for (int i = 0; i < numImages; ++i) {
+            if (imagePaths[i]) paths.emplace_back(imagePaths[i]);
+        }
+        RPPGProcessor rppg;
+        RPPGResult r = rppg.processImagesFromPaths(paths);
+        auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
+        std::string csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+        std::string errors = "[]";
+        if (callback) callback("", bp.first, bp.second, csv.c_str(), errors.c_str());
+        return 0;
+    } catch (const std::exception& e) {
+        std::string errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]");
+        if (callback) callback("", 0, 0, "", errors.c_str());
+        return 1006;
+    }
+}
+
 } 
