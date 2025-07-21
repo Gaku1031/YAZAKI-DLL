@@ -398,12 +398,14 @@ namespace BloodPressureDllTest
                         return;
                     }
 
-                    // webm→avi(MJPEG)一時変換
-                    string tempAvi = Path.Combine(Path.GetTempPath(), $"temp_{Guid.NewGuid().ToString().Replace("-", "")}.avi");
-                    Console.WriteLine($"   ffmpegでavi(MJPEG)に一時変換: {tempAvi}");
+                    // webm→画像シーケンス一時変換
+                    string tempDir = Path.Combine(Path.GetTempPath(), $"frames_{Guid.NewGuid().ToString().Replace("-", "")}");
+                    Directory.CreateDirectory(tempDir);
+                    string framePattern = Path.Combine(tempDir, "frame_%05d.jpg");
+                    Console.WriteLine($"   ffmpegで画像シーケンスに一時変換: {framePattern}");
                     var ffmpegProc = new System.Diagnostics.Process();
                     ffmpegProc.StartInfo.FileName = ffmpegExe;
-                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v mjpeg -q:v 3 \"{tempAvi}\"";
+                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -q:v 2 \"{framePattern}\"";
                     ffmpegProc.StartInfo.UseShellExecute = false;
                     ffmpegProc.StartInfo.RedirectStandardOutput = true;
                     ffmpegProc.StartInfo.RedirectStandardError = true;
@@ -416,21 +418,24 @@ namespace BloodPressureDllTest
                         ffmpegProc.Kill();
                         Console.WriteLine("   [ERROR] ffmpeg変換がタイムアウトしました");
                         Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
+                        try { Directory.Delete(tempDir, true); } catch { }
                         return;
                     }
-                    if (!File.Exists(tempAvi) || new FileInfo(tempAvi).Length < 1000)
+                    var frameFiles = Directory.GetFiles(tempDir, "frame_*.jpg").OrderBy(f => f).ToArray();
+                    if (frameFiles.Length == 0)
                     {
-                        Console.WriteLine($"   [ERROR] ffmpeg変換失敗: {ffmpegErr}");
+                        Console.WriteLine($"   [ERROR] ffmpeg画像変換失敗: {ffmpegErr}");
+                        try { Directory.Delete(tempDir, true); } catch { }
                         return;
                     }
-                    long aviSize = new FileInfo(tempAvi).Length;
-                    if (aviSize > 100 * 1024 * 1024) // 100MB
-                    {
-                        Console.WriteLine($"   [WARNING] 変換後のaviファイルが100MBを超えています（{aviSize / (1024 * 1024)}MB）。一時ファイルを削除します。");
-                        try { File.Delete(tempAvi); } catch { }
-                        return;
-                    }
-                    Console.WriteLine($"   ffmpeg変換成功（{aviSize / (1024 * 1024.0):F2} MB）");
+                    Console.WriteLine($"   ffmpeg変換成功（{frameFiles.Length}フレーム）");
+
+                    // ここでOpenCVで画像を順次解析する処理を呼び出す（例: EstimateFromImages(frameFiles)）
+                    // 既存のStartBloodPressureAnalysisRequest等が動画ファイル名を受け取る場合は、
+                    // 画像シーケンスを仮のaviに再変換するか、画像解析用の関数を用意する必要あり
+
+                    // 一時ディレクトリ削除
+                    try { Directory.Delete(tempDir, true); } catch { }
 
                     // リクエストIDを生成
                     IntPtr requestIdPtr = GenerateRequestId();
@@ -472,7 +477,7 @@ namespace BloodPressureDllTest
                     };
 
                     Console.WriteLine("   血圧推定リクエスト送信中...");
-                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, tempAvi, callback);
+                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, sampleVideo, callback);
                     string result = Marshal.PtrToStringAnsi(resultPtr);
                     Console.WriteLine($"   StartBloodPressureAnalysisRequest戻り値: {result}");
 
@@ -490,8 +495,6 @@ namespace BloodPressureDllTest
                         Console.WriteLine("   [SUCCESS] 血圧推定テスト完了");
                     }
 
-                    // 一時ファイル削除
-                    try { File.Delete(tempAvi); } catch { }
                 }
                 catch (Exception ex)
                 {
