@@ -59,11 +59,27 @@ std::string generateCSV(const std::vector<double>& rppg_signal,
 extern "C" {
 
 int InitializeBP(const char* modelDir) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_estimator) delete g_estimator;
-    g_estimator = new BloodPressureEstimator(modelDir ? modelDir : "models");
-    initialized = true;
-    return 1;
+    try {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (g_estimator) {
+            delete g_estimator;
+            g_estimator = nullptr;
+        }
+        
+        std::string modelPath = modelDir ? modelDir : "models";
+        g_estimator = new BloodPressureEstimator(modelPath);
+        initialized = true;
+        return 1;
+    } catch (const std::exception& e) {
+        // Log error details for debugging
+        std::string error_msg = "DLL initialization failed: " + std::string(e.what());
+        // In a real implementation, you might want to log this to a file
+        // For now, we'll just return failure
+        return 0;
+    } catch (...) {
+        // Catch any other exceptions
+        return 0;
+    }
 }
 
 const char* StartBloodPressureAnalysisRequest(

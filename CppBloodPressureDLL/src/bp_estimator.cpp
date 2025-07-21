@@ -7,6 +7,7 @@
 #include <memory>
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
+#include <fstream> // Added for file existence check
 
 #ifdef ONNXRUNTIME_AVAILABLE
 #include <onnxruntime_cxx_api.h>
@@ -23,8 +24,8 @@ public:
         : models_loaded(false)
     {
         try {
-            std::string sbp_path = model_dir + "/model_sbp.onnx";
-            std::string dbp_path = model_dir + "/model_dbp.onnx";
+            std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
+            std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
             
             sbp_net = cv::dnn::readNetFromONNX(sbp_path);
             dbp_net = cv::dnn::readNetFromONNX(dbp_path);
@@ -68,8 +69,8 @@ public:
           sbp_session(nullptr), dbp_session(nullptr)
     {
         session_options.SetIntraOpNumThreads(1);
-        std::string sbp_path = model_dir + "/model_sbp.onnx";
-        std::string dbp_path = model_dir + "/model_dbp.onnx";
+        std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
+        std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
         sbp_session = Ort::Session(env, sbp_path.c_str(), session_options);
         dbp_session = Ort::Session(env, dbp_path.c_str(), session_options);
     }
@@ -125,11 +126,38 @@ struct BloodPressureEstimator::Impl {
 BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
     : pImpl(new Impl)
 {
+    try {
+        // Check if model directory exists
+        if (model_dir.empty()) {
+            throw std::runtime_error("Model directory path is empty");
+        }
+        
+        // Check if required ONNX files exist
+        std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
+        std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
+        
+        // Simple file existence check (this is a basic check, in production you might want more robust validation)
+        std::ifstream sbp_file(sbp_path, std::ios::binary);
+        std::ifstream dbp_file(dbp_path, std::ios::binary);
+        
+        if (!sbp_file.good()) {
+            throw std::runtime_error("Systolic blood pressure model file not found: " + sbp_path);
+        }
+        if (!dbp_file.good()) {
+            throw std::runtime_error("Diastolic blood pressure model file not found: " + dbp_path);
+        }
+        
+        sbp_file.close();
+        dbp_file.close();
+        
 #ifdef ONNXRUNTIME_AVAILABLE
-    pImpl->onnx = std::make_unique<BPONNXImpl>(model_dir);
+        pImpl->onnx = std::make_unique<BPONNXImpl>(model_dir);
 #else
-    pImpl->opencv = std::make_unique<BPOpenCVImpl>(model_dir);
+        pImpl->opencv = std::make_unique<BPOpenCVImpl>(model_dir);
 #endif
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Failed to initialize BloodPressureEstimator: " + std::string(e.what()));
+    }
 }
 
 BloodPressureEstimator::~BloodPressureEstimator() = default;
