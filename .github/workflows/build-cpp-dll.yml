@@ -976,14 +976,14 @@ jobs:
 
           # Run test and capture output
           Write-Host "Running integration test..." -ForegroundColor Yellow
-          
+
           # Clear any existing log files before test
           if (Test-Path "dll_load.log") { Remove-Item "dll_load.log" -Force }
           if (Test-Path "dll_error.log") { Remove-Item "dll_error.log" -Force }
-          
+
           $testOutput = dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }} 2>&1
           $testExitCode = $LASTEXITCODE
-          
+
           # Check for DLL loading logs immediately after test
           Write-Host "Checking for DLL debug logs..." -ForegroundColor Yellow
           if (Test-Path "dll_load.log") {
@@ -993,7 +993,7 @@ jobs:
           } else {
             Write-Host "No dll_load.log found - DLL may not have been loaded at all" -ForegroundColor Red
           }
-          
+
           if (Test-Path "dll_error.log") {
             Write-Host "=== DLL Error Log ===" -ForegroundColor Red
             Get-Content "dll_error.log" | ForEach-Object { Write-Host $_ -ForegroundColor Red }
@@ -1432,3 +1432,13 @@ jobs:
             CppBloodPressureDLL/build/
             *.log
           retention-days: 7
+
+      - name: Copy dll_load.log to test-results
+        run: |
+          if (Test-Path "CppBloodPressureDLL/test/dll_load.log") {
+            Copy-Item "CppBloodPressureDLL/test/dll_load.log" "CppBloodPressureDLL/test/test-results/dll_load.log" -Force
+            Write-Host "dll_load.log copied to test-results directory"
+          } else {
+            Write-Host "dll_load.log not found, skipping copy"
+          }
+        shell: powershell
