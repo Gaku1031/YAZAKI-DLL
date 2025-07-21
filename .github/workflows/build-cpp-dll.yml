@@ -892,9 +892,11 @@ jobs:
           $zipPath = "ffmpeg.zip"
           Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath
           Expand-Archive -Path $zipPath -DestinationPath "ffmpeg"
-          # ffmpeg.exeのパスを自動検出
+          Write-Host "Listing all files under ffmpeg/ after extraction:" -ForegroundColor Yellow
+          Get-ChildItem -Path "ffmpeg" -Recurse | ForEach-Object { Write-Host $_.FullName }
           $ffmpegExe = Get-ChildItem -Path "ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
           if ($ffmpegExe) {
+            Write-Host "ffmpeg.exe found at: $($ffmpegExe.FullName)" -ForegroundColor Green
             Copy-Item $ffmpegExe.FullName "dist_cpp/" -Force
             Write-Host "ffmpeg.exe copied to dist_cpp/" -ForegroundColor Green
             Copy-Item $ffmpegExe.FullName "deployment/" -Force
