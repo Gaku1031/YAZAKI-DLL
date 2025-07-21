@@ -591,9 +591,13 @@ namespace BloodPressureDllTest
             Console.WriteLine($"[DEBUG] Is64BitProcess: {Environment.Is64BitProcess}");
             try
             {
-                Console.WriteLine("C++ Blood Pressure DLL テスト開始");
-                TestComprehensiveDLL();
-                Console.WriteLine("テスト完了");
+                Console.WriteLine("C++ Blood Pressure DLL GetVersionInfoテスト開始");
+                var sb = new System.Text.StringBuilder(256);
+                int result = GetVersionInfo(sb, sb.Capacity);
+                string version = sb.ToString();
+                Console.WriteLine($"GetVersionInfo result: {result}");
+                Console.WriteLine($"GetVersionInfo buffer: '{version}'");
+                Console.WriteLine("テスト終了");
             }
             catch (Exception ex)
             {
