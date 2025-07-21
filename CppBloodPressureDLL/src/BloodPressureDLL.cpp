@@ -68,19 +68,17 @@ int InitializeBP(const char* modelDir) {
             delete g_estimator;
             g_estimator = nullptr;
         }
-        
         std::string modelPath = modelDir ? modelDir : "models";
         g_estimator = new BloodPressureEstimator(modelPath);
         initialized = true;
         return 1;
     } catch (const std::exception& e) {
-        // Log error details for debugging
-        std::string error_msg = "DLL initialization failed: " + std::string(e.what());
-        // In a real implementation, you might want to log this to a file
-        // For now, we'll just return failure
+        static thread_local std::string error_msg;
+        error_msg = std::string("DLL initialization failed: ") + e.what();
+        // ここでログファイルにも出力したい場合はofstream等で追記可能
         return 0;
     } catch (...) {
-        // Catch any other exceptions
+        static thread_local std::string error_msg = "DLL initialization failed: unknown error";
         return 0;
     }
 }
@@ -89,65 +87,68 @@ const char* StartBloodPressureAnalysisRequest(
     const char* requestId, int height, int weight, int sex,
     const char* moviePath, BPCallback callback)
 {
-    if (!initialized) return "1001"; // DLL_NOT_INITIALIZED
-    static std::string ret_str; // 返却用static
-    std::string reqId(requestId);
-    {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        if (g_threads.count(reqId)) return "1005"; // REQUEST_DURING_PROCESSING
-        g_status[reqId] = "processing";
-    }
-    // スレッドを使わず、メインスレッドで直接コールバックを呼び出す
-    static thread_local std::string thread_request_id = requestId ? std::string(requestId) : "";
-    RPPGProcessor rppg;
     try {
-        RPPGResult r = rppg.processVideo(moviePath);
-        auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-        static thread_local std::string csv;
-        static thread_local std::string errors;
-        csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-        errors = "[]";
-        if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
+        if (!initialized) {
+            static thread_local std::string err = "1001: DLL_NOT_INITIALIZED";
+            return err.c_str();
+        }
+        static std::string ret_str;
+        std::string reqId(requestId);
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            if (g_threads.count(reqId)) {
+                static thread_local std::string err = "1005: REQUEST_DURING_PROCESSING";
+                return err.c_str();
+            }
+            g_status[reqId] = "processing";
+        }
+        static thread_local std::string thread_request_id = requestId ? std::string(requestId) : "";
+        RPPGProcessor rppg;
+        try {
+            RPPGResult r = rppg.processVideo(moviePath);
+            auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
+            static thread_local std::string csv;
+            static thread_local std::string errors;
+            csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+            errors = "[]";
+            if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
+        } catch (const std::exception& e) {
+            static thread_local std::string errors;
+            errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
+            if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            g_status[reqId] = "none";
+            g_threads.erase(reqId);
+        }
+        static thread_local std::string ok = "";
+        return ok.c_str();
     } catch (const std::exception& e) {
-        static thread_local std::string errors;
-        errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-        if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+        static thread_local std::string err;
+        err = std::string("StartBloodPressureAnalysisRequest failed: ") + e.what();
+        return err.c_str();
+    } catch (...) {
+        static thread_local std::string err = "StartBloodPressureAnalysisRequest failed: unknown error";
+        return err.c_str();
     }
-    {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        g_status[reqId] = "none";
-        g_threads.erase(reqId);
-    }
-    return nullptr;
 }
 
 const char* GetProcessingStatus(const char* requestId) {
-    static std::string status_str;
-    
-    // Null pointer check
-    if (!requestId) {
-        status_str = "none";
-        return status_str.c_str();
-    }
-    
+    static thread_local std::string status_str;
     try {
-        // For now, return a safe default without accessing the map
-        // This avoids any potential mutex issues
+        if (!requestId) {
+            status_str = "none";
+            return status_str.c_str();
+        }
         status_str = "none";
-        
-        // Add some debug information (this will be visible in the DLL)
-        // In a real implementation, you might want to log this to a file
         std::string debug_msg = "GetProcessingStatus called with requestId: " + std::string(requestId);
-        
         return status_str.c_str();
-        
     } catch (const std::exception& e) {
-        // Return safe default in case of any exception
-        status_str = "none";
+        status_str = std::string("GetProcessingStatus failed: ") + e.what();
         return status_str.c_str();
     } catch (...) {
-        // Catch any other exceptions
-        status_str = "none";
+        status_str = "GetProcessingStatus failed: unknown error";
         return status_str.c_str();
     }
 }
@@ -158,23 +159,41 @@ int CancelBloodPressureAnalysis(const char* requestId) {
 }
 
 const char* GetVersionInfo() {
-    static std::string version_str = "BloodPressureDLL v1.0.0";
-    return version_str.c_str();
+    try {
+        static thread_local std::string version_str = "BloodPressureDLL v1.0.0";
+        return version_str.c_str();
+    } catch (const std::exception& e) {
+        static thread_local std::string err;
+        err = std::string("GetVersionInfo failed: ") + e.what();
+        return err.c_str();
+    } catch (...) {
+        static thread_local std::string err = "GetVersionInfo failed: unknown error";
+        return err.c_str();
+    }
 }
 
 const char* GenerateRequestId() {
-    static std::string id;
-    auto now = std::chrono::system_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-    std::ostringstream oss;
-    oss << ms << "_CUSTOMER_DRIVER";
-    id = oss.str();
-    return id.c_str();
+    try {
+        static thread_local std::string id;
+        auto now = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        std::ostringstream oss;
+        oss << ms << "_CUSTOMER_DRIVER";
+        id = oss.str();
+        return id.c_str();
+    } catch (const std::exception& e) {
+        static thread_local std::string err;
+        err = std::string("GenerateRequestId failed: ") + e.what();
+        return err.c_str();
+    } catch (...) {
+        static thread_local std::string err = "GenerateRequestId failed: unknown error";
+        return err.c_str();
+    }
 }
 
 int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback) {
-    if (!initialized) return 1001;
     try {
+        if (!initialized) return 1001;
         static thread_local std::string thread_request_id = "";
         std::vector<std::string> paths;
         for (int i = 0; i < numImages; ++i) {
@@ -193,6 +212,11 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         static thread_local std::string thread_request_id = "";
         static thread_local std::string errors;
         errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
+        if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+        return 1006;
+    } catch (...) {
+        static thread_local std::string thread_request_id = "";
+        static thread_local std::string errors = "[{\"code\":\"1006\",\"message\":\"unknown error\",\"isRetriable\":false}]";
         if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         return 1006;
     }

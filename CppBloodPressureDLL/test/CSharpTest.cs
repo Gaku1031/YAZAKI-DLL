@@ -47,6 +47,13 @@ namespace BloodPressureDllTest
         public static extern int AnalyzeBloodPressureFromImages(
             [In] string[] imagePaths, int numImages, int height, int weight, int sex, BPCallback callback);
 
+        // IntPtr→string変換時はNULLチェック
+        public static string PtrToStringSafe(IntPtr ptr)
+        {
+            if (ptr == IntPtr.Zero) return null;
+            return Marshal.PtrToStringAnsi(ptr);
+        }
+
         // コールバック関数の実装
         public static void TestCallback(IntPtr requestIdPtr, int maxBP, int minBP, IntPtr csvDataPtr, IntPtr errorsJsonPtr)
         {
@@ -245,7 +252,7 @@ namespace BloodPressureDllTest
                 {
                     Console.WriteLine("   GetVersionInfo関数を呼び出し中...");
                     IntPtr versionPtr = GetVersionInfo();
-                    string version = Marshal.PtrToStringAnsi(versionPtr);
+                    string version = PtrToStringSafe(versionPtr);
                     Console.WriteLine("   GetVersionInfo関数呼び出し完了");
                     
                     if (string.IsNullOrEmpty(version))
@@ -254,6 +261,11 @@ namespace BloodPressureDllTest
                         return;
                     }
                     Console.WriteLine($"   バージョン: {version}");
+                    if (version.Contains("failed"))
+                    {
+                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {version}");
+                        return;
+                    }
                     Console.WriteLine("   [SUCCESS] バージョン情報取得成功");
                 }
                 catch (DllNotFoundException ex)
@@ -287,7 +299,7 @@ namespace BloodPressureDllTest
                 {
                     Console.WriteLine("   GenerateRequestId関数を呼び出し中...");
                     IntPtr requestIdPtr = GenerateRequestId();
-                    string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
+                    string requestId = PtrToStringSafe(requestIdPtr);
                     Console.WriteLine("   GenerateRequestId関数呼び出し完了");
                     
                     if (string.IsNullOrEmpty(requestId))
@@ -296,6 +308,11 @@ namespace BloodPressureDllTest
                         return;
                     }
                     Console.WriteLine($"   生成されたID: {requestId}");
+                    if (requestId.Contains("failed"))
+                    {
+                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {requestId}");
+                        return;
+                    }
                     Console.WriteLine("   [SUCCESS] リクエストID生成成功");
                 }
                 catch (AccessViolationException ex)
@@ -332,7 +349,7 @@ namespace BloodPressureDllTest
                     Console.WriteLine($"   Step 2.3: 引数値: {testArg}");
                     
                     IntPtr statusPtr = GetProcessingStatus(testArg);
-                    string status = Marshal.PtrToStringAnsi(statusPtr);
+                    string status = PtrToStringSafe(statusPtr);
                     
                     Console.WriteLine("   Step 3: GetProcessingStatus関数呼び出し完了");
                     Console.WriteLine("   Step 4: 戻り値の確認");
@@ -344,6 +361,11 @@ namespace BloodPressureDllTest
                     }
                     
                     Console.WriteLine($"   処理状況: {status}");
+                    if (status.Contains("failed"))
+                    {
+                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {status}");
+                        return;
+                    }
                     Console.WriteLine("   [SUCCESS] 処理状況取得成功");
                 }
                 catch (AccessViolationException ex)
