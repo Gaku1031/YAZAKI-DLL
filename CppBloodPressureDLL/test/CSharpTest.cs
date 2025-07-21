@@ -392,6 +392,9 @@ namespace BloodPressureDllTest
                     if (!File.Exists(ffmpegExe) && ffmpegExe != "ffmpeg.exe")
                     {
                         Console.WriteLine($"   [ERROR] ffmpeg.exeが見つかりません。配布物に同梱されているか、PATHが通っているか確認してください。");
+                        Console.WriteLine("   [DEBUG] testディレクトリのファイル一覧:");
+                        foreach (var f in Directory.GetFiles(".", "*", SearchOption.TopDirectoryOnly))
+                            Console.WriteLine("   " + f);
                         return;
                     }
 
@@ -405,9 +408,15 @@ namespace BloodPressureDllTest
                     ffmpegProc.StartInfo.RedirectStandardOutput = true;
                     ffmpegProc.StartInfo.RedirectStandardError = true;
                     ffmpegProc.Start();
+                    Console.WriteLine("   [DEBUG] ffmpegプロセス開始");
+                    bool exited = ffmpegProc.WaitForExit(15000); // 15秒でタイムアウト
+                    if (!exited) {
+                        ffmpegProc.Kill();
+                        Console.WriteLine("   [ERROR] ffmpeg変換がタイムアウトしました");
+                        return;
+                    }
                     string ffmpegOut = ffmpegProc.StandardOutput.ReadToEnd();
                     string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
-                    ffmpegProc.WaitForExit();
                     if (!File.Exists(tempMp4) || new FileInfo(tempMp4).Length < 1000)
                     {
                         Console.WriteLine($"   [ERROR] ffmpeg変換失敗: {ffmpegErr}");

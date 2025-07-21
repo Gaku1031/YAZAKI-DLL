@@ -895,7 +895,6 @@ jobs:
           Write-Host "Listing all files under ffmpeg/ after extraction:" -ForegroundColor Yellow
           Get-ChildItem -Path "ffmpeg" -Recurse | ForEach-Object { Write-Host $_.FullName }
           $ffmpegExe = Get-ChildItem -Path "ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-          # 追加: コピー先ディレクトリを必ず作成
           if (!(Test-Path "dist_cpp")) { New-Item -ItemType Directory -Path "dist_cpp" | Out-Null }
           if (!(Test-Path "deployment")) { New-Item -ItemType Directory -Path "deployment" | Out-Null }
           if ($ffmpegExe) {
@@ -909,7 +908,7 @@ jobs:
             exit 1
           }
         shell: powershell
-  
+
       - name: Copy ffmpeg.exe to test directory for integration test
         run: |
           if (Test-Path "dist_cpp/ffmpeg.exe") {
