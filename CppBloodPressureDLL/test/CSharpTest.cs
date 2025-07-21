@@ -26,7 +26,7 @@ namespace BloodPressureDllTest
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         [return: MarshalAs(UnmanagedType.LPStr)]
-        public static extern string StartBloodPressureAnalysisRequest(
+        public static extern IntPtr StartBloodPressureAnalysisRequest(
             [MarshalAs(UnmanagedType.LPStr)] string requestId,
             int height, int weight, int sex,
             [MarshalAs(UnmanagedType.LPStr)] string moviePath,
@@ -368,6 +368,84 @@ namespace BloodPressureDllTest
                     Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
                     Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                     return;
+                }
+                
+                // 5. 血圧推定テスト
+                Console.WriteLine("\n5. 血圧推定テスト");
+                try
+                {
+                    string sampleVideo = "sample_video.webm";
+                    if (!File.Exists(sampleVideo))
+                    {
+                        Console.WriteLine($"   [ERROR] サンプル動画が見つかりません: {sampleVideo}");
+                        return;
+                    }
+                    var fileInfo = new FileInfo(sampleVideo);
+                    Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
+
+                    // リクエストIDを生成
+                    IntPtr requestIdPtr = GenerateRequestId();
+                    string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
+                    Console.WriteLine($"   リクエストID: {requestId}");
+
+                    // コールバックで推定値を必ずログ出力
+                    bool callbackCalled = false;
+                    AutoResetEvent callbackEvent = new AutoResetEvent(false);
+                    BPCallback callback = (cbRequestId, maxBP, minBP, csvData, errorsJson) =>
+                    {
+                        callbackCalled = true;
+                        Console.WriteLine("\n=== 血圧推定コールバック ===");
+                        Console.WriteLine($"Request ID: {cbRequestId}");
+                        Console.WriteLine($"最高血圧: {maxBP} mmHg");
+                        Console.WriteLine($"最低血圧: {minBP} mmHg");
+                        Console.WriteLine($"CSVデータサイズ: {csvData?.Length ?? 0} 文字");
+                        if (!string.IsNullOrEmpty(csvData))
+                        {
+                            Console.WriteLine($"CSVデータ(先頭100文字): {csvData.Substring(0, Math.Min(100, csvData.Length))}");
+                        }
+                        if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
+                        {
+                            Console.WriteLine($"[ERROR] エラー: {errorsJson}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("[SUCCESS] エラーなし");
+                        }
+                        if (maxBP > 0 && minBP > 0)
+                        {
+                            Console.WriteLine($"[SUCCESS] 推定値: SBP={maxBP}, DBP={minBP}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("[ERROR] 推定値が0または異常です");
+                        }
+                        callbackEvent.Set();
+                    };
+
+                    Console.WriteLine("   血圧推定リクエスト送信中...");
+                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, sampleVideo, callback);
+                    string result = Marshal.PtrToStringAnsi(resultPtr);
+                    Console.WriteLine($"   StartBloodPressureAnalysisRequest戻り値: {result}");
+
+                    // コールバックが呼ばれるまで最大30秒待機
+                    if (!callbackEvent.WaitOne(30000))
+                    {
+                        Console.WriteLine("   [ERROR] コールバックが30秒以内に呼ばれませんでした");
+                    }
+                    else if (!callbackCalled)
+                    {
+                        Console.WriteLine("   [ERROR] コールバックが呼ばれませんでした");
+                    }
+                    else
+                    {
+                        Console.WriteLine("   [SUCCESS] 血圧推定テスト完了");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"   [ERROR] 血圧推定テストで予期しないエラー: {ex.Message}");
+                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
+                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                 }
                 
                 Console.WriteLine("\n[SUCCESS] すべてのテストが完了しました");
