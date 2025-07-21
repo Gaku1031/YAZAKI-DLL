@@ -314,9 +314,16 @@ namespace BloodPressureDllTest
                 {
                     Console.WriteLine("   処理状況取得を試行中...");
                     Console.WriteLine("   GetProcessingStatus関数を呼び出し中...");
+                    Console.WriteLine("   引数: test_request");
+                    
+                    // 段階的なテスト
+                    Console.WriteLine("   Step 1: 関数呼び出し前の状態確認");
+                    Console.WriteLine("   Step 2: GetProcessingStatus関数呼び出し開始");
                     
                     string status = GetProcessingStatus("test_request");
-                    Console.WriteLine("   GetProcessingStatus関数呼び出し完了");
+                    
+                    Console.WriteLine("   Step 3: GetProcessingStatus関数呼び出し完了");
+                    Console.WriteLine("   Step 4: 戻り値の確認");
                     
                     if (string.IsNullOrEmpty(status))
                     {
