@@ -404,7 +404,7 @@ namespace BloodPressureDllTest
                     var ffmpegProc = new System.Diagnostics.Process();
                     ffmpegProc.StartInfo.FileName = ffmpegExe;
                     // 音声ストリームがあるかどうかをffprobeで判定するのが理想だが、まずは-c:v libx264のみで実行
-                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v libx264 \"{tempMp4}\"";
+                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v libx264 -pix_fmt yuv420p \"{tempMp4}\"";
                     ffmpegProc.StartInfo.UseShellExecute = false;
                     ffmpegProc.StartInfo.RedirectStandardOutput = true;
                     ffmpegProc.StartInfo.RedirectStandardError = true;
