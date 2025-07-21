@@ -131,11 +131,12 @@ int CancelBloodPressureAnalysis(const char* requestId) {
 }
 
 const char* GetVersionInfo() {
-    return version.c_str();
+    static std::string version_str = "BloodPressureDLL v1.0.0";
+    return version_str.c_str();
 }
 
 const char* GenerateRequestId() {
-    static thread_local std::string id;
+    static std::string id;
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
     std::ostringstream oss;

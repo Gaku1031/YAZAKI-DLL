@@ -314,6 +314,11 @@ namespace BloodPressureDllTest
                 try
                 {
                     string version = GetVersionInfo();
+                    if (string.IsNullOrEmpty(version))
+                    {
+                        Console.WriteLine("   [ERROR] バージョン情報が空です");
+                        return;
+                    }
                     Console.WriteLine($"   バージョン: {version}");
                     Console.WriteLine("   [SUCCESS] バージョン情報取得成功");
                 }
@@ -325,6 +330,12 @@ namespace BloodPressureDllTest
                 catch (EntryPointNotFoundException ex)
                 {
                     Console.WriteLine($"   [ERROR] 関数が見つかりません: {ex.Message}");
+                    return;
+                }
+                catch (AccessViolationException ex)
+                {
+                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
+                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
                     return;
                 }
                 catch (Exception ex)
@@ -340,8 +351,19 @@ namespace BloodPressureDllTest
                 try
                 {
                     string requestId = GenerateRequestId();
+                    if (string.IsNullOrEmpty(requestId))
+                    {
+                        Console.WriteLine("   [ERROR] リクエストIDが空です");
+                        return;
+                    }
                     Console.WriteLine($"   生成されたID: {requestId}");
                     Console.WriteLine("   [SUCCESS] リクエストID生成成功");
+                }
+                catch (AccessViolationException ex)
+                {
+                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
+                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
+                    return;
                 }
                 catch (Exception ex)
                 {
