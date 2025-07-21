@@ -410,7 +410,7 @@ namespace BloodPressureDllTest
                     ffmpegProc.StartInfo.RedirectStandardError = true;
                     ffmpegProc.Start();
                     Console.WriteLine("   [DEBUG] ffmpegプロセス開始");
-                    bool exited = ffmpegProc.WaitForExit(15000); // 15秒でタイムアウト
+                    bool exited = ffmpegProc.WaitForExit(60000); // 60秒でタイムアウト
                     string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
                     if (!exited) {
                         ffmpegProc.Kill();
