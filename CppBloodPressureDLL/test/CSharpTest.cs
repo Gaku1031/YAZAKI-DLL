@@ -23,29 +23,29 @@ namespace BloodPressureDllTest
         private const string DllPath = "BloodPressureDLL.dll";
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern int InitializeBP([MarshalAs(UnmanagedType.LPStr)] string modelDir);
+        public static extern int InitializeBP([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string modelDir);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern IntPtr StartBloodPressureAnalysisRequest(
+        public static extern int StartBloodPressureAnalysisRequest([Out] StringBuilder outBuf, int bufSize,
             [MarshalAs(UnmanagedType.LPStr)] string requestId,
             int height, int weight, int sex,
             [MarshalAs(UnmanagedType.LPStr)] string moviePath,
             BPCallback callback);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern IntPtr GetProcessingStatus([MarshalAs(UnmanagedType.LPStr)] string requestId);
+        public static extern int GetProcessingStatus([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string requestId);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern int CancelBloodPressureAnalysis([MarshalAs(UnmanagedType.LPStr)] string requestId);
+        public static extern int CancelBloodPressureAnalysis([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string requestId);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern int GetVersionInfo([Out] StringBuilder outBuf, int bufSize);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern IntPtr GenerateRequestId();
+        public static extern int GenerateRequestId([Out] StringBuilder outBuf, int bufSize);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern int AnalyzeBloodPressureFromImages(
+        public static extern int AnalyzeBloodPressureFromImages([Out] StringBuilder outBuf, int bufSize,
             [In] string[] imagePaths, int numImages, int height, int weight, int sex, BPCallback callback);
 
         // IntPtr→string変換時はNULLチェック
@@ -244,7 +244,8 @@ namespace BloodPressureDllTest
                 int initResult;
                 try 
                 {
-                    initResult = InitializeBP("models");
+                    var sb = new StringBuilder(256);
+                    initResult = InitializeBP(sb, sb.Capacity, "models");
                     Console.WriteLine("   Step 3: InitializeBP call completed successfully");
                     Console.Out.Flush();
                 }
@@ -337,8 +338,9 @@ namespace BloodPressureDllTest
                 try
                 {
                     Console.WriteLine("   GenerateRequestId関数を呼び出し中...");
-                    IntPtr requestIdPtr = GenerateRequestId();
-                    string requestId = PtrToStringSafe(requestIdPtr);
+                    var sb = new StringBuilder(256);
+                    int result = GenerateRequestId(sb, sb.Capacity);
+                    string requestId = sb.ToString();
                     Console.WriteLine("   GenerateRequestId関数呼び出し完了");
                     
                     if (string.IsNullOrEmpty(requestId))
@@ -387,12 +389,18 @@ namespace BloodPressureDllTest
                     string testArg = "test_request";
                     Console.WriteLine($"   Step 2.3: 引数値: {testArg}");
                     
-                    IntPtr statusPtr = GetProcessingStatus(testArg);
-                    string status = PtrToStringSafe(statusPtr);
+                    var sb = new StringBuilder(256);
+                    int result = GetProcessingStatus(sb, sb.Capacity, testArg);
+                    string status = sb.ToString();
                     
                     Console.WriteLine("   Step 3: GetProcessingStatus関数呼び出し完了");
                     Console.WriteLine("   Step 4: 戻り値の確認");
                     
+                    if (result != 0)
+                    {
+                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {status}");
+                        return;
+                    }
                     if (string.IsNullOrEmpty(status))
                     {
                         Console.WriteLine("   [ERROR] 処理状況が空です");
@@ -543,7 +551,13 @@ namespace BloodPressureDllTest
                         }
                     };
                     Console.WriteLine("   血圧推定リクエスト送信中（画像配列）...");
-                    int resultCode = AnalyzeBloodPressureFromImages(frameFiles, frameFiles.Length, height, weight, sex, callback);
+                    var sb = new StringBuilder(256);
+                    int resultCode = AnalyzeBloodPressureFromImages(sb, sb.Capacity, frameFiles, frameFiles.Length, height, weight, sex, callback);
+                    if (resultCode != 0)
+                    {
+                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {sb.ToString()}");
+                        return;
+                    }
                     if (!callbackEvent.WaitOne(30000))
                     {
                         Console.WriteLine("   [ERROR] コールバックが30秒以内に呼ばれませんでした");
