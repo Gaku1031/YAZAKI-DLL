@@ -403,20 +403,21 @@ namespace BloodPressureDllTest
                     Console.WriteLine($"   ffmpegでmp4に一時変換: {tempMp4}");
                     var ffmpegProc = new System.Diagnostics.Process();
                     ffmpegProc.StartInfo.FileName = ffmpegExe;
-                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v libx264 -c:a aac \"{tempMp4}\"";
+                    // 音声ストリームがあるかどうかをffprobeで判定するのが理想だが、まずは-c:v libx264のみで実行
+                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v libx264 \"{tempMp4}\"";
                     ffmpegProc.StartInfo.UseShellExecute = false;
                     ffmpegProc.StartInfo.RedirectStandardOutput = true;
                     ffmpegProc.StartInfo.RedirectStandardError = true;
                     ffmpegProc.Start();
                     Console.WriteLine("   [DEBUG] ffmpegプロセス開始");
                     bool exited = ffmpegProc.WaitForExit(15000); // 15秒でタイムアウト
+                    string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
                     if (!exited) {
                         ffmpegProc.Kill();
                         Console.WriteLine("   [ERROR] ffmpeg変換がタイムアウトしました");
+                        Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
                         return;
                     }
-                    string ffmpegOut = ffmpegProc.StandardOutput.ReadToEnd();
-                    string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
                     if (!File.Exists(tempMp4) || new FileInfo(tempMp4).Length < 1000)
                     {
                         Console.WriteLine($"   [ERROR] ffmpeg変換失敗: {ffmpegErr}");
