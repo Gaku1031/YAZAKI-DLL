@@ -11,9 +11,8 @@ namespace BloodPressureDllTest
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void BPCallback(
         [MarshalAs(UnmanagedType.LPStr)] string requestId,
-        int maxBloodPressure,
-        int minBloodPressure,
-        [MarshalAs(UnmanagedType.LPStr)] string measureRowData,
+        int maxBP, int minBP,
+        [MarshalAs(UnmanagedType.LPStr)] string csvData,
         [MarshalAs(UnmanagedType.LPStr)] string errorsJson
     );
 
@@ -25,7 +24,6 @@ namespace BloodPressureDllTest
         public static extern int InitializeBP([MarshalAs(UnmanagedType.LPStr)] string modelDir);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        [return: MarshalAs(UnmanagedType.LPStr)]
         public static extern IntPtr StartBloodPressureAnalysisRequest(
             [MarshalAs(UnmanagedType.LPStr)] string requestId,
             int height, int weight, int sex,
