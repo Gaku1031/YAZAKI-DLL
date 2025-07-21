@@ -171,7 +171,7 @@ const char* StartBloodPressureAnalysisRequest(
             log << "StartBloodPressureAnalysisRequest inner exception: " << e.what() << std::endl;
             log.close();
             
-            std::lock_guard<std::mutex> lock(g_callback_mutex);
+            std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
             getSafeErrorsStr() = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
             if (callback) {
                 callback(thread_request_id.c_str(), 0, 0, EMPTY_STRING, getSafeErrorsStr().c_str());
@@ -327,7 +327,7 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         
         // Thread-safe callback data preparation
         {
-            std::lock_guard<std::mutex> lock(g_callback_mutex);
+            std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
             getSafeCSVStr() = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
             getSafeErrorsStr() = EMPTY_JSON;
             if (callback) {
@@ -342,7 +342,7 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         log << "AnalyzeBloodPressureFromImages exception: " << e.what() << std::endl;
         log.close();
         
-        std::lock_guard<std::mutex> lock(g_callback_mutex);
+        std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
         getSafeErrorsStr() = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
         if (callback) {
             callback(EMPTY_STRING, 0, 0, EMPTY_STRING, getSafeErrorsStr().c_str());
@@ -354,7 +354,7 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         log << "AnalyzeBloodPressureFromImages unknown exception" << std::endl;
         log.close();
         
-        std::lock_guard<std::mutex> lock(g_callback_mutex);
+        std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
         getSafeErrorsStr() = "[{\"code\":\"1006\",\"message\":\"unknown error\",\"isRetriable\":false}]";
         if (callback) {
             callback(EMPTY_STRING, 0, 0, EMPTY_STRING, getSafeErrorsStr().c_str());
