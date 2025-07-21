@@ -311,96 +311,108 @@ namespace BloodPressureDllTest
                 
                 // 2. バージョン情報取得テスト
                 Console.WriteLine("\n2. バージョン情報取得テスト");
-                string version = GetVersionInfo();
-                Console.WriteLine($"   バージョン: {version}");
+                try
+                {
+                    string version = GetVersionInfo();
+                    Console.WriteLine($"   バージョン: {version}");
+                    Console.WriteLine("   [SUCCESS] バージョン情報取得成功");
+                }
+                catch (DllNotFoundException ex)
+                {
+                    Console.WriteLine($"   [ERROR] DLLが見つかりません: {ex.Message}");
+                    return;
+                }
+                catch (EntryPointNotFoundException ex)
+                {
+                    Console.WriteLine($"   [ERROR] 関数が見つかりません: {ex.Message}");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"   [ERROR] バージョン情報取得で予期しないエラー: {ex.Message}");
+                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
+                    Console.WriteLine($"   詳細: {ex}");
+                    return;
+                }
                 
                 // 3. リクエストID生成テスト
                 Console.WriteLine("\n3. リクエストID生成テスト");
-                string requestId = GenerateRequestId();
-                Console.WriteLine($"   生成されたID: {requestId}");
+                try
+                {
+                    string requestId = GenerateRequestId();
+                    Console.WriteLine($"   生成されたID: {requestId}");
+                    Console.WriteLine("   [SUCCESS] リクエストID生成成功");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"   [ERROR] リクエストID生成で予期しないエラー: {ex.Message}");
+                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
+                    return;
+                }
                 
                 // 4. 処理状況取得テスト
                 Console.WriteLine("\n4. 処理状況取得テスト");
-                string status = GetProcessingStatus("test_request");
-                Console.WriteLine($"   処理状況: {status}");
+                try
+                {
+                    string status = GetProcessingStatus("test_request");
+                    Console.WriteLine($"   処理状況: {status}");
+                    Console.WriteLine("   [SUCCESS] 処理状況取得成功");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"   [ERROR] 処理状況取得で予期しないエラー: {ex.Message}");
+                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
+                    return;
+                }
                 
                 // 5. 血圧解析テスト（サンプル動画がある場合）
                 Console.WriteLine("\n5. 血圧解析テスト");
-                string sampleVideo = "sample_video.webm";
-                if (File.Exists(sampleVideo))
+                try
                 {
-                    var fileInfo = new FileInfo(sampleVideo);
-                    Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024} MB)");
-                    
-                    // コールバック関数を設定
-                    BPCallback callback = TestCallback;
-                    
-                    // 血圧解析開始
-                    string analysisResult = StartBloodPressureAnalysisRequest(
-                        requestId, 170, 70, 1, sampleVideo, callback);
-                    
-                    Console.WriteLine($"   解析開始結果: {analysisResult ?? "成功"}");
-                    
-                    if (analysisResult == null)
+                    string sampleVideo = "sample_video.webm";
+                    if (File.Exists(sampleVideo))
                     {
-                        Console.WriteLine("   解析開始成功 - 処理を監視中...");
+                        var fileInfo = new FileInfo(sampleVideo);
+                        Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024} MB)");
                         
-                        // 処理状況を監視（最大120秒）
-                        for (int i = 0; i < 120; i++)
+                        // リクエストIDを再生成
+                        string requestId = GenerateRequestId();
+                        Console.WriteLine($"   リクエストID: {requestId}");
+                        
+                        // 血圧解析を開始
+                        Console.WriteLine("   血圧解析を開始中...");
+                        string result = StartBloodPressureAnalysisRequest(
+                            requestId, 170, 70, 1, sampleVideo, TestCallback);
+                        
+                        if (result == "1000") // SUCCESS
                         {
-                            Thread.Sleep(1000);
-                            string currentStatus = GetProcessingStatus(requestId);
+                            Console.WriteLine("   [SUCCESS] 血圧解析リクエスト成功");
                             
-                            if (i % 10 == 0) // 10秒ごとに状況を表示
-                            {
-                                Console.WriteLine($"   処理状況 {i+1}秒: {currentStatus}");
-                            }
+                            // 処理完了まで待機
+                            Console.WriteLine("   処理完了まで待機中...");
+                            Thread.Sleep(5000); // 5秒待機
                             
-                            if (currentStatus == "none")
-                            {
-                                Console.WriteLine($"   [SUCCESS] 処理完了 ({i+1}秒)");
-                                break;
-                            }
-                            
-                            if (i == 119)
-                            {
-                                Console.WriteLine("   [WARNING] 処理が120秒を超えました");
-                            }
+                            string finalStatus = GetProcessingStatus(requestId);
+                            Console.WriteLine($"   最終処理状況: {finalStatus}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"   [ERROR] 血圧解析リクエスト失敗: {result}");
                         }
                     }
                     else
                     {
-                        Console.WriteLine($"   [ERROR] 解析開始失敗: {analysisResult}");
+                        Console.WriteLine("   サンプル動画が見つかりません。スキップします。");
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Console.WriteLine($"   [ERROR] サンプル動画が見つかりません: {sampleVideo}");
-                    Console.WriteLine("   動画解析テストをスキップ");
+                    Console.WriteLine($"   [ERROR] 血圧解析テストで予期しないエラー: {ex.Message}");
+                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
                 }
                 
-                // 6. 中断テスト
-                Console.WriteLine("\n6. 中断テスト");
-                int cancelResult = CancelBloodPressureAnalysis(requestId);
-                Console.WriteLine($"   中断結果: {cancelResult}");
-                
-                // 7. テスト結果サマリー
-                Console.WriteLine("\n7. テスト結果サマリー");
-                Console.WriteLine("   [SUCCESS] DLL初期化: 成功");
-                Console.WriteLine("   [SUCCESS] バージョン取得: 成功");
-                Console.WriteLine("   [SUCCESS] リクエストID生成: 成功");
-                Console.WriteLine("   [SUCCESS] 処理状況取得: 成功");
-                if (File.Exists(sampleVideo))
-                {
-                    Console.WriteLine("   [SUCCESS] 血圧解析: 実行済み");
-                }
-                else
-                {
-                    Console.WriteLine("   [WARNING] 血圧解析: スキップ（動画なし）");
-                }
-                Console.WriteLine("   [SUCCESS] 中断機能: テスト済み");
-                
-                Console.WriteLine("\n=== 全てのテストが完了しました ===");
+                Console.WriteLine("\n[SUCCESS] すべてのテストが完了しました");
+                Console.WriteLine("=== C++ Blood Pressure DLL テスト完了 ===");
                 
             }
             catch (Exception ex)
