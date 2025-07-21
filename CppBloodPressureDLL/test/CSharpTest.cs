@@ -10,10 +10,10 @@ namespace BloodPressureDllTest
     // コールバック関数の型定義
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void BPCallback(
-        [MarshalAs(UnmanagedType.LPStr)] string requestId,
+        IntPtr requestId,
         int maxBP, int minBP,
-        [MarshalAs(UnmanagedType.LPStr)] string csvData,
-        [MarshalAs(UnmanagedType.LPStr)] string errorsJson
+        IntPtr csvData,
+        IntPtr errorsJson
     );
 
     public class BloodPressureDll
@@ -47,8 +47,11 @@ namespace BloodPressureDllTest
             [In] string[] imagePaths, int numImages, int height, int weight, int sex, BPCallback callback);
 
         // コールバック関数の実装
-        public static void TestCallback(string requestId, int maxBP, int minBP, string csvData, string errorsJson)
+        public static void TestCallback(IntPtr requestIdPtr, int maxBP, int minBP, IntPtr csvDataPtr, IntPtr errorsJsonPtr)
         {
+            string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
+            string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
+            string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
             Console.WriteLine("=== 血圧解析結果 ===");
             Console.WriteLine($"Request ID: {requestId}");
             Console.WriteLine($"最高血圧: {maxBP} mmHg");
@@ -438,8 +441,11 @@ namespace BloodPressureDllTest
                     int height = 170, weight = 70, sex = 1;
                     bool callbackCalled = false;
                     AutoResetEvent callbackEvent = new AutoResetEvent(false);
-                    BPCallback callback = (cbRequestId, maxBP, minBP, csvData, errorsJson) =>
+                    BPCallback callback = (cbRequestIdPtr, maxBP, minBP, csvDataPtr, errorsJsonPtr) =>
                     {
+                        string cbRequestId = Marshal.PtrToStringAnsi(cbRequestIdPtr);
+                        string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
+                        string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
                         callbackCalled = true;
                         Console.WriteLine("\n=== 血圧推定コールバック ===");
                         Console.WriteLine($"Request ID: {cbRequestId}");
