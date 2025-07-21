@@ -507,18 +507,37 @@ jobs:
           $onnxRuntimePath = "${{ github.workspace }}/onnxruntime"
           Write-Host "Checking ONNX Runtime path: $onnxRuntimePath" -ForegroundColor Yellow
 
-          if (Test-Path $onnxRuntimePath) {
-            Write-Host "ONNX Runtime found" -ForegroundColor Green
-          } else {
-            Write-Host "ONNX Runtime not found" -ForegroundColor Red
+          # ONNX Runtime include/libパスの自動検出
+          $onnxInclude = $null
+          $onnxLib = $null
+          if (Test-Path "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/include") {
+            $onnxInclude = "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/include"
+          } elseif (Test-Path "$onnxRuntimePath/include") {
+            $onnxInclude = "$onnxRuntimePath/include"
           }
+          if (Test-Path "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/lib") {
+            $onnxLib = "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/lib"
+          } elseif (Test-Path "$onnxRuntimePath/lib") {
+            $onnxLib = "$onnxRuntimePath/lib"
+          }
+          if (-not $onnxInclude) {
+            Write-Host "ERROR: Could not find ONNX Runtime include directory" -ForegroundColor Red
+            exit 1
+          }
+          if (-not $onnxLib) {
+            Write-Host "ERROR: Could not find ONNX Runtime lib directory" -ForegroundColor Red
+            exit 1
+          }
+          $env:ONNXRUNTIME_INCLUDE_DIR = $onnxInclude
+          $env:ONNXRUNTIME_LIB_DIR = $onnxLib
+          Write-Host "ONNXRUNTIME_INCLUDE_DIR: $env:ONNXRUNTIME_INCLUDE_DIR" -ForegroundColor Green
+          Write-Host "ONNXRUNTIME_LIB_DIR: $env:ONNXRUNTIME_LIB_DIR" -ForegroundColor Green
 
-          # CMake設定
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DONNXRUNTIME_ROOT="${{ env.ONNXRUNTIME_ROOT }}" `
-            -DONNXRUNTIME_INCLUDE_DIR="${{ env.ONNXRUNTIME_INCLUDE_DIR }}" `
-            -DONNXRUNTIME_LIB_DIR="${{ env.ONNXRUNTIME_LIB_DIR }}" `
+            -DONNXRUNTIME_ROOT="$onnxRuntimePath" `
+            -DONNXRUNTIME_INCLUDE_DIR="$env:ONNXRUNTIME_INCLUDE_DIR" `
+            -DONNXRUNTIME_LIB_DIR="$env:ONNXRUNTIME_LIB_DIR" `
             -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
@@ -791,7 +810,7 @@ jobs:
               exit 1
             }
           }
-      
+
       - name: Download ffmpeg.exe for distribution
         run: |
           $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
