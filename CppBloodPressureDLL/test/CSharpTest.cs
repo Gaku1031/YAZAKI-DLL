@@ -4,6 +4,7 @@ using System.Threading;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text; // StringBuilderを追加
 
 namespace BloodPressureDllTest
 {
@@ -38,7 +39,7 @@ namespace BloodPressureDllTest
         public static extern int CancelBloodPressureAnalysis([MarshalAs(UnmanagedType.LPStr)] string requestId);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern IntPtr GetVersionInfo();
+        public static extern int GetVersionInfo([Out] StringBuilder outBuf, int bufSize);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern IntPtr GenerateRequestId();
@@ -289,21 +290,21 @@ namespace BloodPressureDllTest
                 try
                 {
                     Console.WriteLine("   GetVersionInfo関数を呼び出し中...");
-                    IntPtr versionPtr = GetVersionInfo();
-                    string version = PtrToStringSafe(versionPtr);
+                    var sb = new StringBuilder(256);
+                    int result = GetVersionInfo(sb, sb.Capacity);
+                    string version = sb.ToString();
                     Console.WriteLine("   GetVersionInfo関数呼び出し完了");
-                    
+                    if (result != 0)
+                    {
+                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {version}");
+                        return;
+                    }
                     if (string.IsNullOrEmpty(version))
                     {
                         Console.WriteLine("   [ERROR] バージョン情報が空です");
                         return;
                     }
                     Console.WriteLine($"   バージョン: {version}");
-                    if (version.Contains("failed"))
-                    {
-                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {version}");
-                        return;
-                    }
                     Console.WriteLine("   [SUCCESS] バージョン情報取得成功");
                 }
                 catch (DllNotFoundException ex)

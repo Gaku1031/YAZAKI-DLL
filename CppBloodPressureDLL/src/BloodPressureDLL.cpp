@@ -246,25 +246,30 @@ int CancelBloodPressureAnalysis(const char* requestId) {
     return 0;
 }
 
-const char* GetVersionInfo() {
+int GetVersionInfo(char* outBuf, int bufSize) {
     printf("[DLL] GetVersionInfo called\n"); fflush(stdout);
     try {
-        printf("[DLL] GetVersionInfo returning version\n"); fflush(stdout);
-        return VERSION_INFO;
+        const char* version = "BloodPressureDLL v1.0.0";
+        strncpy(outBuf, version, bufSize - 1);
+        outBuf[bufSize - 1] = '\0';
+        printf("[DLL] GetVersionInfo returning version: %s\n", outBuf); fflush(stdout);
+        return 0;
     } catch (const std::exception& e) {
         printf("[DLL] GetVersionInfo std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetVersionInfo exception: " << e.what() << std::endl;
         log.close();
-        tl_error_str = std::string("GetVersionInfo failed: ") + e.what();
-        return tl_error_str.c_str();
+        strncpy(outBuf, e.what(), bufSize - 1);
+        outBuf[bufSize - 1] = '\0';
+        return -1;
     } catch (...) {
         printf("[DLL] GetVersionInfo unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetVersionInfo unknown exception" << std::endl;
         log.close();
-        tl_error_str = "GetVersionInfo failed: unknown error";
-        return tl_error_str.c_str();
+        strncpy(outBuf, "GetVersionInfo failed: unknown error", bufSize - 1);
+        outBuf[bufSize - 1] = '\0';
+        return -1;
     }
 }
 
