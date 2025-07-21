@@ -25,7 +25,7 @@ DLL_EXPORT const char* GetProcessingStatus(const char* requestId);
 // 血圧解析中断
 DLL_EXPORT int CancelBloodPressureAnalysis(const char* requestId);
 // バージョン情報取得
-DLL_EXPORT const char* GetVersionInfo();
+DLL_EXPORT int GetVersionInfo(char* outBuf, int bufSize);
 // リクエストID生成
 DLL_EXPORT const char* GenerateRequestId();
 // 画像配列から血圧推定（C#から呼び出し用）
