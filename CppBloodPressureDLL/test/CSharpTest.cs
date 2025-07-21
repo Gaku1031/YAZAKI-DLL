@@ -519,6 +519,15 @@ namespace BloodPressureDllTest
 
         public static void Main(string[] args)
         {
+            AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+            {
+                Console.WriteLine($"[FATAL] UnhandledException: {e.ExceptionObject?.ToString()}");
+            };
+            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (sender, e) =>
+            {
+                Console.WriteLine($"[FATAL] UnobservedTaskException: {e.Exception?.ToString()}");
+            };
+            Console.WriteLine($"[DEBUG] Is64BitProcess: {Environment.Is64BitProcess}");
             try
             {
                 Console.WriteLine("C++ Blood Pressure DLL テスト開始");
@@ -528,6 +537,7 @@ namespace BloodPressureDllTest
             catch (Exception ex)
             {
                 Console.WriteLine($"アプリケーションエラー: {ex.Message}");
+                Console.WriteLine($"スタックトレース: {ex.StackTrace}");
                 Environment.Exit(1);
             }
         }
