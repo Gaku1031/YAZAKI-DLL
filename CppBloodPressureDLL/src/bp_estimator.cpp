@@ -45,16 +45,16 @@ struct BloodPressureEstimator::Impl {
         auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
         Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
             memory_info, const_cast<float*>(features.data()), features.size(), input_shape.data(), input_shape.size());
-
-        // 入力・出力名の取得（Allocator経由）
-        auto input_name = allocator.GetInputName(session, 0);
-        auto output_name = allocator.GetOutputName(session, 0);
+    
+        // 入力・出力名の取得（Session経由）
+        auto input_name = session.GetInputNameAllocated(0, allocator);
+        auto output_name = session.GetOutputNameAllocated(0, allocator);
         std::vector<const char*> input_names = {input_name.get()};
         std::vector<const char*> output_names = {output_name.get()};
-
+    
         auto output_tensors = session.Run(
             Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1, output_names.data(), 1);
-
+    
         float* out = output_tensors.front().GetTensorMutableData<float>();
         float result = out[0];
         return result;
