@@ -605,13 +605,119 @@ namespace BloodPressureDllTest
             Console.WriteLine($"[DEBUG] Is64BitProcess: {Environment.Is64BitProcess}");
             try
             {
-                Console.WriteLine("C++ Blood Pressure DLL GetVersionInfoテスト開始");
-                var sb = new System.Text.StringBuilder(256);
-                int result = GetVersionInfo(sb, sb.Capacity);
-                string version = sb.ToString();
+                // 1. DLL初期化
+                var sb = new StringBuilder(256);
+                int result = InitializeBP(sb, sb.Capacity, "models");
+                Console.WriteLine($"InitializeBP result: {result}");
+                Console.WriteLine($"InitializeBP buffer: '{sb}'");
+                if (result != 0) return;
+
+                // 2. バージョン情報
+                sb.Clear();
+                result = GetVersionInfo(sb, sb.Capacity);
                 Console.WriteLine($"GetVersionInfo result: {result}");
-                Console.WriteLine($"GetVersionInfo buffer: '{version}'");
-                Console.WriteLine("テスト終了");
+                Console.WriteLine($"GetVersionInfo buffer: '{sb}'");
+                if (result != 0) return;
+
+                // 3. リクエストID生成
+                sb.Clear();
+                result = GenerateRequestId(sb, sb.Capacity);
+                Console.WriteLine($"GenerateRequestId result: {result}");
+                Console.WriteLine($"GenerateRequestId buffer: '{sb}'");
+                if (result != 0) return;
+                string requestId = sb.ToString();
+
+                // 4. 処理状況取得
+                sb.Clear();
+                result = GetProcessingStatus(sb, sb.Capacity, requestId);
+                Console.WriteLine($"GetProcessingStatus result: {result}");
+                Console.WriteLine($"GetProcessingStatus buffer: '{sb}'");
+                if (result != 0) return;
+
+                // 5. 血圧推定（画像配列）
+                string sampleVideo = "sample_video.webm";
+                if (!File.Exists(sampleVideo))
+                {
+                    Console.WriteLine($"[ERROR] サンプル動画が見つかりません: {sampleVideo}");
+                    return;
+                }
+                // ffmpegで画像展開
+                string tempDir = Path.Combine(Path.GetTempPath(), $"frames_{Guid.NewGuid().ToString().Replace("-", "")}");
+                Directory.CreateDirectory(tempDir);
+                string framePattern = Path.Combine(tempDir, "frame_%05d.jpg");
+                var ffmpegProc = new System.Diagnostics.Process();
+                ffmpegProc.StartInfo.FileName = "ffmpeg.exe";
+                ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -q:v 2 \"{framePattern}\"";
+                ffmpegProc.StartInfo.UseShellExecute = false;
+                ffmpegProc.StartInfo.RedirectStandardOutput = true;
+                ffmpegProc.StartInfo.RedirectStandardError = true;
+                ffmpegProc.Start();
+                ffmpegProc.WaitForExit();
+                var frameFiles = Directory.GetFiles(tempDir, "frame_*.jpg").OrderBy(f => f).ToArray();
+                if (frameFiles.Length == 0)
+                {
+                    Console.WriteLine($"[ERROR] ffmpeg画像変換失敗");
+                    return;
+                }
+                int height = 170, weight = 70, sex = 1;
+                bool callbackCalled = false;
+                AutoResetEvent callbackEvent = new AutoResetEvent(false);
+                BPCallback callback = (cbRequestIdPtr, maxBP, minBP, csvDataPtr, errorsJsonPtr) =>
+                {
+                    string cbRequestId = Marshal.PtrToStringAnsi(cbRequestIdPtr);
+                    string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
+                    string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
+                    callbackCalled = true;
+                    Console.WriteLine("\n=== 血圧推定コールバック ===");
+                    Console.WriteLine($"Request ID: {cbRequestId}");
+                    Console.WriteLine($"最高血圧: {maxBP} mmHg");
+                    Console.WriteLine($"最低血圧: {minBP} mmHg");
+                    Console.WriteLine($"CSVデータサイズ: {csvData?.Length ?? 0} 文字");
+                    if (!string.IsNullOrEmpty(csvData))
+                    {
+                        Console.WriteLine($"CSVデータ(先頭100文字): {csvData.Substring(0, Math.Min(100, csvData.Length))}");
+                    }
+                    if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
+                    {
+                        Console.WriteLine($"[ERROR] エラー: {errorsJson}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[SUCCESS] エラーなし");
+                    }
+                    if (maxBP > 0 && minBP > 0)
+                    {
+                        Console.WriteLine($"[SUCCESS] 推定値: SBP={maxBP}, DBP={minBP}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[ERROR] 推定値が0または異常です");
+                    }
+                    callbackEvent.Set();
+                };
+                sb.Clear();
+                int resultCode = AnalyzeBloodPressureFromImages(sb, sb.Capacity, frameFiles, frameFiles.Length, height, weight, sex, callback);
+                Console.WriteLine($"AnalyzeBloodPressureFromImages result: {resultCode}");
+                Console.WriteLine($"AnalyzeBloodPressureFromImages buffer: '{sb}'");
+                if (resultCode != 0)
+                {
+                    Console.WriteLine($"[ERROR] DLLからエラー返却: {sb}");
+                    return;
+                }
+                if (!callbackEvent.WaitOne(30000))
+                {
+                    Console.WriteLine("[ERROR] コールバックが30秒以内に呼ばれませんでした");
+                }
+                else if (!callbackCalled)
+                {
+                    Console.WriteLine("[ERROR] コールバックが呼ばれませんでした");
+                }
+                else
+                {
+                    Console.WriteLine("[SUCCESS] 血圧推定テスト完了");
+                }
+                try { Directory.Delete(tempDir, true); } catch { }
+                Console.WriteLine("\n[SUCCESS] すべてのテストが完了しました");
             }
             catch (Exception ex)
             {
