@@ -87,6 +87,7 @@ const char* StartBloodPressureAnalysisRequest(
     const char* moviePath, BPCallback callback)
 {
     if (!initialized) return "1001"; // DLL_NOT_INITIALIZED
+    static std::string ret_str; // 返却用static
     std::string reqId(requestId);
     {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -98,14 +99,14 @@ const char* StartBloodPressureAnalysisRequest(
         try {
             RPPGResult r = rppg.processVideo(moviePath);
             auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-            
-            // CSV生成
-            std::string csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-            
-            std::string errors = "[]";
+            static std::string csv;
+            static std::string errors;
+            csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+            errors = "[]";
             if (callback) callback(requestId, bp.first, bp.second, csv.c_str(), errors.c_str());
         } catch (const std::exception& e) {
-            std::string errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
+            static std::string errors;
+            errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
             if (callback) callback(requestId, 0, 0, "", errors.c_str());
         }
         {
@@ -179,12 +180,15 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         RPPGProcessor rppg;
         RPPGResult r = rppg.processImagesFromPaths(paths);
         auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-        std::string csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-        std::string errors = "[]";
+        static std::string csv;
+        static std::string errors;
+        csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+        errors = "[]";
         if (callback) callback("", bp.first, bp.second, csv.c_str(), errors.c_str());
         return 0;
     } catch (const std::exception& e) {
-        std::string errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
+        static std::string errors;
+        errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
         if (callback) callback("", 0, 0, "", errors.c_str());
         return 1006;
     }
