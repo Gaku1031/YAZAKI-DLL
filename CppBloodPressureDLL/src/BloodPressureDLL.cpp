@@ -59,6 +59,7 @@ std::string generateCSV(const std::vector<double>& rppg_signal,
 extern "C" {
 
 static std::string empty_str = "";
+static std::string safe_request_id;
 
 int InitializeBP(const char* modelDir) {
     try {
@@ -90,6 +91,7 @@ const char* StartBloodPressureAnalysisRequest(
 {
     if (!initialized) return "1001"; // DLL_NOT_INITIALIZED
     static std::string ret_str; // 返却用static
+    safe_request_id = requestId ? std::string(requestId) : "";
     std::string reqId(requestId);
     {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -105,11 +107,11 @@ const char* StartBloodPressureAnalysisRequest(
             static std::string errors;
             csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
             errors = "[]";
-            if (callback) callback(empty_str.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
+            if (callback) callback(safe_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         } catch (const std::exception& e) {
             static std::string errors;
             errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-            if (callback) callback(empty_str.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+            if (callback) callback(safe_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         }
         {
             std::lock_guard<std::mutex> lock(g_mutex);
@@ -186,12 +188,14 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         static std::string errors;
         csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
         errors = "[]";
-        if (callback) callback(empty_str.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
+        safe_request_id = "";
+        if (callback) callback(safe_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         return 0;
     } catch (const std::exception& e) {
         static std::string errors;
         errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-        if (callback) callback(empty_str.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+        safe_request_id = "";
+        if (callback) callback(safe_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         return 1006;
     }
 }
