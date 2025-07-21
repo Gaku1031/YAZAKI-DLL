@@ -92,26 +92,10 @@ std::string generateCSV(const std::vector<double>& rppg_signal,
 extern "C" {
 
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
-    try {
-        std::lock_guard<std::mutex> lock(getSafeMutex());
-        if (g_estimator) {
-            delete g_estimator;
-            g_estimator = nullptr;
-        }
-        std::string modelPath = modelDir ? modelDir : "models";
-        g_estimator = new BloodPressureEstimator(modelPath);
-        initialized = true;
-        snprintf(outBuf, bufSize, "OK");
-        return 0;
-    } catch (const std::exception& e) {
-        snprintf(outBuf, bufSize, "InitializeBP exception: %s", e.what());
-        initialized = false;
-        return -1;
-    } catch (...) {
-        snprintf(outBuf, bufSize, "InitializeBP unknown exception");
-        initialized = false;
-        return -1;
-    }
+    if (!outBuf || bufSize <= 0) return -1;
+    outBuf[0] = 'I';
+    if (bufSize > 1) outBuf[1] = '\0';
+    return 0;
 }
 
 int StartBloodPressureAnalysisRequest(char* outBuf, int bufSize,
@@ -202,7 +186,9 @@ int CancelBloodPressureAnalysis(char* outBuf, int bufSize, const char* requestId
 }
 
 int GetVersionInfo(char* outBuf, int bufSize) {
-    snprintf(outBuf, bufSize, "BloodPressureDLL v1.0.0");
+    if (!outBuf || bufSize <= 0) return -1;
+    outBuf[0] = 'V';
+    if (bufSize > 1) outBuf[1] = '\0';
     return 0;
 }
 
