@@ -7,13 +7,14 @@ using System.Linq;
 
 namespace BloodPressureDllTest
 {
-    // コールバック関数の型定義
+    // コールバック関数の型定義（C++ typedef void(*BPCallback)(const char* requestId, int maxBloodPressure, int minBloodPressure, const char* measureRowData, const char* errorsJson); に完全一致）
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void BPCallback(
-        IntPtr requestId,
-        int maxBP, int minBP,
-        IntPtr csvData,
-        IntPtr errorsJson
+        IntPtr requestId, // const char* requestId
+        int maxBloodPressure, // int maxBloodPressure
+        int minBloodPressure, // int minBloodPressure
+        IntPtr measureRowData, // const char* measureRowData (== csvData)
+        IntPtr errorsJson // const char* errorsJson
     );
 
     public class BloodPressureDll
@@ -443,36 +444,42 @@ namespace BloodPressureDllTest
                     AutoResetEvent callbackEvent = new AutoResetEvent(false);
                     BPCallback callback = (cbRequestIdPtr, maxBP, minBP, csvDataPtr, errorsJsonPtr) =>
                     {
-                        string cbRequestId = Marshal.PtrToStringAnsi(cbRequestIdPtr);
-                        string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
-                        string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
-                        callbackCalled = true;
-                        Console.WriteLine("\n=== 血圧推定コールバック ===");
-                        Console.WriteLine($"Request ID: {cbRequestId}");
-                        Console.WriteLine($"最高血圧: {maxBP} mmHg");
-                        Console.WriteLine($"最低血圧: {minBP} mmHg");
-                        Console.WriteLine($"CSVデータサイズ: {csvData?.Length ?? 0} 文字");
-                        if (!string.IsNullOrEmpty(csvData))
-                        {
-                            Console.WriteLine($"CSVデータ(先頭100文字): {csvData.Substring(0, Math.Min(100, csvData.Length))}");
+                        try {
+                            string cbRequestId = Marshal.PtrToStringAnsi(cbRequestIdPtr);
+                            string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
+                            string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
+                            callbackCalled = true;
+                            Console.WriteLine("\n=== 血圧推定コールバック ===");
+                            Console.WriteLine($"Request ID: {cbRequestId}");
+                            Console.WriteLine($"最高血圧: {maxBP} mmHg");
+                            Console.WriteLine($"最低血圧: {minBP} mmHg");
+                            Console.WriteLine($"CSVデータサイズ: {csvData?.Length ?? 0} 文字");
+                            if (!string.IsNullOrEmpty(csvData))
+                            {
+                                Console.WriteLine($"CSVデータ(先頭100文字): {csvData.Substring(0, Math.Min(100, csvData.Length))}");
+                            }
+                            if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
+                            {
+                                Console.WriteLine($"[ERROR] エラー: {errorsJson}");
+                            }
+                            else
+                            {
+                                Console.WriteLine("[SUCCESS] エラーなし");
+                            }
+                            if (maxBP > 0 && minBP > 0)
+                            {
+                                Console.WriteLine($"[SUCCESS] 推定値: SBP={maxBP}, DBP={minBP}");
+                            }
+                            else
+                            {
+                                Console.WriteLine("[ERROR] 推定値が0または異常です");
+                            }
+                            callbackEvent.Set();
+                        } catch (Exception ex) {
+                            Console.WriteLine($"[FATAL ERROR] コールバック内で例外発生: {ex.Message}");
+                            Console.WriteLine($"スタックトレース: {ex.StackTrace}");
+                            throw;
                         }
-                        if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
-                        {
-                            Console.WriteLine($"[ERROR] エラー: {errorsJson}");
-                        }
-                        else
-                        {
-                            Console.WriteLine("[SUCCESS] エラーなし");
-                        }
-                        if (maxBP > 0 && minBP > 0)
-                        {
-                            Console.WriteLine($"[SUCCESS] 推定値: SBP={maxBP}, DBP={minBP}");
-                        }
-                        else
-                        {
-                            Console.WriteLine("[ERROR] 推定値が0または異常です");
-                        }
-                        callbackEvent.Set();
                     };
                     Console.WriteLine("   血圧推定リクエスト送信中（画像配列）...");
                     int resultCode = AnalyzeBloodPressureFromImages(frameFiles, frameFiles.Length, height, weight, sex, callback);
