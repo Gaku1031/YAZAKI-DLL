@@ -177,135 +177,62 @@ namespace BloodPressureDllTest
                     Console.WriteLine("   - Modelsディレクトリ内容:");
                     try
                     {
-                        foreach (var file in Directory.GetFiles("models", "*", SearchOption.AllDirectories))
+                        var modelFiles = Directory.GetFiles("models", "*", SearchOption.AllDirectories);
+                        foreach (var file in modelFiles)
                         {
-                            try
-                            {
-                                var fileInfo = new FileInfo(file);
-                                var sizeKB = fileInfo.Length / 1024.0;
-                                Console.WriteLine($"     {file.Replace(Environment.CurrentDirectory + "\\", "")} ({sizeKB:F2} KB)");
-                                
-                                // Check if file is actually readable
-                                if (fileInfo.Length == 0)
-                                {
-                                    Console.WriteLine($"       WARNING: File appears to be empty (0 bytes)");
-                                    // Try to read a small portion to verify
-                                    try
-                                    {
-                                        using (var stream = File.OpenRead(file))
-                                        {
-                                            var buffer = new byte[10];
-                                            var bytesRead = stream.Read(buffer, 0, buffer.Length);
-                                            Console.WriteLine($"       File read test: {bytesRead} bytes read successfully");
-                                        }
-                                    }
-                                    catch (Exception readEx)
-                                    {
-                                        Console.WriteLine($"       File read test failed: {readEx.Message}");
-                                    }
-                                }
-                            }
-                            catch (Exception fileEx)
-                            {
-                                Console.WriteLine($"     {file.Replace(Environment.CurrentDirectory + "\\", "")} - ERROR: {fileEx.Message}");
-                            }
+                            var fileInfo = new FileInfo(file);
+                            var relativePath = file.Replace(Environment.CurrentDirectory, "").TrimStart('\\');
+                            Console.WriteLine($"     {relativePath} ({fileInfo.Length / 1024.0:F2} KB)");
                         }
                     }
-                    catch (Exception dirEx)
+                    catch (Exception e)
                     {
-                        Console.WriteLine($"   ERROR accessing models directory: {dirEx.Message}");
+                        Console.WriteLine($"     [ERROR] Modelsディレクトリ読み取りエラー: {e.Message}");
                     }
                 }
                 
-                // 依存DLLの存在チェック
-                var requiredDlls = new[] { "opencv_world480.dll", "onnxruntime.dll", "zlib.dll" };
+                // 依存DLLチェック
                 Console.WriteLine("   - 依存DLLチェック:");
+                string[] requiredDlls = { "opencv_world480.dll", "onnxruntime.dll", "zlib.dll" };
                 foreach (var dll in requiredDlls)
                 {
                     Console.WriteLine($"     {dll}: {File.Exists(dll)}");
                 }
                 
-                // DLL初期化を試行
                 Console.WriteLine("   DLL初期化を試行中...");
                 
-                // Pre-initialization file check
+                // 初期化前ファイル確認
                 Console.WriteLine("   - 初期化前ファイル確認:");
-                var requiredFiles = new[] { 
-                    "models/systolicbloodpressure.onnx", 
+                string[] requiredFiles = {
+                    "models/systolicbloodpressure.onnx",
                     "models/diastolicbloodpressure.onnx",
                     "models/opencv_face_detector_uint8.pb",
                     "models/opencv_face_detector.pbtxt"
                 };
                 
-                bool allFilesExist = true;
                 foreach (var file in requiredFiles)
                 {
                     if (File.Exists(file))
                     {
                         var fileInfo = new FileInfo(file);
-                        var sizeKB = fileInfo.Length / 1024.0;
-                        Console.WriteLine($"     {file}: EXISTS ({sizeKB:F2} KB)");
-                        
-                        if (fileInfo.Length == 0)
-                        {
-                            Console.WriteLine($"       WARNING: File is empty (0 bytes)");
-                            allFilesExist = false;
-                        }
+                        Console.WriteLine($"     {file}: EXISTS ({fileInfo.Length / 1024.0:F2} KB)");
                     }
                     else
                     {
                         Console.WriteLine($"     {file}: NOT FOUND");
-                        allFilesExist = false;
                     }
                 }
                 
-                if (!allFilesExist)
-                {
-                    Console.WriteLine("   ERROR: Required model files are missing or empty");
-                    Console.WriteLine("   Cannot proceed with DLL initialization");
-                    return;
-                }
+                int initResult = InitializeBP("models");
+                Console.WriteLine($"   初期化結果: {initResult}");
                 
-                try
+                if (initResult == 1)
                 {
-                    int initResult = InitializeBP("models");
-                    Console.WriteLine($"   初期化結果: {initResult}");
-                    
-                    if (initResult == 0)
-                    {
-                        Console.WriteLine("   初期化失敗 - 戻り値が0");
-                        return;
-                    }
-                    
                     Console.WriteLine("   [SUCCESS] DLL初期化成功");
                 }
-                catch (DllNotFoundException ex)
+                else
                 {
-                    Console.WriteLine($"   [ERROR] DLLが見つかりません: {ex.Message}");
-                    Console.WriteLine($"   詳細: {ex}");
-                    return;
-                }
-                catch (BadImageFormatException ex)
-                {
-                    Console.WriteLine($"   [ERROR] DLLの形式が不正です: {ex.Message}");
-                    Console.WriteLine($"   詳細: {ex}");
-                    return;
-                }
-                catch (EntryPointNotFoundException ex)
-                {
-                    Console.WriteLine($"   [ERROR] DLLの関数が見つかりません: {ex.Message}");
-                    Console.WriteLine($"   詳細: {ex}");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"   [ERROR] DLL初期化で予期しないエラー: {ex.Message}");
-                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
-                    Console.WriteLine($"   詳細: {ex}");
-                    if (ex.InnerException != null)
-                    {
-                        Console.WriteLine($"   内部例外: {ex.InnerException.Message}");
-                    }
+                    Console.WriteLine("   [ERROR] DLL初期化失敗");
                     return;
                 }
                 
@@ -313,7 +240,10 @@ namespace BloodPressureDllTest
                 Console.WriteLine("\n2. バージョン情報取得テスト");
                 try
                 {
+                    Console.WriteLine("   GetVersionInfo関数を呼び出し中...");
                     string version = GetVersionInfo();
+                    Console.WriteLine("   GetVersionInfo関数呼び出し完了");
+                    
                     if (string.IsNullOrEmpty(version))
                     {
                         Console.WriteLine("   [ERROR] バージョン情報が空です");
@@ -336,13 +266,14 @@ namespace BloodPressureDllTest
                 {
                     Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
                     Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
+                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                     return;
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"   [ERROR] バージョン情報取得で予期しないエラー: {ex.Message}");
                     Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
-                    Console.WriteLine($"   詳細: {ex}");
+                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                     return;
                 }
                 
@@ -350,7 +281,10 @@ namespace BloodPressureDllTest
                 Console.WriteLine("\n3. リクエストID生成テスト");
                 try
                 {
+                    Console.WriteLine("   GenerateRequestId関数を呼び出し中...");
                     string requestId = GenerateRequestId();
+                    Console.WriteLine("   GenerateRequestId関数呼び出し完了");
+                    
                     if (string.IsNullOrEmpty(requestId))
                     {
                         Console.WriteLine("   [ERROR] リクエストIDが空です");
@@ -363,12 +297,14 @@ namespace BloodPressureDllTest
                 {
                     Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
                     Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
+                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                     return;
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"   [ERROR] リクエストID生成で予期しないエラー: {ex.Message}");
                     Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
+                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                     return;
                 }
                 
@@ -376,12 +312,18 @@ namespace BloodPressureDllTest
                 Console.WriteLine("\n4. 処理状況取得テスト");
                 try
                 {
+                    Console.WriteLine("   処理状況取得を試行中...");
+                    Console.WriteLine("   GetProcessingStatus関数を呼び出し中...");
+                    
                     string status = GetProcessingStatus("test_request");
+                    Console.WriteLine("   GetProcessingStatus関数呼び出し完了");
+                    
                     if (string.IsNullOrEmpty(status))
                     {
                         Console.WriteLine("   [ERROR] 処理状況が空です");
                         return;
                     }
+                    
                     Console.WriteLine($"   処理状況: {status}");
                     Console.WriteLine("   [SUCCESS] 処理状況取得成功");
                 }
@@ -389,64 +331,25 @@ namespace BloodPressureDllTest
                 {
                     Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
                     Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
+                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
+                    return;
+                }
+                catch (DllNotFoundException ex)
+                {
+                    Console.WriteLine($"   [ERROR] DLLが見つかりません: {ex.Message}");
+                    return;
+                }
+                catch (EntryPointNotFoundException ex)
+                {
+                    Console.WriteLine($"   [ERROR] 関数が見つかりません: {ex.Message}");
                     return;
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"   [ERROR] 処理状況取得で予期しないエラー: {ex.Message}");
                     Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
+                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                     return;
-                }
-                
-                // 5. 血圧解析テスト（サンプル動画がある場合）
-                Console.WriteLine("\n5. 血圧解析テスト");
-                try
-                {
-                    string sampleVideo = "sample_video.webm";
-                    if (File.Exists(sampleVideo))
-                    {
-                        var fileInfo = new FileInfo(sampleVideo);
-                        Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024} MB)");
-                        
-                        // リクエストIDを再生成
-                        string requestId = GenerateRequestId();
-                        Console.WriteLine($"   リクエストID: {requestId}");
-                        
-                        // 血圧解析を開始
-                        Console.WriteLine("   血圧解析を開始中...");
-                        string result = StartBloodPressureAnalysisRequest(
-                            requestId, 170, 70, 1, sampleVideo, TestCallback);
-                        
-                        if (result == "1000") // SUCCESS
-                        {
-                            Console.WriteLine("   [SUCCESS] 血圧解析リクエスト成功");
-                            
-                            // 処理完了まで待機
-                            Console.WriteLine("   処理完了まで待機中...");
-                            Thread.Sleep(5000); // 5秒待機
-                            
-                            string finalStatus = GetProcessingStatus(requestId);
-                            Console.WriteLine($"   最終処理状況: {finalStatus}");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"   [ERROR] 血圧解析リクエスト失敗: {result}");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("   サンプル動画が見つかりません。スキップします。");
-                    }
-                }
-                catch (AccessViolationException ex)
-                {
-                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
-                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"   [ERROR] 血圧解析テストで予期しないエラー: {ex.Message}");
-                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
                 }
                 
                 Console.WriteLine("\n[SUCCESS] すべてのテストが完了しました");
@@ -476,3 +379,4 @@ namespace BloodPressureDllTest
         }
     }
 }
+

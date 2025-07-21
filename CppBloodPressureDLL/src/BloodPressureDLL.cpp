@@ -120,14 +120,31 @@ const char* StartBloodPressureAnalysisRequest(
 
 const char* GetProcessingStatus(const char* requestId) {
     static std::string status_str;
-    std::lock_guard<std::mutex> lock(g_mutex);
-    auto it = g_status.find(requestId);
-    if (it != g_status.end()) {
-        status_str = it->second;
+    
+    // Null pointer check
+    if (!requestId) {
+        status_str = "none";
         return status_str.c_str();
     }
-    status_str = "none";
-    return status_str.c_str();
+    
+    try {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        auto it = g_status.find(requestId);
+        if (it != g_status.end()) {
+            status_str = it->second;
+            return status_str.c_str();
+        }
+        status_str = "none";
+        return status_str.c_str();
+    } catch (const std::exception& e) {
+        // Return safe default in case of any exception
+        status_str = "none";
+        return status_str.c_str();
+    } catch (...) {
+        // Catch any other exceptions
+        status_str = "none";
+        return status_str.c_str();
+    }
 }
 
 int CancelBloodPressureAnalysis(const char* requestId) {
