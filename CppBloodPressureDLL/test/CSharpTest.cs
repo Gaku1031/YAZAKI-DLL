@@ -381,11 +381,25 @@ namespace BloodPressureDllTest
                     var fileInfo = new FileInfo(sampleVideo);
                     Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
 
+                    // ffmpeg.exeのパスを決定
+                    string ffmpegExe = "ffmpeg.exe";
+                    if (File.Exists("ffmpeg.exe"))
+                        ffmpegExe = Path.GetFullPath("ffmpeg.exe");
+                    else if (File.Exists("../ffmpeg.exe"))
+                        ffmpegExe = Path.GetFullPath("../ffmpeg.exe");
+                    // それ以外はPATHに頼る
+
+                    if (!File.Exists(ffmpegExe) && ffmpegExe != "ffmpeg.exe")
+                    {
+                        Console.WriteLine($"   [ERROR] ffmpeg.exeが見つかりません。配布物に同梱されているか、PATHが通っているか確認してください。");
+                        return;
+                    }
+
                     // webm→mp4一時変換
                     string tempMp4 = Path.GetTempFileName().Replace(".tmp", ".mp4");
                     Console.WriteLine($"   ffmpegでmp4に一時変換: {tempMp4}");
                     var ffmpegProc = new System.Diagnostics.Process();
-                    ffmpegProc.StartInfo.FileName = "ffmpeg";
+                    ffmpegProc.StartInfo.FileName = ffmpegExe;
                     ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v libx264 -c:a aac \"{tempMp4}\"";
                     ffmpegProc.StartInfo.UseShellExecute = false;
                     ffmpegProc.StartInfo.RedirectStandardOutput = true;
