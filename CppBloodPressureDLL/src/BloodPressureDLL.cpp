@@ -58,6 +58,8 @@ std::string generateCSV(const std::vector<double>& rppg_signal,
 
 extern "C" {
 
+static std::string empty_str = "";
+
 int InitializeBP(const char* modelDir) {
     try {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -103,11 +105,11 @@ const char* StartBloodPressureAnalysisRequest(
             static std::string errors;
             csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
             errors = "[]";
-            if (callback) callback(requestId, bp.first, bp.second, csv.c_str(), errors.c_str());
+            if (callback) callback(empty_str.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         } catch (const std::exception& e) {
             static std::string errors;
             errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-            if (callback) callback(requestId, 0, 0, "", errors.c_str());
+            if (callback) callback(empty_str.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         }
         {
             std::lock_guard<std::mutex> lock(g_mutex);
@@ -184,12 +186,12 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         static std::string errors;
         csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
         errors = "[]";
-        if (callback) callback("", bp.first, bp.second, csv.c_str(), errors.c_str());
+        if (callback) callback(empty_str.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         return 0;
     } catch (const std::exception& e) {
         static std::string errors;
         errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-        if (callback) callback("", 0, 0, "", errors.c_str());
+        if (callback) callback(empty_str.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         return 1006;
     }
 }
