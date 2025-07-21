@@ -33,19 +33,16 @@ namespace BloodPressureDllTest
             BPCallback callback);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        [return: MarshalAs(UnmanagedType.LPStr)]
-        public static extern string GetProcessingStatus([MarshalAs(UnmanagedType.LPStr)] string requestId);
+        public static extern IntPtr GetProcessingStatus([MarshalAs(UnmanagedType.LPStr)] string requestId);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern int CancelBloodPressureAnalysis([MarshalAs(UnmanagedType.LPStr)] string requestId);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        [return: MarshalAs(UnmanagedType.LPStr)]
-        public static extern string GetVersionInfo();
+        public static extern IntPtr GetVersionInfo();
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        [return: MarshalAs(UnmanagedType.LPStr)]
-        public static extern string GenerateRequestId();
+        public static extern IntPtr GenerateRequestId();
 
         // コールバック関数の実装
         public static void TestCallback(string requestId, int maxBP, int minBP, string csvData, string errorsJson)
@@ -241,7 +238,8 @@ namespace BloodPressureDllTest
                 try
                 {
                     Console.WriteLine("   GetVersionInfo関数を呼び出し中...");
-                    string version = GetVersionInfo();
+                    IntPtr versionPtr = GetVersionInfo();
+                    string version = Marshal.PtrToStringAnsi(versionPtr);
                     Console.WriteLine("   GetVersionInfo関数呼び出し完了");
                     
                     if (string.IsNullOrEmpty(version))
@@ -282,7 +280,8 @@ namespace BloodPressureDllTest
                 try
                 {
                     Console.WriteLine("   GenerateRequestId関数を呼び出し中...");
-                    string requestId = GenerateRequestId();
+                    IntPtr requestIdPtr = GenerateRequestId();
+                    string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
                     Console.WriteLine("   GenerateRequestId関数呼び出し完了");
                     
                     if (string.IsNullOrEmpty(requestId))
@@ -326,7 +325,8 @@ namespace BloodPressureDllTest
                     string testArg = "test_request";
                     Console.WriteLine($"   Step 2.3: 引数値: {testArg}");
                     
-                    string status = GetProcessingStatus(testArg);
+                    IntPtr statusPtr = GetProcessingStatus(testArg);
+                    string status = Marshal.PtrToStringAnsi(statusPtr);
                     
                     Console.WriteLine("   Step 3: GetProcessingStatus関数呼び出し完了");
                     Console.WriteLine("   Step 4: 戻り値の確認");
