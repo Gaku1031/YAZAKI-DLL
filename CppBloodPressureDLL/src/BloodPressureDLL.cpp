@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <cmath>
 #include <fstream>
+#include <cstdio>
 
 namespace {
     std::string version = "1.0.0";
@@ -69,6 +70,7 @@ extern "C" {
 static std::string empty_str = "";
 
 int InitializeBP(const char* modelDir) {
+    printf("[DLL] InitializeBP called\n"); fflush(stdout);
     try {
         std::lock_guard<std::mutex> lock(g_mutex);
         if (g_estimator) {
@@ -78,12 +80,15 @@ int InitializeBP(const char* modelDir) {
         std::string modelPath = modelDir ? modelDir : "models";
         g_estimator = new BloodPressureEstimator(modelPath);
         initialized = true;
+        printf("[DLL] InitializeBP success\n"); fflush(stdout);
         return 1;
     } catch (const std::exception& e) {
+        printf("[DLL] InitializeBP std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "InitializeBP exception: " << e.what() << std::endl;
         return 0;
     } catch (...) {
+        printf("[DLL] InitializeBP unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "InitializeBP unknown exception" << std::endl;
         return 0;
@@ -94,9 +99,11 @@ const char* StartBloodPressureAnalysisRequest(
     const char* requestId, int height, int weight, int sex,
     const char* moviePath, BPCallback callback)
 {
+    printf("[DLL] StartBloodPressureAnalysisRequest called\n"); fflush(stdout);
     try {
         if (!initialized) {
             g_error_str = "1001: DLL_NOT_INITIALIZED";
+            printf("[DLL] StartBloodPressureAnalysisRequest not initialized\n"); fflush(stdout);
             return g_error_str.c_str();
         }
         std::string reqId(requestId);
@@ -104,6 +111,7 @@ const char* StartBloodPressureAnalysisRequest(
             std::lock_guard<std::mutex> lock(g_mutex);
             if (g_threads.count(reqId)) {
                 g_error_str = "1005: REQUEST_DURING_PROCESSING";
+                printf("[DLL] StartBloodPressureAnalysisRequest already processing\n"); fflush(stdout);
                 return g_error_str.c_str();
             }
             g_status[reqId] = "processing";
@@ -111,12 +119,17 @@ const char* StartBloodPressureAnalysisRequest(
         std::string thread_request_id = requestId ? std::string(requestId) : "";
         RPPGProcessor rppg;
         try {
+            printf("[DLL] StartBloodPressureAnalysisRequest: processVideo start\n"); fflush(stdout);
             RPPGResult r = rppg.processVideo(moviePath);
+            printf("[DLL] StartBloodPressureAnalysisRequest: processVideo end\n"); fflush(stdout);
             auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
+            printf("[DLL] StartBloodPressureAnalysisRequest: estimate_bp end\n"); fflush(stdout);
             g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
             g_errors_str = "[]";
             if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+            printf("[DLL] StartBloodPressureAnalysisRequest: callback end\n"); fflush(stdout);
         } catch (const std::exception& e) {
+            printf("[DLL] StartBloodPressureAnalysisRequest inner std::exception: %s\n", e.what()); fflush(stdout);
             std::ofstream log("dll_error.log", std::ios::app);
             log << "StartBloodPressureAnalysisRequest inner exception: " << e.what() << std::endl;
             g_errors_str = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
@@ -128,13 +141,16 @@ const char* StartBloodPressureAnalysisRequest(
             g_threads.erase(reqId);
         }
         g_return_str = "";
+        printf("[DLL] StartBloodPressureAnalysisRequest end\n"); fflush(stdout);
         return g_return_str.c_str();
     } catch (const std::exception& e) {
+        printf("[DLL] StartBloodPressureAnalysisRequest std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "StartBloodPressureAnalysisRequest exception: " << e.what() << std::endl;
         g_error_str = std::string("StartBloodPressureAnalysisRequest failed: ") + e.what();
         return g_error_str.c_str();
     } catch (...) {
+        printf("[DLL] StartBloodPressureAnalysisRequest unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "StartBloodPressureAnalysisRequest unknown exception" << std::endl;
         g_error_str = "StartBloodPressureAnalysisRequest failed: unknown error";
@@ -143,20 +159,25 @@ const char* StartBloodPressureAnalysisRequest(
 }
 
 const char* GetProcessingStatus(const char* requestId) {
+    printf("[DLL] GetProcessingStatus called\n"); fflush(stdout);
     try {
         if (!requestId) {
             g_status_str = "none";
+            printf("[DLL] GetProcessingStatus: requestId is null\n"); fflush(stdout);
             return g_status_str.c_str();
         }
         g_status_str = "none";
         std::string debug_msg = "GetProcessingStatus called with requestId: " + std::string(requestId);
+        printf("[DLL] GetProcessingStatus: returning status\n"); fflush(stdout);
         return g_status_str.c_str();
     } catch (const std::exception& e) {
+        printf("[DLL] GetProcessingStatus std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetProcessingStatus exception: " << e.what() << std::endl;
         g_status_str = std::string("GetProcessingStatus failed: ") + e.what();
         return g_status_str.c_str();
     } catch (...) {
+        printf("[DLL] GetProcessingStatus unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetProcessingStatus unknown exception" << std::endl;
         g_status_str = "GetProcessingStatus failed: unknown error";
@@ -170,15 +191,19 @@ int CancelBloodPressureAnalysis(const char* requestId) {
 }
 
 const char* GetVersionInfo() {
+    printf("[DLL] GetVersionInfo called\n"); fflush(stdout);
     try {
         g_return_str = "BloodPressureDLL v1.0.0";
+        printf("[DLL] GetVersionInfo returning version\n"); fflush(stdout);
         return g_return_str.c_str();
     } catch (const std::exception& e) {
+        printf("[DLL] GetVersionInfo std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetVersionInfo exception: " << e.what() << std::endl;
         g_error_str = std::string("GetVersionInfo failed: ") + e.what();
         return g_error_str.c_str();
     } catch (...) {
+        printf("[DLL] GetVersionInfo unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GetVersionInfo unknown exception" << std::endl;
         g_error_str = "GetVersionInfo failed: unknown error";
@@ -187,19 +212,23 @@ const char* GetVersionInfo() {
 }
 
 const char* GenerateRequestId() {
+    printf("[DLL] GenerateRequestId called\n"); fflush(stdout);
     try {
         auto now = std::chrono::system_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
         std::ostringstream oss;
         oss << ms << "_CUSTOMER_DRIVER";
         g_id_str = oss.str();
+        printf("[DLL] GenerateRequestId returning id\n"); fflush(stdout);
         return g_id_str.c_str();
     } catch (const std::exception& e) {
+        printf("[DLL] GenerateRequestId std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GenerateRequestId exception: " << e.what() << std::endl;
         g_error_str = std::string("GenerateRequestId failed: ") + e.what();
         return g_error_str.c_str();
     } catch (...) {
+        printf("[DLL] GenerateRequestId unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "GenerateRequestId unknown exception" << std::endl;
         g_error_str = "GenerateRequestId failed: unknown error";
@@ -208,26 +237,36 @@ const char* GenerateRequestId() {
 }
 
 int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback) {
+    printf("[DLL] AnalyzeBloodPressureFromImages called\n"); fflush(stdout);
     try {
-        if (!initialized) return 1001;
+        if (!initialized) {
+            printf("[DLL] AnalyzeBloodPressureFromImages not initialized\n"); fflush(stdout);
+            return 1001;
+        }
         std::vector<std::string> paths;
         for (int i = 0; i < numImages; ++i) {
             if (imagePaths[i]) paths.emplace_back(imagePaths[i]);
         }
         RPPGProcessor rppg;
+        printf("[DLL] AnalyzeBloodPressureFromImages: processImagesFromPaths start\n"); fflush(stdout);
         RPPGResult r = rppg.processImagesFromPaths(paths);
+        printf("[DLL] AnalyzeBloodPressureFromImages: processImagesFromPaths end\n"); fflush(stdout);
         auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
+        printf("[DLL] AnalyzeBloodPressureFromImages: estimate_bp end\n"); fflush(stdout);
         g_csv_str = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
         g_errors_str = "[]";
         if (callback) callback("", bp.first, bp.second, g_csv_str.c_str(), g_errors_str.c_str());
+        printf("[DLL] AnalyzeBloodPressureFromImages: callback end\n"); fflush(stdout);
         return 0;
     } catch (const std::exception& e) {
+        printf("[DLL] AnalyzeBloodPressureFromImages std::exception: %s\n", e.what()); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "AnalyzeBloodPressureFromImages exception: " << e.what() << std::endl;
         g_errors_str = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
         if (callback) callback("", 0, 0, empty_str.c_str(), g_errors_str.c_str());
         return 1006;
     } catch (...) {
+        printf("[DLL] AnalyzeBloodPressureFromImages unknown exception\n"); fflush(stdout);
         std::ofstream log("dll_error.log", std::ios::app);
         log << "AnalyzeBloodPressureFromImages unknown exception" << std::endl;
         g_errors_str = "[{\"code\":\"1006\",\"message\":\"unknown error\",\"isRetriable\":false}]";
