@@ -91,7 +91,6 @@ const char* StartBloodPressureAnalysisRequest(
 {
     if (!initialized) return "1001"; // DLL_NOT_INITIALIZED
     static std::string ret_str; // 返却用static
-    safe_request_id = requestId ? std::string(requestId) : "";
     std::string reqId(requestId);
     {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -99,19 +98,20 @@ const char* StartBloodPressureAnalysisRequest(
         g_status[reqId] = "processing";
     }
     g_threads[reqId] = std::thread([=]() {
+        static thread_local std::string thread_request_id = requestId ? std::string(requestId) : "";
         RPPGProcessor rppg;
         try {
             RPPGResult r = rppg.processVideo(moviePath);
             auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-            static std::string csv;
-            static std::string errors;
+            static thread_local std::string csv;
+            static thread_local std::string errors;
             csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
             errors = "[]";
-            if (callback) callback(safe_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
+            if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         } catch (const std::exception& e) {
-            static std::string errors;
+            static thread_local std::string errors;
             errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-            if (callback) callback(safe_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+            if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         }
         {
             std::lock_guard<std::mutex> lock(g_mutex);
@@ -177,6 +177,7 @@ const char* GenerateRequestId() {
 int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback) {
     if (!initialized) return 1001;
     try {
+        static thread_local std::string thread_request_id = "";
         std::vector<std::string> paths;
         for (int i = 0; i < numImages; ++i) {
             if (imagePaths[i]) paths.emplace_back(imagePaths[i]);
@@ -184,18 +185,17 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         RPPGProcessor rppg;
         RPPGResult r = rppg.processImagesFromPaths(paths);
         auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-        static std::string csv;
-        static std::string errors;
+        static thread_local std::string csv;
+        static thread_local std::string errors;
         csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
         errors = "[]";
-        safe_request_id = "";
-        if (callback) callback(safe_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
+        if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         return 0;
     } catch (const std::exception& e) {
-        static std::string errors;
+        static thread_local std::string thread_request_id = "";
+        static thread_local std::string errors;
         errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-        safe_request_id = "";
-        if (callback) callback(safe_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+        if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         return 1006;
     }
 }
