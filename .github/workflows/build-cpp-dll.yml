@@ -851,7 +851,40 @@ jobs:
           Get-ChildItem -Recurse | ForEach-Object {
             Write-Host "  $($_.FullName)" -ForegroundColor Cyan
           }
-        shell: powershell
+
+          # Final verification - test file reading
+          Write-Host "Performing final file verification..." -ForegroundColor Yellow
+          $criticalFiles = @(
+            "models/systolicbloodpressure.onnx",
+            "models/diastolicbloodpressure.onnx", 
+            "models/opencv_face_detector_uint8.pb",
+            "models/opencv_face_detector.pbtxt"
+          )
+
+          foreach ($file in $criticalFiles) {
+            if (Test-Path $file) {
+              $fileInfo = Get-Item $file
+              $size = $fileInfo.Length
+              Write-Host "File: $file - Size: $size bytes" -ForegroundColor Cyan
+              
+              if ($size -eq 0) {
+                Write-Host "ERROR: Critical file is empty: $file" -ForegroundColor Red
+                exit 1
+              }
+              
+              # Test file reading
+              try {
+                $content = Get-Content $file -Raw -ErrorAction Stop
+                Write-Host "  File read test: SUCCESS" -ForegroundColor Green
+              } catch {
+                Write-Host "  File read test: FAILED - $($_.Exception.Message)" -ForegroundColor Red
+                exit 1
+              }
+            } else {
+              Write-Host "ERROR: Critical file not found: $file" -ForegroundColor Red
+              exit 1
+            }
+          }
 
       - name: Run C# Integration Test
         run: |

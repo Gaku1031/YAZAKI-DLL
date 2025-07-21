@@ -175,10 +175,45 @@ namespace BloodPressureDllTest
                 if (Directory.Exists("models"))
                 {
                     Console.WriteLine("   - Modelsディレクトリ内容:");
-                    foreach (var file in Directory.GetFiles("models", "*", SearchOption.AllDirectories))
+                    try
                     {
-                        var fileInfo = new FileInfo(file);
-                        Console.WriteLine($"     {file} ({fileInfo.Length / 1024} KB)");
+                        foreach (var file in Directory.GetFiles("models", "*", SearchOption.AllDirectories))
+                        {
+                            try
+                            {
+                                var fileInfo = new FileInfo(file);
+                                var sizeKB = fileInfo.Length / 1024.0;
+                                Console.WriteLine($"     {file.Replace(Environment.CurrentDirectory + "\\", "")} ({sizeKB:F2} KB)");
+                                
+                                // Check if file is actually readable
+                                if (fileInfo.Length == 0)
+                                {
+                                    Console.WriteLine($"       WARNING: File appears to be empty (0 bytes)");
+                                    // Try to read a small portion to verify
+                                    try
+                                    {
+                                        using (var stream = File.OpenRead(file))
+                                        {
+                                            var buffer = new byte[10];
+                                            var bytesRead = stream.Read(buffer, 0, buffer.Length);
+                                            Console.WriteLine($"       File read test: {bytesRead} bytes read successfully");
+                                        }
+                                    }
+                                    catch (Exception readEx)
+                                    {
+                                        Console.WriteLine($"       File read test failed: {readEx.Message}");
+                                    }
+                                }
+                            }
+                            catch (Exception fileEx)
+                            {
+                                Console.WriteLine($"     {file.Replace(Environment.CurrentDirectory + "\\", "")} - ERROR: {fileEx.Message}");
+                            }
+                        }
+                    }
+                    catch (Exception dirEx)
+                    {
+                        Console.WriteLine($"   ERROR accessing models directory: {dirEx.Message}");
                     }
                 }
                 
@@ -192,6 +227,45 @@ namespace BloodPressureDllTest
                 
                 // DLL初期化を試行
                 Console.WriteLine("   DLL初期化を試行中...");
+                
+                // Pre-initialization file check
+                Console.WriteLine("   - 初期化前ファイル確認:");
+                var requiredFiles = new[] { 
+                    "models/systolicbloodpressure.onnx", 
+                    "models/diastolicbloodpressure.onnx",
+                    "models/opencv_face_detector_uint8.pb",
+                    "models/opencv_face_detector.pbtxt"
+                };
+                
+                bool allFilesExist = true;
+                foreach (var file in requiredFiles)
+                {
+                    if (File.Exists(file))
+                    {
+                        var fileInfo = new FileInfo(file);
+                        var sizeKB = fileInfo.Length / 1024.0;
+                        Console.WriteLine($"     {file}: EXISTS ({sizeKB:F2} KB)");
+                        
+                        if (fileInfo.Length == 0)
+                        {
+                            Console.WriteLine($"       WARNING: File is empty (0 bytes)");
+                            allFilesExist = false;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"     {file}: NOT FOUND");
+                        allFilesExist = false;
+                    }
+                }
+                
+                if (!allFilesExist)
+                {
+                    Console.WriteLine("   ERROR: Required model files are missing or empty");
+                    Console.WriteLine("   Cannot proceed with DLL initialization");
+                    return;
+                }
+                
                 try
                 {
                     int initResult = InitializeBP("models");
