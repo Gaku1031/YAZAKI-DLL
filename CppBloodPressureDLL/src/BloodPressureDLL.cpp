@@ -184,7 +184,7 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         if (callback) callback("", bp.first, bp.second, csv.c_str(), errors.c_str());
         return 0;
     } catch (const std::exception& e) {
-        std::string errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]");
+        std::string errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
         if (callback) callback("", 0, 0, "", errors.c_str());
         return 1006;
     }
