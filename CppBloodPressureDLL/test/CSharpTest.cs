@@ -235,7 +235,6 @@ namespace BloodPressureDllTest
                 
                 int initResult = InitializeBP("models");
                 Console.WriteLine($"   初期化結果: {initResult}");
-                
                 if (initResult == 1)
                 {
                     Console.WriteLine("   [SUCCESS] DLL初期化成功");
@@ -243,6 +242,12 @@ namespace BloodPressureDllTest
                 else
                 {
                     Console.WriteLine("   [ERROR] DLL初期化失敗");
+                    if (File.Exists("dll_error.log"))
+                    {
+                        Console.WriteLine("--- dll_error.log ---");
+                        Console.WriteLine(File.ReadAllText("dll_error.log"));
+                        Console.WriteLine("--- end of dll_error.log ---");
+                    }
                     return;
                 }
                 

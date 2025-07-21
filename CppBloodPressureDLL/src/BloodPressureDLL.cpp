@@ -11,6 +11,7 @@
 #include <set>
 #include <iomanip>
 #include <cmath>
+#include <fstream>
 
 namespace {
     std::string version = "1.0.0";
@@ -73,12 +74,12 @@ int InitializeBP(const char* modelDir) {
         initialized = true;
         return 1;
     } catch (const std::exception& e) {
-        static thread_local std::string error_msg;
-        error_msg = std::string("DLL initialization failed: ") + e.what();
-        // ここでログファイルにも出力したい場合はofstream等で追記可能
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "InitializeBP exception: " << e.what() << std::endl;
         return 0;
     } catch (...) {
-        static thread_local std::string error_msg = "DLL initialization failed: unknown error";
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "InitializeBP unknown exception" << std::endl;
         return 0;
     }
 }
@@ -113,6 +114,8 @@ const char* StartBloodPressureAnalysisRequest(
             errors = "[]";
             if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         } catch (const std::exception& e) {
+            std::ofstream log("dll_error.log", std::ios::app);
+            log << "StartBloodPressureAnalysisRequest inner exception: " << e.what() << std::endl;
             static thread_local std::string errors;
             errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
             if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
@@ -125,10 +128,14 @@ const char* StartBloodPressureAnalysisRequest(
         static thread_local std::string ok = "";
         return ok.c_str();
     } catch (const std::exception& e) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "StartBloodPressureAnalysisRequest exception: " << e.what() << std::endl;
         static thread_local std::string err;
         err = std::string("StartBloodPressureAnalysisRequest failed: ") + e.what();
         return err.c_str();
     } catch (...) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "StartBloodPressureAnalysisRequest unknown exception" << std::endl;
         static thread_local std::string err = "StartBloodPressureAnalysisRequest failed: unknown error";
         return err.c_str();
     }
@@ -145,9 +152,13 @@ const char* GetProcessingStatus(const char* requestId) {
         std::string debug_msg = "GetProcessingStatus called with requestId: " + std::string(requestId);
         return status_str.c_str();
     } catch (const std::exception& e) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "GetProcessingStatus exception: " << e.what() << std::endl;
         status_str = std::string("GetProcessingStatus failed: ") + e.what();
         return status_str.c_str();
     } catch (...) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "GetProcessingStatus unknown exception" << std::endl;
         status_str = "GetProcessingStatus failed: unknown error";
         return status_str.c_str();
     }
@@ -163,10 +174,14 @@ const char* GetVersionInfo() {
         static thread_local std::string version_str = "BloodPressureDLL v1.0.0";
         return version_str.c_str();
     } catch (const std::exception& e) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "GetVersionInfo exception: " << e.what() << std::endl;
         static thread_local std::string err;
         err = std::string("GetVersionInfo failed: ") + e.what();
         return err.c_str();
     } catch (...) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "GetVersionInfo unknown exception" << std::endl;
         static thread_local std::string err = "GetVersionInfo failed: unknown error";
         return err.c_str();
     }
@@ -182,10 +197,14 @@ const char* GenerateRequestId() {
         id = oss.str();
         return id.c_str();
     } catch (const std::exception& e) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "GenerateRequestId exception: " << e.what() << std::endl;
         static thread_local std::string err;
         err = std::string("GenerateRequestId failed: ") + e.what();
         return err.c_str();
     } catch (...) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "GenerateRequestId unknown exception" << std::endl;
         static thread_local std::string err = "GenerateRequestId failed: unknown error";
         return err.c_str();
     }
@@ -209,12 +228,16 @@ int AnalyzeBloodPressureFromImages(const char** imagePaths, int numImages, int h
         if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
         return 0;
     } catch (const std::exception& e) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "AnalyzeBloodPressureFromImages exception: " << e.what() << std::endl;
         static thread_local std::string thread_request_id = "";
         static thread_local std::string errors;
         errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
         if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
         return 1006;
     } catch (...) {
+        std::ofstream log("dll_error.log", std::ios::app);
+        log << "AnalyzeBloodPressureFromImages unknown exception" << std::endl;
         static thread_local std::string thread_request_id = "";
         static thread_local std::string errors = "[{\"code\":\"1006\",\"message\":\"unknown error\",\"isRetriable\":false}]";
         if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
