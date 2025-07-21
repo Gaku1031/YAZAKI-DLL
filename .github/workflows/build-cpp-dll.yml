@@ -466,102 +466,25 @@ jobs:
           .\vcpkg\vcpkg install zlib:x64-windows
         shell: powershell
 
-      - name: Convert PKL Models to ONNX
+      - name: Check and Copy ONNX Model Files
         run: |
           cd CppBloodPressureDLL
-
-          # Install required packages for model conversion
-          python -m pip install onnx numpy scikit-learn joblib
-
-          # Copy PKL models from root models directory
-          if (Test-Path "../models/model_sbp.pkl") {
-            Copy-Item "../models/model_sbp.pkl" "models/" -Force
-            Write-Host "SBP PKL model copied" -ForegroundColor Green
-          }
-          if (Test-Path "../models/model_dbp.pkl") {
-            Copy-Item "../models/model_dbp.pkl" "models/" -Force
-            Write-Host "DBP PKL model copied" -ForegroundColor Green
-          }
-
-          # Verify PKL models exist
-          Write-Host "Verifying PKL models..." -ForegroundColor Yellow
-          if (Test-Path "models/model_sbp.pkl") {
-            $size = [math]::Round((Get-Item "models/model_sbp.pkl").Length / 1KB, 2)
-            Write-Host "SBP PKL model: $size KB" -ForegroundColor Green
-          } else {
-            Write-Host "ERROR: SBP PKL model not found" -ForegroundColor Red
-            exit 1
-          }
-          if (Test-Path "models/model_dbp.pkl") {
-            $size = [math]::Round((Get-Item "models/model_dbp.pkl").Length / 1KB, 2)
-            Write-Host "DBP PKL model: $size KB" -ForegroundColor Green
-          } else {
-            Write-Host "ERROR: DBP PKL model not found" -ForegroundColor Red
-            exit 1
-          }
-
-          # Convert PKL models to ONNX
-          Write-Host "Converting PKL models to ONNX..." -ForegroundColor Yellow
-          try {
-            # Run conversion from CppBloodPressureDLL directory
-            $conversionOutput = python models/convert_pkl_to_onnx.py 2>&1
-            $conversionExitCode = $LASTEXITCODE
-            
-            # Display conversion output
-            Write-Host "=== ONNX Conversion Output ===" -ForegroundColor Cyan
-            $conversionOutput | ForEach-Object { Write-Host $_ }
-            Write-Host "=== End ONNX Conversion Output ===" -ForegroundColor Cyan
-            Write-Host "Conversion exit code: $conversionExitCode" -ForegroundColor Cyan
-            
-            if ($conversionExitCode -ne 0) {
-              Write-Host "ERROR: ONNX conversion failed with exit code $conversionExitCode" -ForegroundColor Red
+          # ONNXファイルの存在チェック
+          $requiredOnnxFiles = @("models/systolicbloodpressure.onnx", "models/diastolicbloodpressure.onnx")
+          foreach ($onnxFile in $requiredOnnxFiles) {
+            if (!(Test-Path $onnxFile)) {
+              Write-Host "ERROR: Required ONNX file not found: $onnxFile" -ForegroundColor Red
               exit 1
-            }
-            
-            # Check if ONNX files were actually created and have content
-            Write-Host "Checking ONNX file creation..." -ForegroundColor Yellow
-            $onnxFiles = Get-ChildItem "models/" -Filter "*.onnx"
-            foreach ($onnxFile in $onnxFiles) {
-              $size = $onnxFile.Length
-              Write-Host "ONNX file: $($onnxFile.Name) - Size: $size bytes" -ForegroundColor Cyan
-              if ($size -eq 0) {
-                Write-Host "ERROR: ONNX file $($onnxFile.Name) is empty (0 bytes)" -ForegroundColor Red
-                Write-Host "This indicates ONNX conversion failed despite successful exit code" -ForegroundColor Red
+            } else {
+              $size = (Get-Item $onnxFile).Length
+              Write-Host "Found ONNX: $onnxFile ($size bytes)" -ForegroundColor Green
+              if ($size -lt 100*1024) {
+                Write-Host "ERROR: ONNX file too small: $onnxFile" -ForegroundColor Red
                 exit 1
               }
             }
-            
-          } catch {
-            Write-Host "ERROR: ONNX conversion failed with exception: $($_.Exception.Message)" -ForegroundColor Red
-            exit 1
           }
-
-          # Verify ONNX models were created
-          Write-Host "Verifying converted ONNX models..." -ForegroundColor Yellow
-          $onnxFiles = Get-ChildItem "models/" -Filter "*.onnx"
-          if ($onnxFiles.Count -eq 0) {
-            Write-Host "ERROR: No ONNX models were created" -ForegroundColor Red
-            Write-Host "Models directory contents:" -ForegroundColor Yellow
-            Get-ChildItem "models/" -Recurse | ForEach-Object {
-              Write-Host "  $($_.FullName)" -ForegroundColor Cyan
-            }
-            Write-Host "This will cause DLL initialization failure" -ForegroundColor Red
-            Write-Host "Please check PKL files and scikit-learn version compatibility" -ForegroundColor Red
-            exit 1
-          } else {
-            Write-Host "ONNX models created successfully:" -ForegroundColor Green
-            $onnxFiles | ForEach-Object {
-              $size = [math]::Round($_.Length / 1KB, 2)
-              Write-Host "  $($_.Name) ($size KB)" -ForegroundColor Green
-            }
-          }
-
-          # List all files in models directory
-          Write-Host "All files in models directory:" -ForegroundColor Cyan
-          Get-ChildItem "models/" -Recurse | ForEach-Object {
-            $size = [math]::Round($_.Length / 1KB, 2)
-            Write-Host "  $($_.FullName) ($size KB)" -ForegroundColor Cyan
-          }
+          # 必要に応じてmodels/をtest/やdist_cpp/等にコピーする処理は既存のまま残す
         shell: powershell
 
       - name: Configure CMake
@@ -762,26 +685,9 @@ jobs:
               $size = $onnxFile.Length
               Write-Host "ONNX file: $($onnxFile.Name) - Size: $size bytes" -ForegroundColor Cyan
               if ($size -eq 0) {
-                Write-Host "ERROR: ONNX file $($onnxFile.Name) is empty after copy" -ForegroundColor Red
-                Write-Host "Attempting to copy again..." -ForegroundColor Yellow
-                
-                # Try to copy the specific file again
-                $sourcePath = "../models/$($onnxFile.Name)"
-                if (Test-Path $sourcePath) {
-                  $sourceSize = (Get-Item $sourcePath).Length
-                  Write-Host "Source file size: $sourceSize bytes" -ForegroundColor Cyan
-                  Copy-Item $sourcePath "models/" -Force
-                  $newSize = (Get-Item "models/$($onnxFile.Name)").Length
-                  Write-Host "After re-copy: $newSize bytes" -ForegroundColor Cyan
-                  
-                  if ($newSize -eq 0) {
-                    Write-Host "ERROR: ONNX file still empty after re-copy" -ForegroundColor Red
-                    exit 1
-                  }
-                } else {
-                  Write-Host "ERROR: Source ONNX file not found: $sourcePath" -ForegroundColor Red
-                  exit 1
-                }
+                Write-Host "ERROR: ONNX file $($onnxFile.Name) is empty (0 bytes)" -ForegroundColor Red
+                Write-Host "This indicates ONNX conversion failed despite successful exit code" -ForegroundColor Red
+                exit 1
               }
             }
           } else {

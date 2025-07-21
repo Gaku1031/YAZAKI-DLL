@@ -6,7 +6,6 @@ Convert PKL models to ONNX format for blood pressure estimation
 import os
 import sys
 import joblib
-import onnx
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
 
@@ -50,5 +49,5 @@ def convert_model(pkl_path, onnx_path):
 
 if __name__ == "__main__":
     os.makedirs("models", exist_ok=True)
-    convert_model("models/model_sbp.pkl", "models/systolicbloodpressure.onnx")
-    convert_model("models/model_dbp.pkl", "models/diastolicbloodpressure.onnx")
+    convert_model("/Users/gakuinoue/workspace/IKI/YAZAKI-DLL/models/model_sbp.pkl", "/Users/gakuinoue/workspace/IKI/YAZAKI-DLL/models/systolicbloodpressure.onnx")
+    convert_model("/Users/gakuinoue/workspace/IKI/YAZAKI-DLL/models/model_dbp.pkl", "/Users/gakuinoue/workspace/IKI/YAZAKI-DLL/models/diastolicbloodpressure.onnx")
