@@ -1471,3 +1471,14 @@ jobs:
             exit 1
           }
         shell: powershell
+
+      - name: Copy ffmpeg.exe to test directory for integration test
+        run: |
+          if (Test-Path "dist_cpp/ffmpeg.exe") {
+            Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
+            Write-Host "ffmpeg.exe copied to CppBloodPressureDLL/test/" -ForegroundColor Green
+          } else {
+            Write-Host "ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
