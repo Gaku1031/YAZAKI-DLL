@@ -32,31 +32,31 @@ struct BloodPressureEstimator::Impl {
         }
         sbp_file.close();
         dbp_file.close();
-        sbp_session = Ort::Session(env, sbp_path.c_str(), session_options);
-        dbp_session = Ort::Session(env, dbp_path.c_str(), session_options);
+        // Windows用にパスをwstringに変換
+        std::wstring sbp_path_w(sbp_path.begin(), sbp_path.end());
+        std::wstring dbp_path_w(dbp_path.begin(), dbp_path.end());
+        sbp_session = Ort::Session(env, sbp_path_w.c_str(), session_options);
+        dbp_session = Ort::Session(env, dbp_path_w.c_str(), session_options);
     }
 
-    float run(const Ort::Session& session, const std::vector<float>& features) {
+    float run(Ort::Session& session, const std::vector<float>& features) {
         Ort::AllocatorWithDefaultOptions allocator;
         std::vector<int64_t> input_shape = {1, (int64_t)features.size()};
         auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
         Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
             memory_info, const_cast<float*>(features.data()), features.size(), input_shape.data(), input_shape.size());
 
-        const char* input_name = session.GetInputName(0, allocator);
-        const char* output_name = session.GetOutputName(0, allocator);
-        std::vector<const char*> input_names = {input_name};
-        std::vector<const char*> output_names = {output_name};
+        // 入力・出力名の取得（Allocator経由）
+        auto input_name = allocator.GetInputName(session, 0);
+        auto output_name = allocator.GetOutputName(session, 0);
+        std::vector<const char*> input_names = {input_name.get()};
+        std::vector<const char*> output_names = {output_name.get()};
 
         auto output_tensors = session.Run(
             Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1, output_names.data(), 1);
 
         float* out = output_tensors.front().GetTensorMutableData<float>();
         float result = out[0];
-
-        allocator.Free((void*)input_name);
-        allocator.Free((void*)output_name);
-
         return result;
     }
 };
