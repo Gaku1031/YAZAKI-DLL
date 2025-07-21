@@ -97,29 +97,27 @@ const char* StartBloodPressureAnalysisRequest(
         if (g_threads.count(reqId)) return "1005"; // REQUEST_DURING_PROCESSING
         g_status[reqId] = "processing";
     }
-    g_threads[reqId] = std::thread([=]() {
-        static thread_local std::string thread_request_id = requestId ? std::string(requestId) : "";
-        RPPGProcessor rppg;
-        try {
-            RPPGResult r = rppg.processVideo(moviePath);
-            auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-            static thread_local std::string csv;
-            static thread_local std::string errors;
-            csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-            errors = "[]";
-            if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
-        } catch (const std::exception& e) {
-            static thread_local std::string errors;
-            errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-            if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
-        }
-        {
-            std::lock_guard<std::mutex> lock(g_mutex);
-            g_status[reqId] = "none";
-            g_threads.erase(reqId);
-        }
-    });
-    g_threads[reqId].detach();
+    // スレッドを使わず、メインスレッドで直接コールバックを呼び出す
+    static thread_local std::string thread_request_id = requestId ? std::string(requestId) : "";
+    RPPGProcessor rppg;
+    try {
+        RPPGResult r = rppg.processVideo(moviePath);
+        auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
+        static thread_local std::string csv;
+        static thread_local std::string errors;
+        csv = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
+        errors = "[]";
+        if (callback) callback(thread_request_id.c_str(), bp.first, bp.second, csv.c_str(), errors.c_str());
+    } catch (const std::exception& e) {
+        static thread_local std::string errors;
+        errors = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
+        if (callback) callback(thread_request_id.c_str(), 0, 0, empty_str.c_str(), errors.c_str());
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_status[reqId] = "none";
+        g_threads.erase(reqId);
+    }
     return nullptr;
 }
 
