@@ -398,22 +398,19 @@ namespace BloodPressureDllTest
                         return;
                     }
 
-                    // webm→mp4一時変換
-                    string tempMp4 = Path.GetTempFileName().Replace(".tmp", ".mp4");
-                    Console.WriteLine($"   ffmpegでmp4に一時変換: {tempMp4}");
+                    // webm→avi(MJPEG)一時変換
+                    string tempAvi = Path.Combine(Path.GetTempPath(), $"temp_{Guid.NewGuid().ToString().Replace("-", "")}.avi");
+                    Console.WriteLine($"   ffmpegでavi(MJPEG)に一時変換: {tempAvi}");
                     var ffmpegProc = new System.Diagnostics.Process();
                     ffmpegProc.StartInfo.FileName = ffmpegExe;
-                    // 音声ストリームがあるかどうかをffprobeで判定するのが理想だが、まずは-c:v libx264のみで実行
-                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v libx264 -pix_fmt yuv420p \"{tempMp4}\"";
+                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -c:v mjpeg -q:v 3 \"{tempAvi}\"";
                     ffmpegProc.StartInfo.UseShellExecute = false;
                     ffmpegProc.StartInfo.RedirectStandardOutput = true;
                     ffmpegProc.StartInfo.RedirectStandardError = true;
                     ffmpegProc.Start();
                     Console.WriteLine("   [DEBUG] ffmpegプロセス開始");
-                    // まずReadToEndで全て読み切る
                     string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
                     string ffmpegOut = ffmpegProc.StandardOutput.ReadToEnd();
-                    // その後、WaitForExitでプロセスの完全終了を待つ（タイムアウト付き）
                     bool exited = ffmpegProc.WaitForExit(60000); // 60秒でタイムアウト
                     if (!exited) {
                         ffmpegProc.Kill();
@@ -421,12 +418,19 @@ namespace BloodPressureDllTest
                         Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
                         return;
                     }
-                    if (!File.Exists(tempMp4) || new FileInfo(tempMp4).Length < 1000)
+                    if (!File.Exists(tempAvi) || new FileInfo(tempAvi).Length < 1000)
                     {
                         Console.WriteLine($"   [ERROR] ffmpeg変換失敗: {ffmpegErr}");
                         return;
                     }
-                    Console.WriteLine("   ffmpeg変換成功");
+                    long aviSize = new FileInfo(tempAvi).Length;
+                    if (aviSize > 100 * 1024 * 1024) // 100MB
+                    {
+                        Console.WriteLine($"   [WARNING] 変換後のaviファイルが100MBを超えています（{aviSize / (1024 * 1024)}MB）。一時ファイルを削除します。");
+                        try { File.Delete(tempAvi); } catch { }
+                        return;
+                    }
+                    Console.WriteLine($"   ffmpeg変換成功（{aviSize / (1024 * 1024.0):F2} MB）");
 
                     // リクエストIDを生成
                     IntPtr requestIdPtr = GenerateRequestId();
@@ -468,7 +472,7 @@ namespace BloodPressureDllTest
                     };
 
                     Console.WriteLine("   血圧推定リクエスト送信中...");
-                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, tempMp4, callback);
+                    IntPtr resultPtr = StartBloodPressureAnalysisRequest(requestId, 170, 70, 1, tempAvi, callback);
                     string result = Marshal.PtrToStringAnsi(resultPtr);
                     Console.WriteLine($"   StartBloodPressureAnalysisRequest戻り値: {result}");
 
@@ -487,7 +491,7 @@ namespace BloodPressureDllTest
                     }
 
                     // 一時ファイル削除
-                    try { File.Delete(tempMp4); } catch { }
+                    try { File.Delete(tempAvi); } catch { }
                 }
                 catch (Exception ex)
                 {
