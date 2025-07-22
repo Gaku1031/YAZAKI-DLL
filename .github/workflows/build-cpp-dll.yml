@@ -878,7 +878,18 @@ jobs:
             exit 1
           }
         shell: powershell
-      
+
+      - name: Show onnxruntime.dll file size
+        run: |
+          $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
+          if (Test-Path $dllPath) {
+            $size = (Get-Item $dllPath).Length
+            Write-Host "onnxruntime.dll size: $size bytes"
+          } else {
+            Write-Host "onnxruntime.dll not found"
+          }
+        shell: powershell
+
       - name: List onnxruntime.dll dependencies
         run: |
           $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
