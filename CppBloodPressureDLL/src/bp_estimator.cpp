@@ -44,6 +44,10 @@ struct BloodPressureEstimator::Impl {
             // 1. Ort::Env envの生成だけ（ローカル変数で）
             Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
             printf("[BP_EST] Ort::Env created.\n"); fflush(stdout);
+            // 2. session_options.SetIntraOpNumThreads(1);
+            Ort::SessionOptions session_options;
+            session_options.SetIntraOpNumThreads(1);
+            printf("[BP_EST] Ort::SessionOptions created and threads set.\n"); fflush(stdout);
             return;
             // 2. session_options.SetIntraOpNumThreads(1);
             // 3. std::wstring sbp_path_w, dbp_path_wの生成

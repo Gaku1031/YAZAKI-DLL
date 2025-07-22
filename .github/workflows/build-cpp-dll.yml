@@ -474,7 +474,7 @@ jobs:
             exit 1
           }
         shell: powershell
-      
+
       - name: Copy onnxruntime lib directory to test
         run: |
           $src = "onnxruntime/onnxruntime-win-x64-1.16.3/lib"
@@ -1503,26 +1503,5 @@ jobs:
             Write-Host "dll_load.log copied to test-results directory"
           } else {
             Write-Host "dll_load.log not found, skipping copy"
-          }
-        shell: powershell
-
-      - name: Ensure onnxruntime.dll is present in test directory
-        run: |
-          $srcPaths = @(
-            "../../onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll",
-            "../../onnxruntime/lib/onnxruntime.dll"
-          )
-          $found = $false
-          foreach ($src in $srcPaths) {
-            if (Test-Path $src) {
-              Copy-Item $src "CppBloodPressureDLL/test/onnxruntime.dll" -Force
-              Write-Host "onnxruntime.dll copied from: $src"
-              $found = $true
-              break
-            }
-          }
-          if (-not $found) {
-            Write-Host "ERROR: onnxruntime.dll not found in any expected location"
-            exit 1
           }
         shell: powershell
