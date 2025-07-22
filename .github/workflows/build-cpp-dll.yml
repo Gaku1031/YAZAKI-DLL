@@ -392,19 +392,6 @@ jobs:
           Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
         shell: powershell
 
-      - name: Configure CMake
-        run: |
-          cd CppBloodPressureDLL
-          cmake -B build -S . `
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0" `
-            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/include" `
-            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/lib" `
-            -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
-            -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-        shell: powershell
-
       - name: Extract ONNX Runtime with 7-Zip
         run: |
           $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
@@ -460,6 +447,19 @@ jobs:
             }
           }
           # 必要に応じてmodels/をtest/やdist_cpp/等にコピーする処理は既存のまま残す
+        shell: powershell
+      
+      - name: Configure CMake
+        run: |
+          cd CppBloodPressureDLL
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0" `
+            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/include" `
+            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/lib" `
+            -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
+            -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         shell: powershell
 
       - name: Build DLL
