@@ -844,7 +844,7 @@ jobs:
             exit 1
           }
         shell: powershell
-      
+
       - name: Check DLL Bitness (onnxruntime.dll and BloodPressureDLL.dll)
         run: |
           function Get-DllBitness($dllPath) {
@@ -865,9 +865,9 @@ jobs:
           foreach ($dll in $dlls) {
             if (Test-Path $dll) {
               $bit = Get-DllBitness $dll
-              Write-Host "$dll: $bit"
+              Write-Host ($dll + ": " + $bit)
             } else {
-              Write-Host "$dll: Not found"
+              Write-Host ($dll + ": Not found")
             }
           }
         shell: powershell
