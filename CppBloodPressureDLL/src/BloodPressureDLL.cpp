@@ -95,22 +95,24 @@ int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
     try {
         std::lock_guard<std::mutex> lock(getSafeMutex());
-        if (g_estimator) {
-            delete g_estimator;
-            g_estimator = nullptr;
-        }
+        // 1. 何もしない
+        // snprintf(outBuf, bufSize, "OK (empty)");
+        // return 0;
+
+        // 2. modelPathの生成だけ
         std::string modelPath = modelDir ? modelDir : "models";
-        g_estimator = new BloodPressureEstimator(modelPath);
-        initialized = true;
-        snprintf(outBuf, bufSize, "OK");
+        snprintf(outBuf, bufSize, "modelPath OK: %s", modelPath.c_str());
         return 0;
+
+        // 3. BloodPressureEstimator* tmp = new BloodPressureEstimator(modelPath); だけ
+        // 4. g_estimator = tmp; だけ
+        // 5. delete tmp; だけ
+        // ... 1行ずつ戻してテスト
     } catch (const std::exception& e) {
         snprintf(outBuf, bufSize, "InitializeBP exception: %s", e.what());
-        initialized = false;
         return -1;
     } catch (...) {
         snprintf(outBuf, bufSize, "InitializeBP unknown exception");
-        initialized = false;
         return -1;
     }
 }
