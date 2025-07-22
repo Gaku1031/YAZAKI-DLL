@@ -157,6 +157,11 @@ int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
         // 4. モデルファイルチェック（既存のまま）
         std::string modelPath = modelDir ? modelDir : "models";
         oss << "[CHECK] modelPath: " << modelPath << "\n";
+        // === ここから段階的に復元 ===
+        oss << "[STEP] Ort::Env OK\n";
+        Ort::SessionOptions session_options;
+        session_options.SetIntraOpNumThreads(1);
+        oss << "[STEP] SessionOptions OK\n";
         snprintf(outBuf, bufSize, "%s", oss.str().c_str());
         return 0;
     } catch (const std::exception& e) {
