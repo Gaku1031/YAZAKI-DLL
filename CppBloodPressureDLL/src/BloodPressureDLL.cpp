@@ -31,10 +31,10 @@ namespace {
     // std::string version = "1.0.0";
     
     // Lazy initialization for complex objects
-    std::mutex& getSafeMutex() { return getSafeStatic<std::mutex>(); }
-    std::map<std::string, std::thread>& getSafeThreads() { return getSafeStatic<std::map<std::string, std::thread>>(); }
-    std::map<std::string, std::string>& getSafeStatus() { return getSafeStatic<std::map<std::string, std::string>>(); }
-    std::mutex& getSafeCallbackMutex() { return getSafeStatic<std::mutex>(); }
+    // std::mutex& getSafeMutex() { return getSafeStatic<std::mutex>(); }
+    // std::map<std::string, std::thread>& getSafeThreads() { return getSafeStatic<std::map<std::string, std::thread>>(); }
+    // std::map<std::string, std::string>& getSafeStatus() { return getSafeStatic<std::map<std::string, std::string>>(); }
+    // std::mutex& getSafeCallbackMutex() { return getSafeStatic<std::mutex>(); }
     // std::string& getSafeCSVStr() { return getSafeStatic<std::string>(); }
     // std::string& getSafeErrorsStr() { return getSafeStatic<std::string>(); }
     
@@ -187,87 +187,18 @@ int StartBloodPressureAnalysisRequest(char* outBuf, int bufSize,
     const char* requestId, int height, int weight, int sex,
     const char* moviePath, BPCallback callback)
 {
-    try {
-        if (!initialized) {
-            snprintf(outBuf, bufSize, "1001: DLL_NOT_INITIALIZED");
-            return -1;
-        }
-        std::string reqId(requestId ? requestId : "");
-        {
-            std::lock_guard<std::mutex> lock(getSafeMutex());
-            if (getSafeThreads().count(reqId)) {
-                snprintf(outBuf, bufSize, "1005: REQUEST_DURING_PROCESSING");
-                return -1;
-            }
-            getSafeStatus()[reqId] = STATUS_PROCESSING;
-        }
-        std::string thread_request_id = requestId ? std::string(requestId) : "";
-        RPPGProcessor rppg;
-        try {
-            RPPGResult r = rppg.processVideo(moviePath);
-            auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-            {
-                std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
-                // getSafeCSVStr() = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-                // getSafeErrorsStr() = EMPTY_JSON;
-                if (callback) {
-                    callback(thread_request_id.c_str(), bp.first, bp.second, EMPTY_STRING, EMPTY_STRING);
-                }
-            }
-            snprintf(outBuf, bufSize, "OK");
-            return 0;
-        } catch (const std::exception& e) {
-            std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
-            // getSafeErrorsStr() = std::string("[{\"code\":\"1006\",\"message\":\"") + e.what() + "\",\"isRetriable\":false}]";
-            if (callback) {
-                callback(thread_request_id.c_str(), 0, 0, EMPTY_STRING, EMPTY_STRING);
-            }
-            snprintf(outBuf, bufSize, "StartBloodPressureAnalysisRequest inner exception: %s", e.what());
-            return -1;
-        }
-        {
-            std::lock_guard<std::mutex> lock(getSafeMutex());
-            getSafeStatus()[reqId] = STATUS_NONE;
-            getSafeThreads().erase(reqId);
-        }
-    } catch (const std::exception& e) {
-        snprintf(outBuf, bufSize, "StartBloodPressureAnalysisRequest exception: %s", e.what());
-        return -1;
-    } catch (...) {
-        snprintf(outBuf, bufSize, "StartBloodPressureAnalysisRequest unknown exception");
-        return -1;
-    }
+    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
+    return -1;
 }
 
 int GetProcessingStatus(char* outBuf, int bufSize, const char* requestId) {
-    try {
-        if (!requestId) {
-            snprintf(outBuf, bufSize, "%s", STATUS_NONE);
-            return 0;
-        }
-        std::string reqId(requestId);
-        {
-            std::lock_guard<std::mutex> lock(getSafeMutex());
-            auto it = getSafeStatus().find(reqId);
-            if (it != getSafeStatus().end()) {
-                snprintf(outBuf, bufSize, "%s", it->second.c_str());
-                return 0;
-            }
-        }
-        snprintf(outBuf, bufSize, "%s", STATUS_NONE);
-        return 0;
-    } catch (const std::exception& e) {
-        snprintf(outBuf, bufSize, "GetProcessingStatus exception: %s", e.what());
-        return -1;
-    } catch (...) {
-        snprintf(outBuf, bufSize, "GetProcessingStatus unknown exception");
-        return -1;
-    }
+    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
+    return -1;
 }
 
 int CancelBloodPressureAnalysis(char* outBuf, int bufSize, const char* requestId) {
-    snprintf(outBuf, bufSize, "OK");
-    return 0;
+    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
+    return -1;
 }
 
 int GetVersionInfo(char* outBuf, int bufSize) {
@@ -278,59 +209,14 @@ int GetVersionInfo(char* outBuf, int bufSize) {
 }
 
 int GenerateRequestId(char* outBuf, int bufSize) {
-    try {
-        auto now = std::chrono::system_clock::now();
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-        std::ostringstream oss;
-        oss << ms << "_CUSTOMER_DRIVER";
-        snprintf(outBuf, bufSize, "%s", oss.str().c_str());
-        return 0;
-    } catch (const std::exception& e) {
-        snprintf(outBuf, bufSize, "GenerateRequestId exception: %s", e.what());
-        return -1;
-    } catch (...) {
-        snprintf(outBuf, bufSize, "GenerateRequestId unknown exception");
-        return -1;
-    }
+    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
+    return -1;
 }
 
 int AnalyzeBloodPressureFromImages(char* outBuf, int bufSize,
     const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback) {
-    try {
-        if (!initialized) {
-            snprintf(outBuf, bufSize, "AnalyzeBloodPressureFromImages not initialized");
-            return -1;
-        }
-        if (!g_estimator) {
-            snprintf(outBuf, bufSize, "AnalyzeBloodPressureFromImages estimator is null");
-            return -1;
-        }
-        std::vector<std::string> paths;
-        for (int i = 0; i < numImages; ++i) {
-            if (imagePaths[i]) {
-                paths.emplace_back(imagePaths[i]);
-            }
-        }
-        RPPGProcessor rppg;
-        RPPGResult r = rppg.processImagesFromPaths(paths);
-        auto bp = g_estimator->estimate_bp(r.peak_times, height, weight, sex);
-        {
-            std::lock_guard<std::mutex> lock(getSafeCallbackMutex());
-            // getSafeCSVStr() = generateCSV(r.rppg_signal, r.time_data, r.peak_times);
-            // getSafeErrorsStr() = EMPTY_JSON;
-            if (callback) {
-                callback(EMPTY_STRING, bp.first, bp.second, EMPTY_STRING, EMPTY_STRING);
-            }
-        }
-        snprintf(outBuf, bufSize, "OK");
-        return 0;
-    } catch (const std::exception& e) {
-        snprintf(outBuf, bufSize, "AnalyzeBloodPressureFromImages exception: %s", e.what());
-        return -1;
-    } catch (...) {
-        snprintf(outBuf, bufSize, "AnalyzeBloodPressureFromImages unknown exception");
-        return -1;
-    }
+    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
+    return -1;
 }
 
 #ifdef _WIN32
