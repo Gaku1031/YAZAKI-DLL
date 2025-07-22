@@ -87,6 +87,13 @@ BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
 
 BloodPressureEstimator::~BloodPressureEstimator() = default;
 
-std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double>&, int, int, int) {
-    return {0, 0};
+std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double>& peak_times, int height, int weight, int sex) {
+    // 入力ベクトルをfloatに変換
+    std::vector<float> input;
+    for (double v : peak_times) input.push_back(static_cast<float>(v));
+    // SBP推定
+    int sbp = static_cast<int>(std::round(pImpl->run(nullptr, input)));
+    // DBP推定（例：session_ptrに&dbp_sessionを渡す）
+    int dbp = static_cast<int>(std::round(pImpl->run(&pImpl->dbp_session, input)));
+    return {sbp, dbp};
 } 
