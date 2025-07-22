@@ -13,6 +13,7 @@
 #include <cmath>
 #include <fstream>
 #include <cstdio>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -89,17 +90,64 @@ std::string generateCSV(const std::vector<double>& rppg_signal,
     return csv.str();
 }
 
+bool file_exists(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    return f.good();
+}
+
+std::string get_dll_architecture(const std::string& dll_path) {
+    std::ifstream file(dll_path, std::ios::binary);
+    if (!file) return "not found";
+    file.seekg(0x3C);
+    int pe_offset = 0;
+    file.read(reinterpret_cast<char*>(&pe_offset), 4);
+    file.seekg(pe_offset + 4);
+    short machine = 0;
+    file.read(reinterpret_cast<char*>(&machine), 2);
+    if (machine == 0x8664) return "x64";
+    if (machine == 0x14c) return "x86";
+    return "unknown";
+}
+
 extern "C" {
 
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
     try {
-        std::lock_guard<std::mutex> lock(getSafeMutex());
+        std::ostringstream oss;
+        // 1. onnxruntime.dllの存在チェック
+        std::string dll_path = "onnxruntime.dll";
+        oss << "[CHECK] onnxruntime.dll: ";
+        if (!file_exists(dll_path)) {
+            oss << "NOT FOUND\n";
+            snprintf(outBuf, bufSize, "%s", oss.str().c_str());
+            return -1;
+        }
+        oss << "FOUND\n";
+        // 2. bit数チェック
+        std::string arch = get_dll_architecture(dll_path);
+        oss << "[CHECK] onnxruntime.dll architecture: " << arch << "\n";
+        if (arch != "x64") {
+            oss << "ERROR: onnxruntime.dll is not x64\n";
+            snprintf(outBuf, bufSize, "%s", oss.str().c_str());
+            return -1;
+        }
+        // 3. 依存DLLチェック（zlib.dll, opencv_world480.dllなど）
+        std::vector<std::string> deps = {"zlib.dll", "opencv_world480.dll"};
+        for (const auto& dep : deps) {
+            oss << "[CHECK] " << dep << ": ";
+            if (!file_exists(dep)) {
+                oss << "NOT FOUND\n";
+                snprintf(outBuf, bufSize, "%s", oss.str().c_str());
+                return -1;
+            }
+            oss << "FOUND\n";
+        }
+        // 4. モデルファイルチェック（既存のまま）
         std::string modelPath = modelDir ? modelDir : "models";
-        BloodPressureEstimator* tmp = new BloodPressureEstimator(modelPath);
-        snprintf(outBuf, bufSize, "new OK");
+        oss << "[CHECK] modelPath: " << modelPath << "\n";
+        snprintf(outBuf, bufSize, "%s", oss.str().c_str());
         return 0;
-        // 以降はまだ追加しない
     } catch (const std::exception& e) {
         snprintf(outBuf, bufSize, "InitializeBP exception: %s", e.what());
         return -1;
