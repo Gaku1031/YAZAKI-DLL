@@ -380,7 +380,7 @@ jobs:
       - name: Install ONNX Runtime
         run: |
           # Download and install ONNX Runtime
-          $onnxVersion = "1.17.0"
+          $onnxVersion = "1.22.1"
           $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
           $onnxZip = "onnxruntime.zip"
           $onnxDir = "${{ github.workspace }}/onnxruntime"
@@ -392,25 +392,26 @@ jobs:
           Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
         shell: powershell
 
-      - name: Extract ONNX Runtime with 7-Zip
+      - name: Show onnxruntime.dll file size and version
         run: |
-          $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
-          $sevenZipExe = "7z-installer.exe"
-          Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe
-          Start-Process -FilePath $sevenZipExe -ArgumentList "/S" -Wait -NoNewWindow
-          $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
-          if (Test-Path $sevenZipPath) {
-            & "$sevenZipPath" x "onnxruntime.zip" "-oonnxruntime" -y
-            Write-Host "ONNX Runtime extracted with 7-Zip"
+          $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
+          if (Test-Path $dllPath) {
+            $size = (Get-Item $dllPath).Length
+            Write-Host "onnxruntime.dll size: $size bytes"
+            try {
+              $ver = (Get-Command $dllPath).FileVersionInfo
+              Write-Host "onnxruntime.dll version: $($ver.FileVersion) ($($ver.ProductVersion))"
+            } catch {
+              Write-Host "onnxruntime.dll version: (could not retrieve)"
+            }
           } else {
-            Write-Host "7-Zip not found"
-            exit 1
+            Write-Host "onnxruntime.dll not found"
           }
         shell: powershell
-
+      
       - name: Copy onnxruntime lib directory to test
         run: |
-          $src = "onnxruntime/onnxruntime-win-x64-1.17.0/lib"
+          $src = "onnxruntime/onnxruntime-win-x64-1.22.1/lib"
           $dst = "CppBloodPressureDLL/test"
           if (Test-Path $src) {
             Copy-Item "$src/*" $dst -Recurse -Force
@@ -454,9 +455,9 @@ jobs:
           cd CppBloodPressureDLL
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0" `
-            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/include" `
-            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/lib" `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1" `
+            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
+            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib" `
             -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
