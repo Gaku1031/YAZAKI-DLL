@@ -118,7 +118,8 @@ std::string get_dll_architecture(const std::string& dll_path) {
     return buf;
 }
 
-extern "C" {
+typedef void(*BPCallback)(const char* requestId, int sbp, int dbp, const char* csv, const char* errorsJson);
+
 __declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
@@ -181,4 +182,71 @@ int EstimateBloodPressure(
         return -1;
     }
 }
-} 
+__declspec(dllexport)
+int EstimateBloodPressureFromVideo(
+    const char* videoPath,
+    int height, int weight, int sex,
+    int* sbp, int* dbp)
+{
+    try {
+        if (!g_estimator) return -1;
+        RPPGProcessor rppg;
+        RPPGResult rppg_result = rppg.processVideo(videoPath);
+        if (rppg_result.peak_times.empty()) {
+            FILE* f = fopen("dll_error.log", "a");
+            if (f) {
+                fprintf(f, "EstimateBloodPressureFromVideo: No peaks detected or video read error: %s\n", videoPath);
+                fclose(f);
+            }
+            return -1;
+        }
+        auto result = g_estimator->estimate_bp(rppg_result.peak_times, height, weight, sex);
+        if (sbp) *sbp = result.first;
+        if (dbp) *dbp = result.second;
+        return 0;
+    } catch (const std::exception& e) {
+        FILE* f = fopen("dll_error.log", "a");
+        if (f) {
+            fprintf(f, "EstimateBloodPressureFromVideo exception: %s\n", e.what());
+            fclose(f);
+        }
+        return -1;
+    } catch (...) {
+        FILE* f = fopen("dll_error.log", "a");
+        if (f) {
+            fprintf(f, "EstimateBloodPressureFromVideo unknown exception\n");
+            fclose(f);
+        }
+        return -1;
+    }
+}
+__declspec(dllexport)
+int StartBloodPressureAnalysisRequest(
+    const char* requestId,
+    int height, int weight, int sex,
+    const char* moviePath,
+    BPCallback callback)
+{
+    try {
+        if (!g_estimator) {
+            if (callback) callback(requestId, 0, 0, "", "[{\"code\":1001,\"message\":\"DLL not initialized\",\"isRetriable\":false}]");
+            return 1001;
+        }
+        RPPGProcessor rppg;
+        RPPGResult rppg_result = rppg.processVideo(moviePath);
+        if (rppg_result.peak_times.empty()) {
+            if (callback) callback(requestId, 0, 0, "", "[{\"code\":1006,\"message\":\"No peaks detected or video read error\",\"isRetriable\":false}]");
+            return 1006;
+        }
+        auto result = g_estimator->estimate_bp(rppg_result.peak_times, height, weight, sex);
+        std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
+        if (callback) callback(requestId, result.first, result.second, csv.c_str(), "[]");
+        return 0;
+    } catch (const std::exception& e) {
+        if (callback) callback(requestId, 0, 0, "", (std::string("[{\"code\":1006,\"message\":\"") + e.what() + "\",\"isRetriable\":false}]").c_str());
+        return 1006;
+    } catch (...) {
+        if (callback) callback(requestId, 0, 0, "", "[{\"code\":1006,\"message\":\"Unknown exception\",\"isRetriable\":false}]");
+        return 1006;
+    }
+}

@@ -11,12 +11,10 @@ namespace BloodPressureDllTest
     // コールバック関数の型定義（C++ typedef void(*BPCallback)(const char* requestId, int maxBloodPressure, int minBloodPressure, const char* measureRowData, const char* errorsJson); に完全一致）
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void BPCallback(
-        IntPtr requestId, // const char* requestId
-        int maxBloodPressure, // int maxBloodPressure
-        int minBloodPressure, // int minBloodPressure
-        IntPtr measureRowData, // const char* measureRowData (== csvData)
-        IntPtr errorsJson // const char* errorsJson
-    );
+        [MarshalAs(UnmanagedType.LPStr)] string requestId,
+        int sbp, int dbp,
+        [MarshalAs(UnmanagedType.LPStr)] string csv,
+        [MarshalAs(UnmanagedType.LPStr)] string errorsJson);
 
     public class BloodPressureDll
     {
@@ -26,7 +24,7 @@ namespace BloodPressureDllTest
         public static extern int InitializeBP([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string modelDir);
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-        public static extern int StartBloodPressureAnalysisRequest([Out] StringBuilder outBuf, int bufSize,
+        public static extern int StartBloodPressureAnalysisRequest(
             [MarshalAs(UnmanagedType.LPStr)] string requestId,
             int height, int weight, int sex,
             [MarshalAs(UnmanagedType.LPStr)] string moviePath,
@@ -517,38 +515,19 @@ namespace BloodPressureDllTest
                     int height = 170, weight = 70, sex = 1;
                     bool callbackCalled = false;
                     AutoResetEvent callbackEvent = new AutoResetEvent(false);
-                    BPCallback callback = (cbRequestIdPtr, maxBP, minBP, csvDataPtr, errorsJsonPtr) =>
+                    BPCallback callback = (reqId, sbp, dbp, csv, errorsJson) =>
                     {
                         try {
-                            string cbRequestId = Marshal.PtrToStringAnsi(cbRequestIdPtr);
-                            string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
-                            string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
-                            callbackCalled = true;
-                            Console.WriteLine("\n=== 血圧推定コールバック ===");
-                            Console.WriteLine($"Request ID: {cbRequestId}");
-                            Console.WriteLine($"最高血圧: {maxBP} mmHg");
-                            Console.WriteLine($"最低血圧: {minBP} mmHg");
-                            Console.WriteLine($"CSVデータサイズ: {csvData?.Length ?? 0} 文字");
-                            if (!string.IsNullOrEmpty(csvData))
+                            Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={sbp}, DBP={dbp}");
+                            if (!string.IsNullOrEmpty(csv))
                             {
-                                Console.WriteLine($"CSVデータ(先頭100文字): {csvData.Substring(0, Math.Min(100, csvData.Length))}");
+                                Console.WriteLine($"[CALLBACK] CSV length: {csv.Length}");
                             }
                             if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
                             {
-                                Console.WriteLine($"[ERROR] エラー: {errorsJson}");
+                                Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
                             }
-                            else
-                            {
-                                Console.WriteLine("[SUCCESS] エラーなし");
-                            }
-                            if (maxBP > 0 && minBP > 0)
-                            {
-                                Console.WriteLine($"[SUCCESS] 推定値: SBP={maxBP}, DBP={minBP}");
-                            }
-                            else
-                            {
-                                Console.WriteLine("[ERROR] 推定値が0または異常です");
-                            }
+                            callbackCalled = true;
                             callbackEvent.Set();
                         } catch (Exception ex) {
                             Console.WriteLine($"[FATAL ERROR] コールバック内で例外発生: {ex.Message}");
@@ -638,6 +617,26 @@ namespace BloodPressureDllTest
                 int estResult = EstimateBloodPressure(peakTimes, peakTimes.Length, height, weight, sex, out sbp, out dbp);
                 Console.WriteLine($"EstimateBloodPressure result: {estResult}");
                 Console.WriteLine($"推定SBP: {sbp}, 推定DBP: {dbp}");
+
+                // 仕様準拠の推論テスト
+                string requestId = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_TEST001_000000001";
+                int height = 170;
+                int weight = 65;
+                int sex = 1; // 男性=1, 女性=2
+                string moviePath = "sample_video.webm";
+                BPCallback callback = (reqId, sbp, dbp, csv, errorsJson) => {
+                    Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={sbp}, DBP={dbp}");
+                    if (!string.IsNullOrEmpty(csv))
+                    {
+                        Console.WriteLine($"[CALLBACK] CSV length: {csv.Length}");
+                    }
+                    if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
+                    {
+                        Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
+                    }
+                };
+                int ret = StartBloodPressureAnalysisRequest(requestId, height, weight, sex, moviePath, callback);
+                Console.WriteLine($"StartBloodPressureAnalysisRequest returned: {ret}");
             }
             catch (Exception ex)
             {
