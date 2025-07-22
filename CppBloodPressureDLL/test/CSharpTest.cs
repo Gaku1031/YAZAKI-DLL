@@ -12,8 +12,9 @@ namespace BloodPressureDllTest
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void BPCallback(
         [MarshalAs(UnmanagedType.LPStr)] string requestId,
-        int sbp, int dbp,
-        [MarshalAs(UnmanagedType.LPStr)] string csv,
+        int maxBloodPressure,
+        int minBloodPressure,
+        [MarshalAs(UnmanagedType.LPStr)] string measureRowData,
         [MarshalAs(UnmanagedType.LPStr)] string errorsJson);
 
     public class BloodPressureDll
@@ -25,6 +26,7 @@ namespace BloodPressureDllTest
 
         [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern int StartBloodPressureAnalysisRequest(
+            [Out] StringBuilder outBuf, int bufSize,
             [MarshalAs(UnmanagedType.LPStr)] string requestId,
             int height, int weight, int sex,
             [MarshalAs(UnmanagedType.LPStr)] string moviePath,
@@ -618,19 +620,20 @@ namespace BloodPressureDllTest
                 int weight2 = 65;
                 int sex2 = 1; // 男性=1, 女性=2
                 string moviePath = "sample_video.webm";
-                BPCallback callback = (reqId, sbp, dbp, csv, errorsJson) => {
-                    Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={sbp}, DBP={dbp}");
-                    if (!string.IsNullOrEmpty(csv))
+                BPCallback callback = (reqId, maxBP, minBP, measureRowData, errorsJson) => {
+                    Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={maxBP}, DBP={minBP}");
+                    if (!string.IsNullOrEmpty(measureRowData))
                     {
-                        Console.WriteLine($"[CALLBACK] CSV length: {csv.Length}");
+                        Console.WriteLine($"[CALLBACK] CSV length: {measureRowData.Length}");
                     }
                     if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
                     {
                         Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
                     }
                 };
-                int ret = StartBloodPressureAnalysisRequest(requestId, height2, weight2, sex2, moviePath, callback);
-                Console.WriteLine($"StartBloodPressureAnalysisRequest returned: {ret}");
+                var outBuf = new StringBuilder(1024);
+                int ret = StartBloodPressureAnalysisRequest(outBuf, outBuf.Capacity, requestId, height2, weight2, sex2, moviePath, callback);
+                Console.WriteLine($"StartBloodPressureAnalysisRequest returned: {ret}, outBuf: '{outBuf}'");
             }
             catch (Exception ex)
             {

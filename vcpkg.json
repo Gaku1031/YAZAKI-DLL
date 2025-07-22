@@ -1,0 +1,5 @@
+{
+  "name": "blood-pressure-dll",
+  "version-string": "0.1.0",
+  "dependencies": ["zlib"]
+}
