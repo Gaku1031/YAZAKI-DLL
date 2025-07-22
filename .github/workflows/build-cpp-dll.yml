@@ -475,6 +475,19 @@ jobs:
           }
         shell: powershell
       
+      - name: Copy onnxruntime lib directory to test
+        run: |
+          $src = "onnxruntime/onnxruntime-win-x64-1.16.3/lib"
+          $dst = "CppBloodPressureDLL/test"
+          if (Test-Path $src) {
+            Copy-Item "$src/*" $dst -Recurse -Force
+            Write-Host "onnxruntime lib directory copied to test"
+          } else {
+            Write-Host "onnxruntime lib directory not found"
+            exit 1
+          }
+        shell: powershell
+
       - name: List files in onnxruntime lib directory
         run: |
           $libDir = "onnxruntime/onnxruntime-win-x64-1.16.3/lib"
