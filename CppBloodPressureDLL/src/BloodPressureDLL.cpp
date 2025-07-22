@@ -131,4 +131,17 @@ int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     outBuf[n] = '\0';
     return 0;
 }
+
+__declspec(dllexport)
+int GetVersionInfo(char* outBuf, int bufSize) {
+    if (!outBuf || bufSize <= 0) return -1;
+    const char* msg = "VERSION";
+    int n = 0;
+    while (msg[n] && n < bufSize - 1) {
+        outBuf[n] = msg[n];
+        ++n;
+    }
+    outBuf[n] = '\0';
+    return 0;
+}
 } 
