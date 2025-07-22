@@ -39,7 +39,7 @@ namespace {
     // std::string& getSafeErrorsStr() { return getSafeStatic<std::string>(); }
     
     std::atomic<bool> initialized{false};
-    BloodPressureEstimator* g_estimator = nullptr;
+    static std::unique_ptr<BloodPressureEstimator> g_estimator;
     
     // thread_local std::string tl_return_str;
     // thread_local std::string tl_error_str;
@@ -124,21 +124,28 @@ __declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
     try {
-        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
-        const char* msg = "ORT_ENV_OK";
-        int n = 0;
-        while (msg[n] && n < bufSize - 1) {
-            outBuf[n] = msg[n];
-            ++n;
+        // 既存のインスタンスを解放
+        g_estimator.reset();
+        // モデルファイル存在チェック
+        std::string sbp_path = std::string(modelDir) + "/systolicbloodpressure.onnx";
+        std::string dbp_path = std::string(modelDir) + "/diastolicbloodpressure.onnx";
+        if (!file_exists(sbp_path) || !file_exists(dbp_path)) {
+            std::string msg = "Model file not found: " + sbp_path + " or " + dbp_path;
+            snprintf(outBuf, bufSize, "%s", msg.c_str());
+            FILE* f = fopen("dll_error.log", "a");
+            if (f) { fprintf(f, "%s\n", msg.c_str()); fclose(f); }
+            return 1;
         }
-        outBuf[n] = '\0';
+        // 推論器初期化
+        g_estimator = std::make_unique<BloodPressureEstimator>(modelDir);
+        snprintf(outBuf, bufSize, "ORT_ENV_OK");
         return 0;
     } catch (const std::exception& e) {
-        if (bufSize > 0) {
-            strncpy(outBuf, e.what(), bufSize - 1);
-            outBuf[bufSize - 1] = '\0';
-        }
-        return -1;
+        snprintf(outBuf, bufSize, "InitializeBP exception: %s", e.what());
+        FILE* f = fopen("dll_error.log", "a");
+        if (f) { fprintf(f, "InitializeBP exception: %s\n", e.what()); fclose(f); }
+        g_estimator.reset();
+        return 1;
     }
 }
 __declspec(dllexport)
