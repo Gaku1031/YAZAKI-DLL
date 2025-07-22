@@ -165,7 +165,19 @@ int EstimateBloodPressure(
         if (sbp) *sbp = result.first;
         if (dbp) *dbp = result.second;
         return 0;
+    } catch (const std::exception& e) {
+        FILE* f = fopen("dll_error.log", "a");
+        if (f) {
+            fprintf(f, "EstimateBloodPressure exception: %s\n", e.what());
+            fclose(f);
+        }
+        return -1;
     } catch (...) {
+        FILE* f = fopen("dll_error.log", "a");
+        if (f) {
+            fprintf(f, "EstimateBloodPressure unknown exception\n");
+            fclose(f);
+        }
         return -1;
     }
 }
