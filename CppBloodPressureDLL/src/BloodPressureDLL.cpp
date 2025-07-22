@@ -14,6 +14,7 @@
 #include <fstream>
 #include <cstdio>
 #include <vector>
+#include <onnxruntime_cxx_api.h>
 
 #ifdef _WIN32
 #include <windows.h>
