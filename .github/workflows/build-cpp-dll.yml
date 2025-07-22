@@ -848,27 +848,35 @@ jobs:
       - name: Check DLL Bitness (onnxruntime.dll and BloodPressureDLL.dll)
         run: |
           function Get-DllBitness($dllPath) {
+            if (!(Test-Path $dllPath)) { Write-Host ($dllPath + ": Not found"); return "Not found" }
             $bytes = [System.IO.File]::ReadAllBytes($dllPath)
-            if ($bytes.Length -lt 64) { return "Unknown" }
+            if ($bytes.Length -lt 64) { Write-Host ($dllPath + ": Unknown"); return "Unknown" }
             $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
-            if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length) { return "Unknown" }
-            if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset+1] -ne 0x45) { return "Unknown" }
+            if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length) { Write-Host ($dllPath + ": Unknown"); return "Unknown" }
+            if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset+1] -ne 0x45) { Write-Host ($dllPath + ": Unknown"); return "Unknown" }
             $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
             switch ($machine) {
-              0x8664 { return "x64" }
-              0x14c  { return "x86" }
-              default { return "Unknown(0x$([Convert]::ToString($machine,16)))" }
+              0x8664 { $arch = "x64" }
+              0x14c  { $arch = "x86" }
+              default { $arch = "Unknown(0x$([Convert]::ToString($machine,16)))" }
             }
+            Write-Host ($dllPath + ": " + $arch)
+            return $arch
           }
           cd CppBloodPressureDLL/test
-          $dlls = @("onnxruntime.dll", "BloodPressureDLL.dll")
-          foreach ($dll in $dlls) {
-            if (Test-Path $dll) {
-              $bit = Get-DllBitness $dll
-              Write-Host ($dll + ": " + $bit)
-            } else {
-              Write-Host ($dll + ": Not found")
-            }
+          $onnx = Get-DllBitness "onnxruntime.dll"
+          $bp = Get-DllBitness "BloodPressureDLL.dll"
+          if ($onnx -eq "Not found" -or $bp -eq "Not found") {
+            Write-Host "ERROR: 必須DLLが見つかりません"
+            exit 1
+          }
+          if ($onnx -eq "Unknown" -or $bp -eq "Unknown") {
+            Write-Host "ERROR: DLLのbit数が不明です"
+            exit 1
+          }
+          if ($onnx -ne $bp) {
+            Write-Host "ERROR: DLLのbit数が一致しません"
+            exit 1
           }
         shell: powershell
 
@@ -1467,5 +1475,26 @@ jobs:
             Write-Host "dll_load.log copied to test-results directory"
           } else {
             Write-Host "dll_load.log not found, skipping copy"
+          }
+        shell: powershell
+
+      - name: Ensure onnxruntime.dll is present in test directory
+        run: |
+          $srcPaths = @(
+            "../../onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll",
+            "../../onnxruntime/lib/onnxruntime.dll"
+          )
+          $found = $false
+          foreach ($src in $srcPaths) {
+            if (Test-Path $src) {
+              Copy-Item $src "CppBloodPressureDLL/test/onnxruntime.dll" -Force
+              Write-Host "onnxruntime.dll copied from: $src"
+              $found = $true
+              break
+            }
+          }
+          if (-not $found) {
+            Write-Host "ERROR: onnxruntime.dll not found in any expected location"
+            exit 1
           }
         shell: powershell
