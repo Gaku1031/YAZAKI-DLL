@@ -867,15 +867,15 @@ jobs:
           $onnx = Get-DllBitness "onnxruntime.dll"
           $bp = Get-DllBitness "BloodPressureDLL.dll"
           if ($onnx -eq "Not found" -or $bp -eq "Not found") {
-            Write-Host "ERROR: 必須DLLが見つかりません"
+            Write-Host "ERROR: Required DLL not found"
             exit 1
           }
           if ($onnx -eq "Unknown" -or $bp -eq "Unknown") {
-            Write-Host "ERROR: DLLのbit数が不明です"
+            Write-Host "ERROR: DLL bitness unknown"
             exit 1
           }
           if ($onnx -ne $bp) {
-            Write-Host "ERROR: DLLのbit数が一致しません"
+            Write-Host "ERROR: DLL bitness mismatch"
             exit 1
           }
         shell: powershell
