@@ -60,8 +60,22 @@ struct BloodPressureEstimator::Impl {
         }
     }
 
-    float run(void*, const std::vector<float>&) {
-        return 0.0f;
+    float run(void* session_ptr, const std::vector<float>& input) {
+        // session_ptrがnullptrならSBP、そうでなければDBPを使う（例）
+        Ort::Session* session = session_ptr ? static_cast<Ort::Session*>(session_ptr) : &sbp_session;
+        // 入力名・出力名はモデルに合わせて要調整
+        const char* input_names[] = {"input"};
+        const char* output_names[] = {"output"};
+        std::vector<int64_t> input_shape = {static_cast<int64_t>(input.size())};
+        Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        Ort::Value input_tensor = Ort::Value::CreateTensor<float>(memory_info, const_cast<float*>(input.data()), input.size(), input_shape.data(), input_shape.size());
+        std::vector<Ort::Value> ort_outputs = session->Run(Ort::RunOptions{nullptr}, input_names, &input_tensor, 1, output_names, 1);
+        float result = 0.0f;
+        if (ort_outputs.size() > 0 && ort_outputs[0].IsTensor()) {
+            float* out_data = ort_outputs[0].GetTensorMutableData<float>();
+            result = out_data[0];
+        }
+        return result;
     }
 };
 
