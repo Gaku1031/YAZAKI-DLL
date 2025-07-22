@@ -122,6 +122,14 @@ extern "C" {
 __declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
+#ifdef _WIN32
+    HMODULE h = LoadLibraryA("onnxruntime.dll");
+    if (!h) {
+        DWORD err = GetLastError();
+        snprintf(outBuf, bufSize, "[ERROR] LoadLibraryA(onnxruntime.dll) failed. GetLastError=%lu", (unsigned long)err);
+        return -1;
+    }
+#endif
     try {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
         std::ostringstream oss;
