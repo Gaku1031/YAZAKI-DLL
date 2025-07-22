@@ -474,6 +474,18 @@ jobs:
             exit 1
           }
         shell: powershell
+      
+      - name: List files in onnxruntime lib directory
+        run: |
+          $libDir = "onnxruntime/onnxruntime-win-x64-1.16.3/lib"
+          if (Test-Path $libDir) {
+            Get-ChildItem $libDir | ForEach-Object {
+              Write-Host "$($_.Name): $($_.Length) bytes"
+            }
+          } else {
+            Write-Host "onnxruntime lib directory not found"
+          }
+        shell: powershell
 
       - name: Show downloaded onnxruntime zip size
         run: |
