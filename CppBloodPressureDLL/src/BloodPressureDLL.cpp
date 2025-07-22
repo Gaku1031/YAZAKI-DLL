@@ -48,11 +48,9 @@ namespace {
     // thread_local std::string tl_version_str;
     
     // Constants for common responses
-    // const char* const STATUS_NONE = "none";
-    // const char* const STATUS_PROCESSING = "processing";
-    // const char* const VERSION_INFO = "BloodPressureDLL v1.0.0";
-    // const char* const EMPTY_JSON = "[]";
-    // const char* const EMPTY_STRING = "";
+    const char* const STATUS_NONE = "none";
+    const char* const STATUS_PROCESSING = "processing";
+    const char* const EMPTY_STRING = "";
 }
 
 // CSV生成用のヘルパー関数
