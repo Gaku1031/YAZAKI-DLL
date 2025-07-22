@@ -380,7 +380,7 @@ jobs:
       - name: Install ONNX Runtime
         run: |
           # Download and install ONNX Runtime
-          $onnxVersion = "1.16.3"
+          $onnxVersion = "1.17.0"
           $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
           $onnxZip = "onnxruntime.zip"
           $onnxDir = "${{ github.workspace }}/onnxruntime"
@@ -390,73 +390,19 @@ jobs:
 
           Write-Host "Extracting ONNX Runtime..." -ForegroundColor Yellow
           Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
+        shell: powershell
 
-          # Check the extracted directory structure
-          Write-Host "Checking ONNX Runtime directory structure..." -ForegroundColor Yellow
-          Get-ChildItem $onnxDir -Recurse -Directory | ForEach-Object {
-            Write-Host "  Directory: $($_.FullName)" -ForegroundColor Cyan
-          }
-          Get-ChildItem $onnxDir -Recurse -File -Include "*.h", "*.lib" | ForEach-Object {
-            Write-Host "  File: $($_.FullName)" -ForegroundColor Cyan
-          }
-
-          # Find the correct paths
-          $includePath = $null
-          $libPath = $null
-
-          # Look for include directory
-          if (Test-Path "$onnxDir/include") {
-            $includePath = "$onnxDir/include"
-          } elseif (Test-Path "$onnxDir/onnxruntime-win-x64-$onnxVersion/include") {
-            $includePath = "$onnxDir/onnxruntime-win-x64-$onnxVersion/include"
-          } else {
-            # Search for include directory
-            $includeDirs = Get-ChildItem $onnxDir -Recurse -Directory -Name "include"
-            if ($includeDirs) {
-              $includePath = "$onnxDir/$($includeDirs[0])"
-            }
-          }
-
-          # Look for lib directory
-          if (Test-Path "$onnxDir/lib") {
-            $libPath = "$onnxDir/lib"
-          } elseif (Test-Path "$onnxDir/onnxruntime-win-x64-$onnxVersion/lib") {
-            $libPath = "$onnxDir/onnxruntime-win-x64-$onnxVersion/lib"
-          } else {
-            # Search for lib directory
-            $libDirs = Get-ChildItem $onnxDir -Recurse -Directory -Name "lib"
-            if ($libDirs) {
-              $libPath = "$onnxDir/$($libDirs[0])"
-            }
-          }
-
-          Write-Host "Found include path: $includePath" -ForegroundColor Cyan
-          Write-Host "Found lib path: $libPath" -ForegroundColor Cyan
-
-          # Set environment variables for CMake
-          $env:ONNXRUNTIME_ROOT = $onnxDir
-          $env:ONNXRUNTIME_INCLUDE_DIR = $includePath
-          $env:ONNXRUNTIME_LIB_DIR = $libPath
-
-          # Verify installation
-          Write-Host "Verifying ONNX Runtime installation..." -ForegroundColor Yellow
-          if ($includePath -and (Test-Path "$includePath/onnxruntime_cxx_api.h")) {
-            Write-Host "ONNX Runtime headers found" -ForegroundColor Green
-          } else {
-            Write-Host "Error: ONNX Runtime headers not found" -ForegroundColor Red
-            Write-Host "Searched in: $includePath" -ForegroundColor Yellow
-            exit 1
-          }
-
-          if ($libPath -and (Test-Path "$libPath/onnxruntime.lib")) {
-            Write-Host "ONNX Runtime library found" -ForegroundColor Green
-          } else {
-            Write-Host "Error: ONNX Runtime library not found" -ForegroundColor Red
-            Write-Host "Searched in: $libPath" -ForegroundColor Yellow
-            exit 1
-          }
-
-          Write-Host "ONNX Runtime installed successfully" -ForegroundColor Green
+      - name: Configure CMake
+        run: |
+          cd CppBloodPressureDLL
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0" `
+            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/include" `
+            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.17.0/lib" `
+            -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
+            -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         shell: powershell
 
       - name: Extract ONNX Runtime with 7-Zip
@@ -514,19 +460,6 @@ jobs:
             }
           }
           # 必要に応じてmodels/をtest/やdist_cpp/等にコピーする処理は既存のまま残す
-        shell: powershell
-
-      - name: Configure CMake
-        run: |
-          cd CppBloodPressureDLL
-          cmake -B build -S . `
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.16.3" `
-            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.16.3/include" `
-            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.16.3/lib" `
-            -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
-            -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         shell: powershell
 
       - name: Build DLL
