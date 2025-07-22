@@ -554,57 +554,14 @@ jobs:
       - name: Configure CMake
         run: |
           cd CppBloodPressureDLL
-
-          # libmediapipeの実際の出力パスを確認
-          $libmediapipeOutput = "${{ github.workspace }}/libmediapipe/output"
-          Write-Host "Checking libmediapipe output directory: $libmediapipeOutput" -ForegroundColor Yellow
-
-          if (Test-Path $libmediapipeOutput) {
-            Get-ChildItem $libmediapipeOutput -Recurse -Directory | ForEach-Object {
-              Write-Host "Found directory: $($_.FullName)" -ForegroundColor Cyan
-            }
-          } else {
-            Write-Host "libmediapipe output directory not found" -ForegroundColor Red
-          }
-
-          # ONNX Runtimeのパスを確認
-          $onnxRuntimePath = "${{ github.workspace }}/onnxruntime"
-          Write-Host "Checking ONNX Runtime path: $onnxRuntimePath" -ForegroundColor Yellow
-
-          # ONNX Runtime include/libパスの自動検出
-          $onnxInclude = $null
-          $onnxLib = $null
-          if (Test-Path "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/include") {
-            $onnxInclude = "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/include"
-          } elseif (Test-Path "$onnxRuntimePath/include") {
-            $onnxInclude = "$onnxRuntimePath/include"
-          }
-          if (Test-Path "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/lib") {
-            $onnxLib = "$onnxRuntimePath/onnxruntime-win-x64-1.16.3/lib"
-          } elseif (Test-Path "$onnxRuntimePath/lib") {
-            $onnxLib = "$onnxRuntimePath/lib"
-          }
-          if (-not $onnxInclude) {
-            Write-Host "ERROR: Could not find ONNX Runtime include directory" -ForegroundColor Red
-            exit 1
-          }
-          if (-not $onnxLib) {
-            Write-Host "ERROR: Could not find ONNX Runtime lib directory" -ForegroundColor Red
-            exit 1
-          }
-          $env:ONNXRUNTIME_INCLUDE_DIR = $onnxInclude
-          $env:ONNXRUNTIME_LIB_DIR = $onnxLib
-          Write-Host "ONNXRUNTIME_INCLUDE_DIR: $env:ONNXRUNTIME_INCLUDE_DIR" -ForegroundColor Green
-          Write-Host "ONNXRUNTIME_LIB_DIR: $env:ONNXRUNTIME_LIB_DIR" -ForegroundColor Green
-
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DONNXRUNTIME_ROOT="$onnxRuntimePath" `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime" `
             -DONNXRUNTIME_INCLUDE_DIR="$env:ONNXRUNTIME_INCLUDE_DIR" `
             -DONNXRUNTIME_LIB_DIR="$env:ONNXRUNTIME_LIB_DIR" `
             -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows
         shell: powershell
 
