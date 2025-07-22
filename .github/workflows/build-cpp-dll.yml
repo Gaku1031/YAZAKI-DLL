@@ -488,40 +488,6 @@ jobs:
           }
         shell: powershell
 
-      - name: List files in onnxruntime lib directory
-        run: |
-          $libDir = "onnxruntime/onnxruntime-win-x64-1.16.3/lib"
-          if (Test-Path $libDir) {
-            Get-ChildItem $libDir | ForEach-Object {
-              Write-Host "$($_.Name): $($_.Length) bytes"
-            }
-          } else {
-            Write-Host "onnxruntime lib directory not found"
-          }
-        shell: powershell
-
-      - name: Show downloaded onnxruntime zip size
-        run: |
-          $zipPath = "onnxruntime.zip"
-          if (Test-Path $zipPath) {
-            $size = (Get-Item $zipPath).Length
-            Write-Host "Downloaded onnxruntime.zip size: $size bytes"
-          } else {
-            Write-Host "Downloaded onnxruntime.zip not found"
-          }
-        shell: powershell
-
-      - name: Show downloaded onnxruntime.dll size
-        run: |
-          $dllPath = "onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll"
-          if (Test-Path $dllPath) {
-            $size = (Get-Item $dllPath).Length
-            Write-Host "Downloaded onnxruntime.dll size: $size bytes"
-          } else {
-            Write-Host "Downloaded onnxruntime.dll not found"
-          }
-        shell: powershell
-
       - name: Install vcpkg and ZLIB
         run: |
           git clone https://github.com/microsoft/vcpkg.git
@@ -939,17 +905,6 @@ jobs:
           if ($onnx -ne $bp) {
             Write-Host "ERROR: DLL bitness mismatch"
             exit 1
-          }
-        shell: powershell
-
-      - name: Show onnxruntime.dll file size
-        run: |
-          $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
-          if (Test-Path $dllPath) {
-            $size = (Get-Item $dllPath).Length
-            Write-Host "onnxruntime.dll size: $size bytes"
-          } else {
-            Write-Host "onnxruntime.dll not found"
           }
         shell: powershell
 

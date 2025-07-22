@@ -592,8 +592,12 @@ namespace BloodPressureDllTest
             }
         }
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool SetDllDirectory(string lpPathName);
+
         public static void Main(string[] args)
         {
+            SetDllDirectory(System.IO.Directory.GetCurrentDirectory());
             AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
             {
                 Console.WriteLine($"[FATAL] UnhandledException: {e.ExceptionObject?.ToString()}");
