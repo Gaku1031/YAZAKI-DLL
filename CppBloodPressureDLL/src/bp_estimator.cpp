@@ -41,19 +41,21 @@ struct BloodPressureEstimator::Impl {
             sbp_file.close();
             dbp_file.close();
 
-            // 1. Ort::Env envの生成だけ（ローカル変数で）
             Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
             printf("[BP_EST] Ort::Env created.\n"); fflush(stdout);
-            // 2. session_options.SetIntraOpNumThreads(1);
             Ort::SessionOptions session_options;
             session_options.SetIntraOpNumThreads(1);
             printf("[BP_EST] Ort::SessionOptions created and threads set.\n"); fflush(stdout);
-            return;
-            // 2. session_options.SetIntraOpNumThreads(1);
             // 3. std::wstring sbp_path_w, dbp_path_wの生成
+            std::wstring sbp_path_w(sbp_path.begin(), sbp_path.end());
+            std::wstring dbp_path_w(dbp_path.begin(), dbp_path.end());
             // 4. Ort::Session sbp_session = Ort::Session(env, sbp_path_w.c_str(), session_options);
+            Ort::Session sbp_session(env, sbp_path_w.c_str(), session_options);
+            printf("[BP_EST] SBP session created.\n"); fflush(stdout);
             // 5. Ort::Session dbp_session = Ort::Session(env, dbp_path_w.c_str(), session_options);
-            // ... 1行ずつ戻してテスト ...
+            Ort::Session dbp_session(env, dbp_path_w.c_str(), session_options);
+            printf("[BP_EST] DBP session created.\n"); fflush(stdout);
+            return;
         } catch (const std::exception& e) {
             printf("[BP_EST] Standard exception in constructor: %s\n", e.what()); fflush(stdout);
             throw;
