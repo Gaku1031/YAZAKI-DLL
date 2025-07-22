@@ -878,6 +878,66 @@ jobs:
             exit 1
           }
         shell: powershell
+      
+      - name: List onnxruntime.dll dependencies
+        run: |
+          $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
+          if (!(Test-Path $dllPath)) {
+            Write-Host "onnxruntime.dll not found"
+            exit 1
+          }
+          $bytes = [System.IO.File]::ReadAllBytes($dllPath)
+          $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+          $importTableRVA = [System.BitConverter]::ToInt32($bytes, $peOffset + 0x80)
+          $importTableSize = [System.BitConverter]::ToInt32($bytes, $peOffset + 0x84)
+          if ($importTableRVA -eq 0) {
+            Write-Host "No import table found"
+            exit 1
+          }
+          $sectionCount = [System.BitConverter]::ToUInt16($bytes, $peOffset + 6)
+          $sectionTableOffset = $peOffset + 0xF8
+          $importOffset = 0
+          for ($i = 0; $i -lt $sectionCount; $i++) {
+            $sectionOffset = $sectionTableOffset + ($i * 40)
+            $virtualAddress = [System.BitConverter]::ToInt32($bytes, $sectionOffset + 12)
+            $rawDataPtr = [System.BitConverter]::ToInt32($bytes, $sectionOffset + 20)
+            $rawDataSize = [System.BitConverter]::ToInt32($bytes, $sectionOffset + 16)
+            if ($importTableRVA -ge $virtualAddress -and $importTableRVA -lt ($virtualAddress + $rawDataSize)) {
+              $importOffset = $rawDataPtr + ($importTableRVA - $virtualAddress)
+              break
+            }
+          }
+          if ($importOffset -eq 0) {
+            Write-Host "Import table not found in any section"
+            exit 1
+          }
+          Write-Host "onnxruntime.dll dependencies:"
+          $maxImports = 50
+          for ($i = 0; $i -lt $maxImports; $i++) {
+            $descOffset = $importOffset + ($i * 20)
+            $nameRVA = [System.BitConverter]::ToInt32($bytes, $descOffset + 12)
+            if ($nameRVA -eq 0) { break }
+            $nameOffset = 0
+            for ($j = 0; $j -lt $sectionCount; $j++) {
+              $sectionOffset = $sectionTableOffset + ($j * 40)
+              $virtualAddress = [System.BitConverter]::ToInt32($bytes, $sectionOffset + 12)
+              $rawDataPtr = [System.BitConverter]::ToInt32($bytes, $sectionOffset + 20)
+              $rawDataSize = [System.BitConverter]::ToInt32($bytes, $sectionOffset + 16)
+              if ($nameRVA -ge $virtualAddress -and $nameRVA -lt ($virtualAddress + $rawDataSize)) {
+                $nameOffset = $rawDataPtr + ($nameRVA - $virtualAddress)
+                break
+              }
+            }
+            if ($nameOffset -eq 0) { continue }
+            $dllName = ""
+            for ($k = $nameOffset; $k -lt $bytes.Length; $k++) {
+              $b = $bytes[$k]
+              if ($b -eq 0) { break }
+              $dllName += [char]$b
+            }
+            Write-Host "  $dllName"
+          }
+        shell: powershell
 
       - name: Run C# Integration Test
         run: |
