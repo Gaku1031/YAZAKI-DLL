@@ -152,4 +152,21 @@ int GetVersionInfo(char* outBuf, int bufSize) {
     outBuf[n] = '\0';
     return 0;
 }
+__declspec(dllexport)
+int EstimateBloodPressure(
+    double* peak_times, int peak_count,
+    int height, int weight, int sex,
+    int* sbp, int* dbp)
+{
+    try {
+        if (!g_estimator) return -1;
+        std::vector<double> peaks(peak_times, peak_times + peak_count);
+        auto result = g_estimator->estimate_bp(peaks, height, weight, sex);
+        if (sbp) *sbp = result.first;
+        if (dbp) *dbp = result.second;
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
 } 
