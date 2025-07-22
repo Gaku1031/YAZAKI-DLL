@@ -122,16 +122,25 @@ extern "C" {
 __declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
-    std::ostringstream oss;
-    oss << "TEST_OK";
-    std::string s = oss.str();
-    int n = 0;
-    while (n < bufSize - 1 && n < (int)s.size()) {
-        outBuf[n] = s[n];
-        ++n;
+    try {
+        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
+        std::ostringstream oss;
+        oss << "ORT_ENV_OK";
+        std::string s = oss.str();
+        int n = 0;
+        while (n < bufSize - 1 && n < (int)s.size()) {
+            outBuf[n] = s[n];
+            ++n;
+        }
+        outBuf[n] = '\0';
+        return 0;
+    } catch (const std::exception& e) {
+        if (bufSize > 0) {
+            strncpy(outBuf, e.what(), bufSize - 1);
+            outBuf[bufSize - 1] = '\0';
+        }
+        return -1;
     }
-    outBuf[n] = '\0';
-    return 0;
 }
 
 __declspec(dllexport)
