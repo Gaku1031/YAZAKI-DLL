@@ -220,8 +220,10 @@ int EstimateBloodPressureFromVideo(
         return -1;
     }
 }
+extern "C" {
 __declspec(dllexport)
 int StartBloodPressureAnalysisRequest(
+    char* outBuf, int bufSize,
     const char* requestId,
     int height, int weight, int sex,
     const char* moviePath,
@@ -230,23 +232,29 @@ int StartBloodPressureAnalysisRequest(
     try {
         if (!g_estimator) {
             if (callback) callback(requestId, 0, 0, "", "[{\"code\":1001,\"message\":\"DLL not initialized\",\"isRetriable\":false}]");
+            snprintf(outBuf, bufSize, "DLL not initialized");
             return 1001;
         }
         RPPGProcessor rppg;
         RPPGResult rppg_result = rppg.processVideo(moviePath);
         if (rppg_result.peak_times.empty()) {
             if (callback) callback(requestId, 0, 0, "", "[{\"code\":1006,\"message\":\"No peaks detected or video read error\",\"isRetriable\":false}]");
+            snprintf(outBuf, bufSize, "No peaks detected or video read error");
             return 1006;
         }
         auto result = g_estimator->estimate_bp(rppg_result.peak_times, height, weight, sex);
         std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
         if (callback) callback(requestId, result.first, result.second, csv.c_str(), "[]");
+        snprintf(outBuf, bufSize, "OK");
         return 0;
     } catch (const std::exception& e) {
         if (callback) callback(requestId, 0, 0, "", (std::string("[{\"code\":1006,\"message\":\"") + e.what() + "\",\"isRetriable\":false}]").c_str());
+        snprintf(outBuf, bufSize, "%s", e.what());
         return 1006;
     } catch (...) {
         if (callback) callback(requestId, 0, 0, "", "[{\"code\":1006,\"message\":\"Unknown exception\",\"isRetriable\":false}]");
+        snprintf(outBuf, bufSize, "Unknown exception");
         return 1006;
     }
 }
+} // extern "C"
