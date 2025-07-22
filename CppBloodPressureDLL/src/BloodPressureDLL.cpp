@@ -98,15 +98,24 @@ bool file_exists(const std::string& path) {
 std::string get_dll_architecture(const std::string& dll_path) {
     std::ifstream file(dll_path, std::ios::binary);
     if (!file) return "not found";
+    file.seekg(0, std::ios::end);
+    size_t filesize = file.tellg();
+    if (filesize < 0x40) return "file too small";
     file.seekg(0x3C);
     int pe_offset = 0;
     file.read(reinterpret_cast<char*>(&pe_offset), 4);
-    file.seekg(pe_offset + 4);
+    if (pe_offset <= 0 || pe_offset + 6 > filesize) return "invalid PE offset";
+    file.seekg(pe_offset);
+    char sig[4] = {};
+    file.read(sig, 4);
+    if (sig[0] != 'P' || sig[1] != 'E' || sig[2] != 0 || sig[3] != 0) return "no PE signature";
     short machine = 0;
     file.read(reinterpret_cast<char*>(&machine), 2);
     if (machine == 0x8664) return "x64";
     if (machine == 0x14c) return "x86";
-    return "unknown";
+    char buf[32];
+    snprintf(buf, sizeof(buf), "unknown(0x%04x)", (unsigned short)machine);
+    return buf;
 }
 
 extern "C" {
