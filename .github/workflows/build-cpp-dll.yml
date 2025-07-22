@@ -863,9 +863,8 @@ jobs:
             Write-Host ($dllPath + ": " + $arch)
             return $arch
           }
-          cd CppBloodPressureDLL/test
-          $onnx = Get-DllBitness "onnxruntime.dll"
-          $bp = Get-DllBitness "BloodPressureDLL.dll"
+          $onnx = Get-DllBitness "CppBloodPressureDLL/test/onnxruntime.dll"
+          $bp = Get-DllBitness "CppBloodPressureDLL/test/BloodPressureDLL.dll"
           if ($onnx -eq "Not found" -or $bp -eq "Not found") {
             Write-Host "ERROR: Required DLL not found"
             exit 1
