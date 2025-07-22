@@ -39,40 +39,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache OpenCV
-        id: cache-opencv
-        uses: actions/cache@v3
-        with:
-          path: opencv
-          key: ${{ runner.os }}-opencv-${{ hashFiles('**/opencv-version.txt') }}
-
-      - name: Cache ONNX Runtime
-        id: cache-onnxruntime
-        uses: actions/cache@v3
-        with:
-          path: onnxruntime
-          key: ${{ runner.os }}-onnxruntime-${{ hashFiles('**/onnxruntime-version.txt') }}
-
-      - name: Cache vcpkg
-        id: cache-vcpkg
-        uses: actions/cache@v3
-        with:
-          path: |
-            vcpkg/buildtrees
-            vcpkg/downloads
-            vcpkg/packages
-            vcpkg/archives
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
-
-      - name: Cache pip
-        id: cache-pip
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-
       - name: Install OpenCV (Pre-built)
-        if: steps.cache-opencv.outputs.cache-hit != 'true'
         run: |
           Write-Host "Installing OpenCV from pre-built binaries..." -ForegroundColor Yellow
           $opencvVersion = "4.8.0"
@@ -411,7 +378,6 @@ jobs:
           }
 
       - name: Install ONNX Runtime
-        if: steps.cache-onnxruntime.outputs.cache-hit != 'true'
         run: |
           # Download and install ONNX Runtime
           $onnxVersion = "1.16.3"
@@ -523,11 +489,10 @@ jobs:
         shell: powershell
 
       - name: Install vcpkg and ZLIB
-        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
-          .\vcpkg\vcpkg install
+          .\vcpkg\vcpkg install zlib:x64-windows
         shell: powershell
 
       - name: Check and Copy ONNX Model Files
@@ -561,8 +526,7 @@ jobs:
             -DONNXRUNTIME_LIB_DIR="$env:ONNXRUNTIME_LIB_DIR" `
             -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         shell: powershell
 
       - name: Build DLL
