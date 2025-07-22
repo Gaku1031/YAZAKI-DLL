@@ -111,10 +111,12 @@ std::string get_dll_architecture(const std::string& dll_path) {
     if (sig[0] != 'P' || sig[1] != 'E' || sig[2] != 0 || sig[3] != 0) return "no PE signature";
     short machine = 0;
     file.read(reinterpret_cast<char*>(&machine), 2);
-    if (machine == 0x8664) return "x64";
-    if (machine == 0x14c) return "x86";
+    unsigned char* p = reinterpret_cast<unsigned char*>(&machine);
+    unsigned short machine_le = p[0] | (p[1] << 8);
+    if (machine_le == 0x8664) return "x64";
+    if (machine_le == 0x14c) return "x86";
     char buf[32];
-    snprintf(buf, sizeof(buf), "unknown(0x%04x)", (unsigned short)machine);
+    snprintf(buf, sizeof(buf), "unknown(0x%04x)", machine_le);
     return buf;
 }
 
