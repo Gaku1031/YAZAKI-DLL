@@ -410,7 +410,7 @@ jobs:
 
       - name: Copy onnxruntime lib directory to test
         run: |
-          $src = "onnxruntime/onnxruntime-win-x64-1.16.3/lib"
+          $src = "onnxruntime/onnxruntime-win-x64-1.17.0/lib"
           $dst = "CppBloodPressureDLL/test"
           if (Test-Path $src) {
             Copy-Item "$src/*" $dst -Recurse -Force
@@ -448,7 +448,7 @@ jobs:
           }
           # 必要に応じてmodels/をtest/やdist_cpp/等にコピーする処理は既存のまま残す
         shell: powershell
-      
+
       - name: Configure CMake
         run: |
           cd CppBloodPressureDLL
