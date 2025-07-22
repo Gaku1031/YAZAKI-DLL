@@ -408,7 +408,7 @@ jobs:
             Write-Host "onnxruntime.dll not found"
           }
         shell: powershell
-      
+
       - name: Copy onnxruntime lib directory to test
         run: |
           $src = "onnxruntime/onnxruntime-win-x64-1.22.1/lib"
@@ -1394,5 +1394,19 @@ jobs:
             Write-Host "dll_load.log copied to test-results directory"
           } else {
             Write-Host "dll_load.log not found, skipping copy"
+          }
+        shell: powershell
+
+      - name: Show opencv_face_detector_uint8.pb file size and head bytes
+        run: |
+          $file = "CppBloodPressureDLL/test/opencv_face_detector_uint8.pb"
+          if (Test-Path $file) {
+            $size = (Get-Item $file).Length
+            Write-Host "opencv_face_detector_uint8.pb size: $size bytes"
+            $bytes = [System.IO.File]::ReadAllBytes($file)
+            $head = $bytes[0..([Math]::Min(15, $bytes.Length-1))]
+            Write-Host "First 16 bytes: $($head -join ' ')"
+          } else {
+            Write-Host "opencv_face_detector_uint8.pb not found"
           }
         shell: powershell
