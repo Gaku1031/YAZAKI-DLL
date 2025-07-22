@@ -46,12 +46,6 @@ namespace BloodPressureDllTest
         public static extern int AnalyzeBloodPressureFromImages([Out] StringBuilder outBuf, int bufSize,
             [In] string[] imagePaths, int numImages, int height, int weight, int sex, BPCallback callback);
 
-        [DllImport(DllPath, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int EstimateBloodPressure(
-            [In] double[] peak_times, int peak_count,
-            int height, int weight, int sex,
-            out int sbp, out int dbp);
-
         // IntPtr→string変換時はNULLチェック
         public static string PtrToStringSafe(IntPtr ptr)
         {
@@ -609,14 +603,14 @@ namespace BloodPressureDllTest
                 if (result != 0) return;
 
                 // 推論テスト
-                double[] peakTimes = new double[] { 0.1, 0.5, 1.0, 1.5, 2.0 }; // ダミーデータ
-                int height = 170;
-                int weight = 65;
-                int sex = 1; // 男性=1, 女性=0
-                int sbp, dbp;
-                int estResult = EstimateBloodPressure(peakTimes, peakTimes.Length, height, weight, sex, out sbp, out dbp);
-                Console.WriteLine($"EstimateBloodPressure result: {estResult}");
-                Console.WriteLine($"推定SBP: {sbp}, 推定DBP: {dbp}");
+                // double[] peakTimes = new double[] { 0.1, 0.5, 1.0, 1.5, 2.0 }; // ダミーデータ
+                // int height = 170;
+                // int weight = 65;
+                // int sex = 1; // 男性=1, 女性=0
+                // int sbp, dbp;
+                // int estResult = EstimateBloodPressure(peakTimes, peakTimes.Length, height, weight, sex, out sbp, out dbp);
+                // Console.WriteLine($"EstimateBloodPressure result: {estResult}");
+                // Console.WriteLine($"推定SBP: {sbp}, 推定DBP: {dbp}");
 
                 // 仕様準拠の推論テスト
                 string requestId = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_TEST001_000000001";
