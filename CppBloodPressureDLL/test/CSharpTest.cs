@@ -620,9 +620,9 @@ namespace BloodPressureDllTest
 
                 // 仕様準拠の推論テスト
                 string requestId = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_TEST001_000000001";
-                int height = 170;
-                int weight = 65;
-                int sex = 1; // 男性=1, 女性=2
+                int height2 = 170;
+                int weight2 = 65;
+                int sex2 = 1; // 男性=1, 女性=2
                 string moviePath = "sample_video.webm";
                 BPCallback callback = (reqId, sbp, dbp, csv, errorsJson) => {
                     Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={sbp}, DBP={dbp}");
@@ -635,7 +635,7 @@ namespace BloodPressureDllTest
                         Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
                     }
                 };
-                int ret = StartBloodPressureAnalysisRequest(requestId, height, weight, sex, moviePath, callback);
+                int ret = StartBloodPressureAnalysisRequest(requestId, height2, weight2, sex2, moviePath, callback);
                 Console.WriteLine($"StartBloodPressureAnalysisRequest returned: {ret}");
             }
             catch (Exception ex)
