@@ -119,111 +119,16 @@ std::string get_dll_architecture(const std::string& dll_path) {
 }
 
 extern "C" {
-
+__declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
-#ifdef _WIN32
-    HMODULE h = LoadLibraryA("onnxruntime.dll");
-    if (!h) {
-        DWORD err = GetLastError();
-        snprintf(outBuf, bufSize, "[ERROR] LoadLibraryA(onnxruntime.dll) failed. GetLastError=%lu", (unsigned long)err);
-        return -1;
+    const char* msg = "HELLO";
+    int n = 0;
+    while (msg[n] && n < bufSize - 1) {
+        outBuf[n] = msg[n];
+        ++n;
     }
-#endif
-    printf("[DEBUG] Enter InitializeBP\n"); fflush(stdout);
-    try {
-        std::ostringstream oss;
-        oss << "[DEBUG] try block entered\n";
-        // 1. onnxruntime.dllの存在チェック
-        std::string dll_path = "onnxruntime.dll";
-        oss << "[CHECK] onnxruntime.dll: ";
-        if (!file_exists(dll_path)) {
-            oss << "NOT FOUND\n";
-            snprintf(outBuf, bufSize, "%s", oss.str().c_str());
-            return -1;
-        }
-        oss << "FOUND\n";
-        // 2. bit数チェック
-        std::string arch = get_dll_architecture(dll_path);
-        oss << "[CHECK] onnxruntime.dll architecture: " << arch << "\n";
-        if (arch != "x64") {
-            oss << "ERROR: onnxruntime.dll is not x64\n";
-            snprintf(outBuf, bufSize, "%s", oss.str().c_str());
-            return -1;
-        }
-        // 3. 依存DLLチェック（zlib.dll, opencv_world480.dllなど）
-        std::vector<std::string> deps = {"zlib.dll", "opencv_world480.dll"};
-        for (const auto& dep : deps) {
-            oss << "[CHECK] " << dep << ": ";
-            if (!file_exists(dep)) {
-                oss << "NOT FOUND\n";
-                snprintf(outBuf, bufSize, "%s", oss.str().c_str());
-                return -1;
-            }
-            oss << "FOUND\n";
-        }
-        // 4. モデルファイルチェック（既存のまま）
-        std::string modelPath = modelDir ? modelDir : "models";
-        oss << "[CHECK] modelPath: " << modelPath << "\n";
-        oss << "[STEP] Ort::Env OK\n";
-        Ort::SessionOptions session_options;
-        printf("[DEBUG] After SessionOptions\n"); fflush(stdout);
-        session_options.SetIntraOpNumThreads(1);
-        oss << "[STEP] SessionOptions OK\n";
-        snprintf(outBuf, bufSize, "%s", oss.str().c_str());
-        return 0;
-    } catch (const std::exception& e) {
-        printf("[DEBUG] Caught std::exception: %s\n", e.what()); fflush(stdout);
-        snprintf(outBuf, bufSize, "InitializeBP exception: %s", e.what());
-        return -1;
-    } catch (...) {
-        printf("[DEBUG] Caught unknown exception\n"); fflush(stdout);
-        snprintf(outBuf, bufSize, "InitializeBP unknown exception");
-        return -1;
-    }
-}
-
-int StartBloodPressureAnalysisRequest(char* outBuf, int bufSize,
-    const char* requestId, int height, int weight, int sex,
-    const char* moviePath, BPCallback callback)
-{
-    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
-    return -1;
-}
-
-int GetProcessingStatus(char* outBuf, int bufSize, const char* requestId) {
-    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
-    return -1;
-}
-
-int CancelBloodPressureAnalysis(char* outBuf, int bufSize, const char* requestId) {
-    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
-    return -1;
-}
-
-int GetVersionInfo(char* outBuf, int bufSize) {
-    if (!outBuf || bufSize <= 0) return -1;
-    outBuf[0] = 'V';
-    if (bufSize > 1) outBuf[1] = '\0';
+    outBuf[n] = '\0';
     return 0;
 }
-
-int GenerateRequestId(char* outBuf, int bufSize) {
-    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
-    return -1;
-}
-
-int AnalyzeBloodPressureFromImages(char* outBuf, int bufSize,
-    const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback) {
-    snprintf(outBuf, bufSize, "NOT IMPLEMENTED");
-    return -1;
-}
-
-#ifdef _WIN32
-// DLL Entry Point - Critical for detecting early loading issues
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-    return TRUE;
-}
-#endif
-
 } 
