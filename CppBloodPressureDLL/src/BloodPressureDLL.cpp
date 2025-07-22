@@ -125,6 +125,14 @@ extern "C" {
 
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
+#ifdef _WIN32
+    HMODULE h = LoadLibraryA("onnxruntime.dll");
+    if (!h) {
+        DWORD err = GetLastError();
+        snprintf(outBuf, bufSize, "[ERROR] LoadLibraryA(onnxruntime.dll) failed. GetLastError=%lu", (unsigned long)err);
+        return -1;
+    }
+#endif
     printf("[DEBUG] Enter InitializeBP\n"); fflush(stdout);
     try {
         std::ostringstream oss;
