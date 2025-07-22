@@ -122,10 +122,12 @@ extern "C" {
 __declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
-    const char* msg = "HELLO";
+    std::ostringstream oss;
+    oss << "TEST_OK";
+    std::string s = oss.str();
     int n = 0;
-    while (msg[n] && n < bufSize - 1) {
-        outBuf[n] = msg[n];
+    while (n < bufSize - 1 && n < (int)s.size()) {
+        outBuf[n] = s[n];
         ++n;
     }
     outBuf[n] = '\0';
