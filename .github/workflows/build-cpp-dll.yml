@@ -458,7 +458,23 @@ jobs:
 
           Write-Host "ONNX Runtime installed successfully" -ForegroundColor Green
         shell: powershell
-      
+
+      - name: Extract ONNX Runtime with 7-Zip
+        run: |
+          $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
+          $sevenZipExe = "7z-installer.exe"
+          Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe
+          Start-Process -FilePath $sevenZipExe -ArgumentList "/S" -Wait -NoNewWindow
+          $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
+          if (Test-Path $sevenZipPath) {
+            & "$sevenZipPath" x "onnxruntime.zip" "-oonnxruntime" -y
+            Write-Host "ONNX Runtime extracted with 7-Zip"
+          } else {
+            Write-Host "7-Zip not found"
+            exit 1
+          }
+        shell: powershell
+
       - name: Show downloaded onnxruntime zip size
         run: |
           $zipPath = "onnxruntime.zip"
