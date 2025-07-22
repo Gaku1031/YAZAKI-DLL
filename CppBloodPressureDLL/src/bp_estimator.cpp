@@ -9,12 +9,17 @@
 #include <onnxruntime_cxx_api.h>
 
 struct BloodPressureEstimator::Impl {
-    //Ort::Env env;
-    //Ort::Session sbp_session;
-    //Ort::Session dbp_session;
-    //Ort::SessionOptions session_options;
+    Ort::Env env;
+    Ort::SessionOptions session_options;
+    Ort::Session sbp_session;
+    Ort::Session dbp_session;
 
-    Impl(const std::string& model_dir) {
+    Impl(const std::string& model_dir)
+        : env(ORT_LOGGING_LEVEL_WARNING, "bp"),
+          session_options(),
+          sbp_session(nullptr),
+          dbp_session(nullptr)
+    {
         try {
             std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
             std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
@@ -41,28 +46,20 @@ struct BloodPressureEstimator::Impl {
             sbp_file.close();
             dbp_file.close();
 
-            Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
-            printf("[BP_EST] Ort::Env created.\n"); fflush(stdout);
-            Ort::SessionOptions session_options;
             session_options.SetIntraOpNumThreads(1);
             printf("[BP_EST] Ort::SessionOptions created and threads set.\n"); fflush(stdout);
-            // 3. std::wstring sbp_path_w, dbp_path_wの生成
             std::wstring sbp_path_w(sbp_path.begin(), sbp_path.end());
             std::wstring dbp_path_w(dbp_path.begin(), dbp_path.end());
-            // 4. Ort::Session sbp_session = Ort::Session(env, sbp_path_w.c_str(), session_options);
-            Ort::Session sbp_session(env, sbp_path_w.c_str(), session_options);
+            sbp_session = Ort::Session(env, sbp_path_w.c_str(), session_options);
             printf("[BP_EST] SBP session created.\n"); fflush(stdout);
-            // 5. Ort::Session dbp_session = Ort::Session(env, dbp_path_w.c_str(), session_options);
-            Ort::Session dbp_session(env, dbp_path_w.c_str(), session_options);
+            dbp_session = Ort::Session(env, dbp_path_w.c_str(), session_options);
             printf("[BP_EST] DBP session created.\n"); fflush(stdout);
-            return;
         } catch (const std::exception& e) {
             printf("[BP_EST] Standard exception in constructor: %s\n", e.what()); fflush(stdout);
             throw;
         }
     }
 
-    // ONNX Runtime依存のrun関数を一時的に空実装
     float run(void*, const std::vector<float>&) {
         return 0.0f;
     }
@@ -76,7 +73,6 @@ BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
 
 BloodPressureEstimator::~BloodPressureEstimator() = default;
 
-// estimate_bpも一時的に空実装
 std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double>&, int, int, int) {
     return {0, 0};
 } 
