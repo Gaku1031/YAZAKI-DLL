@@ -844,6 +844,33 @@ jobs:
             exit 1
           }
         shell: powershell
+      
+      - name: Check DLL Bitness (onnxruntime.dll and BloodPressureDLL.dll)
+        run: |
+          function Get-DllBitness($dllPath) {
+            $bytes = [System.IO.File]::ReadAllBytes($dllPath)
+            if ($bytes.Length -lt 64) { return "Unknown" }
+            $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+            if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length) { return "Unknown" }
+            if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset+1] -ne 0x45) { return "Unknown" }
+            $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+            switch ($machine) {
+              0x8664 { return "x64" }
+              0x14c  { return "x86" }
+              default { return "Unknown(0x$([Convert]::ToString($machine,16)))" }
+            }
+          }
+          cd CppBloodPressureDLL/test
+          $dlls = @("onnxruntime.dll", "BloodPressureDLL.dll")
+          foreach ($dll in $dlls) {
+            if (Test-Path $dll) {
+              $bit = Get-DllBitness $dll
+              Write-Host "$dll: $bit"
+            } else {
+              Write-Host "$dll: Not found"
+            }
+          }
+        shell: powershell
 
       - name: Run C# Integration Test
         run: |
@@ -1440,32 +1467,5 @@ jobs:
             Write-Host "dll_load.log copied to test-results directory"
           } else {
             Write-Host "dll_load.log not found, skipping copy"
-          }
-        shell: powershell
-
-      - name: Check DLL Bitness (onnxruntime.dll and BloodPressureDLL.dll)
-        run: |
-          function Get-DllBitness($dllPath) {
-            $bytes = [System.IO.File]::ReadAllBytes($dllPath)
-            if ($bytes.Length -lt 64) { return "Unknown" }
-            $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
-            if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length) { return "Unknown" }
-            if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset+1] -ne 0x45) { return "Unknown" }
-            $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
-            switch ($machine) {
-              0x8664 { return "x64" }
-              0x14c  { return "x86" }
-              default { return "Unknown(0x$([Convert]::ToString($machine,16)))" }
-            }
-          }
-          cd CppBloodPressureDLL/test
-          $dlls = @("onnxruntime.dll", "BloodPressureDLL.dll")
-          foreach ($dll in $dlls) {
-            if (Test-Path $dll) {
-              $bit = Get-DllBitness $dll
-              Write-Host "$dll: $bit"
-            } else {
-              Write-Host "$dll: Not found"
-            }
           }
         shell: powershell
