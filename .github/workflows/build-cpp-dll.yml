@@ -459,6 +459,17 @@ jobs:
           Write-Host "ONNX Runtime installed successfully" -ForegroundColor Green
         shell: powershell
       
+      - name: Show downloaded onnxruntime zip size
+        run: |
+          $zipPath = "onnxruntime.zip"
+          if (Test-Path $zipPath) {
+            $size = (Get-Item $zipPath).Length
+            Write-Host "Downloaded onnxruntime.zip size: $size bytes"
+          } else {
+            Write-Host "Downloaded onnxruntime.zip not found"
+          }
+        shell: powershell
+
       - name: Show downloaded onnxruntime.dll size
         run: |
           $dllPath = "onnxruntime/onnxruntime-win-x64-1.16.3/lib/onnxruntime.dll"
