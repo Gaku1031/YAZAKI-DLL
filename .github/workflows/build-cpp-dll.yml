@@ -40,24 +40,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Cache OpenCV
+        id: cache-opencv
         uses: actions/cache@v3
         with:
           path: opencv
           key: ${{ runner.os }}-opencv-${{ hashFiles('**/opencv-version.txt') }}
 
       - name: Cache ONNX Runtime
+        id: cache-onnxruntime
         uses: actions/cache@v3
         with:
           path: onnxruntime
           key: ${{ runner.os }}-onnxruntime-${{ hashFiles('**/onnxruntime-version.txt') }}
 
       - name: Cache vcpkg
+        id: cache-vcpkg
         uses: actions/cache@v3
         with:
-          path: vcpkg
+          path: |
+            vcpkg/buildtrees
+            vcpkg/downloads
+            vcpkg/packages
+            vcpkg/archives
           key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
 
       - name: Cache pip
+        id: cache-pip
         uses: actions/cache@v3
         with:
           path: ~/.cache/pip
@@ -596,7 +604,8 @@ jobs:
             -DONNXRUNTIME_LIB_DIR="$env:ONNXRUNTIME_LIB_DIR" `
             -DMEDIAPIPE_ROOT="${{ github.workspace }}/libmediapipe/output" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=x64-windows
         shell: powershell
 
       - name: Build DLL
