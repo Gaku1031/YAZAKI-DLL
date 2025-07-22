@@ -9,7 +9,7 @@
 #include <onnxruntime_cxx_api.h>
 
 struct BloodPressureEstimator::Impl {
-    //Ort::Env env;
+    Ort::Env env;
     //Ort::Session sbp_session;
     //Ort::Session dbp_session;
     //Ort::SessionOptions session_options;
@@ -41,9 +41,15 @@ struct BloodPressureEstimator::Impl {
             sbp_file.close();
             dbp_file.close();
 
-            printf("[BP_EST] Model file size check passed.\n"); fflush(stdout);
+            // 1. Ort::Env envの生成だけ
+            env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "bp");
+            printf("[BP_EST] Ort::Env created.\n"); fflush(stdout);
             return;
-            // ONNX RuntimeやSession生成はまだコメントアウト
+            // 2. session_options.SetIntraOpNumThreads(1);
+            // 3. std::wstring sbp_path_w, dbp_path_wの生成
+            // 4. Ort::Session sbp_session = Ort::Session(env, sbp_path_w.c_str(), session_options);
+            // 5. Ort::Session dbp_session = Ort::Session(env, dbp_path_w.c_str(), session_options);
+            // ... 1行ずつ戻してテスト ...
         } catch (const std::exception& e) {
             printf("[BP_EST] Standard exception in constructor: %s\n", e.what()); fflush(stdout);
             throw;
