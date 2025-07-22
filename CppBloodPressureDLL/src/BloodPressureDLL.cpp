@@ -14,7 +14,7 @@
 #include <fstream>
 #include <cstdio>
 #include <vector>
-#include <onnxruntime_cxx_api.h>
+// #include <onnxruntime_cxx_api.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -122,35 +122,15 @@ extern "C" {
 __declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
-#ifdef _WIN32
-    HMODULE h = LoadLibraryA("onnxruntime.dll");
-    if (!h) {
-        DWORD err = GetLastError();
-        snprintf(outBuf, bufSize, "[ERROR] LoadLibraryA(onnxruntime.dll) failed. GetLastError=%lu", (unsigned long)err);
-        return -1;
+    const char* msg = "OK";
+    int n = 0;
+    while (msg[n] && n < bufSize - 1) {
+        outBuf[n] = msg[n];
+        ++n;
     }
-#endif
-    try {
-        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
-        std::ostringstream oss;
-        oss << "ORT_ENV_OK";
-        std::string s = oss.str();
-        int n = 0;
-        while (n < bufSize - 1 && n < (int)s.size()) {
-            outBuf[n] = s[n];
-            ++n;
-        }
-        outBuf[n] = '\0';
-        return 0;
-    } catch (const std::exception& e) {
-        if (bufSize > 0) {
-            strncpy(outBuf, e.what(), bufSize - 1);
-            outBuf[bufSize - 1] = '\0';
-        }
-        return -1;
-    }
+    outBuf[n] = '\0';
+    return 0;
 }
-
 __declspec(dllexport)
 int GetVersionInfo(char* outBuf, int bufSize) {
     if (!outBuf || bufSize <= 0) return -1;
