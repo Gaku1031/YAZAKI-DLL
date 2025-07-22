@@ -9,7 +9,7 @@
 #include <onnxruntime_cxx_api.h>
 
 struct BloodPressureEstimator::Impl {
-    Ort::Env env;
+    //Ort::Env env;
     //Ort::Session sbp_session;
     //Ort::Session dbp_session;
     //Ort::SessionOptions session_options;
@@ -41,8 +41,8 @@ struct BloodPressureEstimator::Impl {
             sbp_file.close();
             dbp_file.close();
 
-            // 1. Ort::Env envの生成だけ
-            env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "bp");
+            // 1. Ort::Env envの生成だけ（ローカル変数で）
+            Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "bp");
             printf("[BP_EST] Ort::Env created.\n"); fflush(stdout);
             return;
             // 2. session_options.SetIntraOpNumThreads(1);
