@@ -125,8 +125,10 @@ extern "C" {
 
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
+    printf("[DEBUG] Enter InitializeBP\n"); fflush(stdout);
     try {
         std::ostringstream oss;
+        oss << "[DEBUG] try block entered\n";
         // 1. onnxruntime.dllの存在チェック
         std::string dll_path = "onnxruntime.dll";
         oss << "[CHECK] onnxruntime.dll: ";
@@ -158,17 +160,19 @@ int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
         // 4. モデルファイルチェック（既存のまま）
         std::string modelPath = modelDir ? modelDir : "models";
         oss << "[CHECK] modelPath: " << modelPath << "\n";
-        // === ここから段階的に復元 ===
         oss << "[STEP] Ort::Env OK\n";
         Ort::SessionOptions session_options;
+        printf("[DEBUG] After SessionOptions\n"); fflush(stdout);
         session_options.SetIntraOpNumThreads(1);
         oss << "[STEP] SessionOptions OK\n";
         snprintf(outBuf, bufSize, "%s", oss.str().c_str());
         return 0;
     } catch (const std::exception& e) {
+        printf("[DEBUG] Caught std::exception: %s\n", e.what()); fflush(stdout);
         snprintf(outBuf, bufSize, "InitializeBP exception: %s", e.what());
         return -1;
     } catch (...) {
+        printf("[DEBUG] Caught unknown exception\n"); fflush(stdout);
         snprintf(outBuf, bufSize, "InitializeBP unknown exception");
         return -1;
     }
