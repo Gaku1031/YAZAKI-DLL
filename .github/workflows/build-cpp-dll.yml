@@ -1004,7 +1004,7 @@ jobs:
             
             # Check file header to verify it's a valid video file
             try {
-              $bytes = [System.IO.File]::ReadAllBytes("./sample_video.webm")
+              $bytes = [System.IO.File]::ReadAllBytes($videoFile.FullName)
               $header = $bytes[0..([Math]::Min(15, $bytes.Length-1))]
               $headerHex = ($header | ForEach-Object { $_.ToString("X2") }) -join " "
               Write-Host "  File header (hex): $headerHex" -ForegroundColor Cyan
