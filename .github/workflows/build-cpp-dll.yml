@@ -517,7 +517,16 @@ jobs:
           Write-Host "DEBUG: dst path = $dst"
           if (Test-Path $src) {
               Write-Host "DEBUG: src file exists"
-              [System.IO.File]::Copy($src, $dst, $true)
+              if (Test-Path $dst) {
+                  Write-Host "DEBUG: dst file already exists, removing"
+                  Remove-Item $dst -Force -ErrorAction SilentlyContinue
+              }
+              try {
+                  [System.IO.File]::Copy($src, $dst, $true)
+              } catch {
+                  Write-Host "ERROR: Exception during copy: $($_.Exception.Message)" -ForegroundColor Red
+                  exit 1
+              }
               if (Test-Path $dst) {
                   $size = [math]::Round((Get-Item $dst).Length / 1MB, 2)
                   Write-Host "Real sample video copied for testing: $dst ($size MB)" -ForegroundColor Green
