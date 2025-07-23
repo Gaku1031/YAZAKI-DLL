@@ -511,7 +511,7 @@ jobs:
 
           # Copy the real sample video for testing
           if (Test-Path "../../sample-data/sample_1M.webm") {
-            Copy-Item "../../sample-data/sample_1M.webm" "sample_video.webm" -Force
+            [System.IO.File]::Copy("../../sample-data/sample_1M.webm", "sample_video.webm", $true)
             $size = [math]::Round((Get-Item "sample_video.webm").Length / 1MB, 2)
             Write-Host "Real sample video copied for testing: sample_video.webm ($size MB)" -ForegroundColor Green
             
