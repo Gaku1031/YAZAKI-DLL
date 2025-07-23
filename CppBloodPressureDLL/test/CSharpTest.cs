@@ -453,10 +453,42 @@ namespace BloodPressureDllTest
                     if (!File.Exists(sampleVideo))
                     {
                         Console.WriteLine($"   [ERROR] サンプル動画が見つかりません: {sampleVideo}");
+                        Console.WriteLine("   [DEBUG] カレントディレクトリのファイル一覧:");
+                        foreach (var f in Directory.GetFiles(".", "*", SearchOption.TopDirectoryOnly))
+                            Console.WriteLine($"     {f}");
                         return;
                     }
+                    
                     var fileInfo = new FileInfo(sampleVideo);
                     Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
+                    Console.WriteLine($"   ファイルサイズ: {fileInfo.Length} bytes");
+                    Console.WriteLine($"   最終更新日時: {fileInfo.LastWriteTime}");
+                    
+                    // ファイルヘッダーをチェックしてビデオファイルかどうか確認
+                    try
+                    {
+                        byte[] header = new byte[16];
+                        using (var stream = File.OpenRead(sampleVideo))
+                        {
+                            stream.Read(header, 0, header.Length);
+                        }
+                        string headerHex = BitConverter.ToString(header).Replace("-", " ");
+                        Console.WriteLine($"   ファイルヘッダー: {headerHex}");
+                        
+                        // WebM/Matroskaファイルのシグネチャをチェック
+                        if (header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3)
+                        {
+                            Console.WriteLine("   [INFO] ファイルは有効なWebM/Matroskaファイルです");
+                        }
+                        else
+                        {
+                            Console.WriteLine("   [WARNING] ファイルヘッダーがWebM/Matroska形式と一致しません");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"   [WARNING] ファイルヘッダーの読み取りに失敗: {ex.Message}");
+                    }
 
                     // ffmpeg.exeのパスを決定
                     string ffmpegExe = "ffmpeg.exe";
@@ -491,9 +523,23 @@ namespace BloodPressureDllTest
                     string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
                     string ffmpegOut = ffmpegProc.StandardOutput.ReadToEnd();
                     bool exited = ffmpegProc.WaitForExit(60000); // 60秒でタイムアウト
+                    
+                    Console.WriteLine($"   [DEBUG] ffmpeg終了コード: {ffmpegProc.ExitCode}");
+                    if (!string.IsNullOrEmpty(ffmpegOut))
+                        Console.WriteLine($"   [DEBUG] ffmpeg stdout: {ffmpegOut}");
+                    if (!string.IsNullOrEmpty(ffmpegErr))
+                        Console.WriteLine($"   [DEBUG] ffmpeg stderr: {ffmpegErr}");
+                    
                     if (!exited) {
                         ffmpegProc.Kill();
                         Console.WriteLine("   [ERROR] ffmpeg変換がタイムアウトしました");
+                        Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
+                        try { Directory.Delete(tempDir, true); } catch { }
+                        return;
+                    }
+                    
+                    if (ffmpegProc.ExitCode != 0) {
+                        Console.WriteLine($"   [ERROR] ffmpeg変換が失敗しました (終了コード: {ffmpegProc.ExitCode})");
                         Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
                         try { Directory.Delete(tempDir, true); } catch { }
                         return;

@@ -514,9 +514,39 @@ jobs:
             Copy-Item "../../sample-data/sample_1M.webm" "sample_video.webm" -Force
             $size = [math]::Round((Get-Item "sample_video.webm").Length / 1MB, 2)
             Write-Host "Real sample video copied for testing: sample_video.webm ($size MB)" -ForegroundColor Green
+            
+            # Verify video file integrity
+            Write-Host "Verifying video file integrity..." -ForegroundColor Yellow
+            $videoInfo = Get-Item "sample_video.webm"
+            Write-Host "Video file size: $([math]::Round($videoInfo.Length / 1KB, 2)) KB" -ForegroundColor Cyan
+            Write-Host "Video file extension: $($videoInfo.Extension)" -ForegroundColor Cyan
+            
+            # Check if file is actually a video file (not empty or corrupted)
+            if ($videoInfo.Length -lt 1024) {
+              Write-Host "ERROR: Video file is too small, may be corrupted" -ForegroundColor Red
+              exit 1
+            }
           } else {
-            Write-Host "Warning: Real sample video not found, creating dummy video" -ForegroundColor Yellow
-            "dummy video content for testing" | Out-File -FilePath "sample_video.webm" -Encoding UTF8
+            Write-Host "Warning: Real sample video not found, creating test video with ffmpeg" -ForegroundColor Yellow
+            
+            # Create a simple test video using ffmpeg
+            try {
+              $ffmpegCmd = "ffmpeg -f lavfi -i testsrc=duration=5:size=320x240:rate=1 -f lavfi -i sine=frequency=1000:duration=5 -c:v libx264 -c:a aac -shortest sample_video.webm"
+              Write-Host "Creating test video with command: $ffmpegCmd" -ForegroundColor Cyan
+              Invoke-Expression $ffmpegCmd
+              
+              if (Test-Path "sample_video.webm") {
+                $size = [math]::Round((Get-Item "sample_video.webm").Length / 1KB, 2)
+                Write-Host "Test video created successfully: sample_video.webm ($size KB)" -ForegroundColor Green
+              } else {
+                Write-Host "ERROR: Failed to create test video" -ForegroundColor Red
+                exit 1
+              }
+            } catch {
+              Write-Host "ERROR: Failed to create test video with ffmpeg: $($_.Exception.Message)" -ForegroundColor Red
+              Write-Host "Creating minimal dummy video file..." -ForegroundColor Yellow
+              "dummy video content for testing" | Out-File -FilePath "sample_video.webm" -Encoding UTF8
+            }
           }
 
           # Copy OpenCV DNN model files
@@ -961,6 +991,39 @@ jobs:
           # Note: dumpbin is not available in GitHub Actions Windows runner
           Write-Host "Note: dumpbin not available in GitHub Actions environment" -ForegroundColor Yellow
           Write-Host "DLL dependency analysis will be performed through C# application testing" -ForegroundColor Yellow
+
+          # Additional video file verification before test
+          Write-Host "Additional video file verification before test..." -ForegroundColor Yellow
+          if (Test-Path "sample_video.webm") {
+            $videoFile = Get-Item "sample_video.webm"
+            Write-Host "Video file details:" -ForegroundColor Cyan
+            Write-Host "  Name: $($videoFile.Name)" -ForegroundColor Cyan
+            Write-Host "  Size: $([math]::Round($videoFile.Length / 1KB, 2)) KB" -ForegroundColor Cyan
+            Write-Host "  Extension: $($videoFile.Extension)" -ForegroundColor Cyan
+            Write-Host "  Last modified: $($videoFile.LastWriteTime)" -ForegroundColor Cyan
+            
+            # Check file header to verify it's a valid video file
+            try {
+              $bytes = [System.IO.File]::ReadAllBytes("sample_video.webm")
+              $header = $bytes[0..([Math]::Min(15, $bytes.Length-1))]
+              $headerHex = ($header | ForEach-Object { $_.ToString("X2") }) -join " "
+              Write-Host "  File header (hex): $headerHex" -ForegroundColor Cyan
+              
+              # Check for common video file signatures
+              if ($headerHex -match "1A 45 DF A3") {
+                Write-Host "  File appears to be a valid WebM/Matroska file" -ForegroundColor Green
+              } elseif ($headerHex -match "00 00 00") {
+                Write-Host "  File appears to be a valid MP4 file" -ForegroundColor Green
+              } else {
+                Write-Host "  WARNING: File header doesn't match known video formats" -ForegroundColor Yellow
+              }
+            } catch {
+              Write-Host "  ERROR: Could not read file header: $($_.Exception.Message)" -ForegroundColor Red
+            }
+          } else {
+            Write-Host "ERROR: Video file not found!" -ForegroundColor Red
+            exit 1
+          }
 
           # Run test and capture output
           Write-Host "Running integration test..." -ForegroundColor Yellow
