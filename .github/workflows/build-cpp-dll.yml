@@ -513,12 +513,20 @@ jobs:
           $workspace = $env:GITHUB_WORKSPACE
           $src = Join-Path $workspace "sample-data/sample_1M.webm"
           $dst = "sample_video.webm"
+          Write-Host "DEBUG: src path = $src"
+          Write-Host "DEBUG: dst path = $dst"
           if (Test-Path $src) {
+              Write-Host "DEBUG: src file exists"
               [System.IO.File]::Copy($src, $dst, $true)
-              $size = [math]::Round((Get-Item $dst).Length / 1MB, 2)
-              Write-Host "Real sample video copied for testing: $dst ($size MB)" -ForegroundColor Green
+              if (Test-Path $dst) {
+                  $size = [math]::Round((Get-Item $dst).Length / 1MB, 2)
+                  Write-Host "Real sample video copied for testing: $dst ($size MB)" -ForegroundColor Green
+              } else {
+                  Write-Host "ERROR: Copy failed, $dst does not exist after copy" -ForegroundColor Red
+                  exit 1
+              }
           } else {
-              Write-Host "ERROR: sample-data/sample_1M.webm not found. Please provide a real sample video." -ForegroundColor Red
+              Write-Host "ERROR: sample-data/sample_1M.webm not found at $src. Please provide a real sample video." -ForegroundColor Red
               exit 1
           }
 
