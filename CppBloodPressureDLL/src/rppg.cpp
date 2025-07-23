@@ -9,6 +9,8 @@
 #include <numeric>
 #include <fstream>
 #include <vector>
+#include <filesystem>
+#include <chrono>
 
 // OpenCV DNN for face detection
 #include <opencv2/dnn.hpp>
@@ -146,131 +148,41 @@ RPPGProcessor::RPPGProcessor(const std::string& model_dir) : pImpl(std::make_uni
 RPPGProcessor::~RPPGProcessor() = default;
 
 RPPGResult RPPGProcessor::processVideo(const std::string& videoPath) {
-    cv::VideoCapture cap(videoPath);
-    if (!cap.isOpened()) {
-        throw std::runtime_error("Cannot open video: " + videoPath);
-    }
-    
-    double fps = cap.get(cv::CAP_PROP_FPS);
-    if (fps <= 0) fps = 30.0;
+    // 1. 一時ディレクトリ作成
+    namespace fs = std::filesystem;
+    std::string temp_dir = "temp_frames_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::create_directory(temp_dir);
 
-    std::vector<std::vector<double>> skin_means; // RGB平均
-    std::vector<double> timestamps;
-    int frame_count = 0;
-    cv::Mat frame;
-    
-    while (cap.read(frame)) {
-        double current_time = frame_count / fps;
-        frame_count++;
-        
-        // 顔検出とROI抽出
-        std::vector<cv::Point2f> landmarks = pImpl->detectFaceLandmarks(frame);
-        
-        if (!landmarks.empty()) {
-            // ROIマスクの作成
-            cv::Mat mask = cv::Mat::zeros(frame.size(), CV_8UC1);
-            std::vector<cv::Point> roi_points;
-            for (const auto& pt : landmarks) {
-                roi_points.push_back(cv::Point(static_cast<int>(pt.x), static_cast<int>(pt.y)));
-            }
-            
-            if (roi_points.size() >= 3) {
-                cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
-                
-                // 肌色フィルタリング（YCbCr色空間）
-                cv::Mat frame_ycbcr;
-                cv::cvtColor(frame, frame_ycbcr, cv::COLOR_BGR2YCrCb);
-                cv::Mat skin_mask;
-                cv::inRange(frame_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
-                
-                // ROIマスクと肌色マスクの組み合わせ
-                cv::Mat combined_mask;
-                cv::bitwise_and(mask, skin_mask, combined_mask);
-                
-                // ROI領域の色平均を計算
-                cv::Scalar mean = cv::mean(frame, combined_mask);
-                
-                // 有効な平均値のみを保存
-                if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
-                    skin_means.push_back({mean[0], mean[1], mean[2]});
-                    timestamps.push_back(current_time);
-                }
-            }
+    // 2. ffmpegで画像シーケンスに変換
+    std::string ffmpeg_cmd = "ffmpeg -y -i \"" + videoPath + "\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\"";
+    int ret = system(ffmpeg_cmd.c_str());
+    if (ret != 0) {
+        fs::remove_all(temp_dir);
+        throw std::runtime_error("ffmpeg failed to extract frames from video: " + videoPath);
+    }
+
+    // 3. 画像ファイルリストを取得
+    std::vector<std::string> imagePaths;
+    for (const auto& entry : fs::directory_iterator(temp_dir)) {
+        if (entry.is_regular_file()) {
+            imagePaths.push_back(entry.path().string());
         }
     }
-    
-    std::vector<double> rppg_signal, time_data, peak_times;
-    
-    if (skin_means.size() > 30) {
-        // POSアルゴリズムによるrPPG信号抽出
-        int L = 30; // ウィンドウサイズ
-        int frames = static_cast<int>(skin_means.size());
-        
-        Eigen::MatrixXd C(3, frames);
-        for (int i = 0; i < frames; ++i) {
-            C(0, i) = skin_means[i][0];
-            C(1, i) = skin_means[i][1];
-            C(2, i) = skin_means[i][2];
-        }
-        
-        Eigen::VectorXd H = Eigen::VectorXd::Zero(frames);
-        
-        for (int f = 0; f < frames - L + 1; ++f) {
-            Eigen::MatrixXd block = C.block(0, f, 3, L);
-            Eigen::Vector3d mu_C = block.rowwise().mean();
-            
-            // ゼロ除算を防ぐ
-            for (int i = 0; i < 3; ++i) {
-                if (mu_C(i) == 0) mu_C(i) = 1e-8;
-            }
-            
-            Eigen::MatrixXd C_normed = block.array().colwise() / mu_C.array();
-            
-            // POSアルゴリズムの変換行列
-            Eigen::MatrixXd M(2, 3);
-            M << 0, 1, -1,
-                -2, 1, 1;
-            
-            Eigen::MatrixXd S = M * C_normed;
-            
-            // アルファ値の計算
-            double alpha = std::sqrt(S.row(0).array().square().mean()) / 
-                          (std::sqrt(S.row(1).array().square().mean()) + 1e-8);
-            
-            Eigen::VectorXd P = S.row(0).transpose() + alpha * S.row(1).transpose();
-            
-            // 正規化
-            double P_mean = P.mean();
-            double P_std = std::max(std::sqrt((P.array() - P_mean).square().mean()), 1e-8);
-            Eigen::VectorXd P_normalized = (P.array() - P_mean) / P_std;
-            
-            H.segment(f, L) += P_normalized;
-        }
-        
-        // Zスコア正規化
-        double mean = H.mean();
-        double stddev = std::sqrt((H.array() - mean).square().sum() / H.size());
-        Eigen::VectorXd pulse_z = (H.array() - mean) / (stddev + 1e-8);
-        
-        // rPPG信号をstd::vectorに変換
-        rppg_signal.assign(pulse_z.data(), pulse_z.data() + pulse_z.size());
-        time_data = timestamps;
-        
-        // ピーク検出
-        std::vector<size_t> peaks = find_peaks(rppg_signal, 10, 0.0);
-        for (size_t idx : peaks) {
-            if (idx < time_data.size()) {
-                peak_times.push_back(time_data[idx]);
-            }
-        }
+    std::sort(imagePaths.begin(), imagePaths.end());
+    if (imagePaths.empty()) {
+        fs::remove_all(temp_dir);
+        throw std::runtime_error("No frames extracted from video: " + videoPath);
     }
-    
-    RPPGResult result;
-    result.rppg_signal = rppg_signal;
-    result.time_data = time_data;
-    result.peak_times = peak_times;
+
+    // 4. 画像シーケンスで解析
+    double fps = 30.0; // 必要ならffmpegでfps取得も可
+    RPPGResult result = processImagesFromPaths(imagePaths, fps);
+
+    // 5. 一時ファイル削除
+    fs::remove_all(temp_dir);
+
     return result;
-} 
+}
 
 RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>& imagePaths, double fps) {
     std::vector<std::vector<double>> skin_means;

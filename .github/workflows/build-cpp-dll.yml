@@ -788,6 +788,19 @@ jobs:
             exit 1
           }
         shell: powershell
+    
+      - name: Check ffmpeg existence
+        run: |
+          Write-Host "Checking ffmpeg existence..."
+          if (Test-Path "./ffmpeg.exe") {
+            Write-Host "ffmpeg.exe found in current directory"
+          } elseif (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+            Write-Host "ffmpeg found in PATH"
+          } else {
+            Write-Host "ERROR: ffmpeg not found. Please ensure ffmpeg.exe is available." -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
 
       - name: Check DLL Bitness (onnxruntime.dll and BloodPressureDLL.dll)
         run: |
@@ -822,7 +835,7 @@ jobs:
             exit 1
           }
         shell: powershell
-      
+
       - name: OpenCV ffmpeg DLL search and copy
         run: |
           $ffmpegDll = Get-ChildItem -Path "../../opencv" -Recurse -Filter "opencv_ffmpeg*.dll" | Select-Object -First 1
