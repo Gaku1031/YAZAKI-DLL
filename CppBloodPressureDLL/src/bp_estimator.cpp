@@ -87,15 +87,38 @@ BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
 BloodPressureEstimator::~BloodPressureEstimator() = default;
 
 std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double>& peak_times, int height, int weight, int sex) {
-    // 入力ベクトルをfloatに変換（peak_times + 身長・体重・性別などの特徴量を追加）
-    std::vector<float> input;
-    for (double v : peak_times) input.push_back(static_cast<float>(v));
-    input.push_back(static_cast<float>(height));
-    input.push_back(static_cast<float>(weight));
-    input.push_back(static_cast<float>(sex));
-    // SBP推定
+    // rri計算・外れ値除去
+    std::vector<double> rri;
+    for (size_t i = 1; i < peak_times.size(); ++i) {
+        double val = peak_times[i] - peak_times[i-1];
+        if (val >= 0.4 && val <= 1.2) {
+            rri.push_back(val);
+        }
+    }
+    if (rri.empty()) {
+        rri = {0.8, 0.8, 0.8, 0.8};
+    }
+    // rri統計量
+    const size_t N = rri.size();
+    double rri_mean = std::accumulate(rri.begin(), rri.end(), 0.0) / N;
+    double rri_std = 0.0;
+    for (double v : rri) rri_std += (v - rri_mean) * (v - rri_mean);
+    rri_std = std::sqrt(rri_std / N);
+    double rri_min = *std::min_element(rri.begin(), rri.end());
+    double rri_max = *std::max_element(rri.begin(), rri.end());
+    double height_m = height / 100.0;
+    double bmi = weight / (height_m * height_m);
+    double sex_feature = (sex == 0) ? 0.0 : 1.0;
+    std::vector<float> input = {
+        static_cast<float>(rri_mean),
+        static_cast<float>(rri_std),
+        static_cast<float>(rri_min),
+        static_cast<float>(rri_max),
+        static_cast<float>(bmi),
+        static_cast<float>(sex_feature)
+    };
+    // ONNX推論
     int sbp = static_cast<int>(std::round(pImpl->run(nullptr, input)));
-    // DBP推定
     int dbp = static_cast<int>(std::round(pImpl->run(&pImpl->dbp_session, input)));
     return {sbp, dbp};
 }
