@@ -916,9 +916,9 @@ jobs:
           foreach ($file in $currentDirFiles) {
             if (Test-Path $file) {
               $size = (Get-Item $file).Length
-              Write-Host "  $file: EXISTS in current directory ($([math]::Round($size / 1KB, 2)) KB)" -ForegroundColor Green
+              Write-Host "  $file - EXISTS in current directory ($([math]::Round($size / 1KB, 2)) KB)" -ForegroundColor Green
             } else {
-              Write-Host "  $file: NOT FOUND in current directory" -ForegroundColor Red
+              Write-Host "  $file - NOT FOUND in current directory" -ForegroundColor Red
             }
           }
 
