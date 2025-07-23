@@ -673,3 +673,86 @@ cdef public const char* GenerateRequestId():
         memcpy(result_buffer, <const char*>result_bytes, n)
         result_buffer[n] = 0
         return <const char*>result_buffer
+
+# Additional Python wrapper functions for C++ integration
+def InitializeDLL_Python(model_dir: str = "models") -> int:
+    """Python wrapper for DLL initialization"""
+    try:
+        result = initialize_models(model_dir)
+        return 1 if result else 0
+    except Exception as e:
+        print(f"InitializeDLL_Python error: {e}")
+        return 0
+
+def StartBloodPressureAnalysisRequest_Python(request_id: str, height: int, weight: int, 
+                                           sex: int, movie_path: str) -> str:
+    """Python wrapper for blood pressure analysis request"""
+    try:
+        error_code = start_blood_pressure_analysis(request_id, height, weight, sex, movie_path)
+        if error_code == "":
+            return "SUCCESS"
+        else:
+            return error_code
+    except Exception as e:
+        print(f"StartBloodPressureAnalysisRequest_Python error: {e}")
+        return ErrorCode.INTERNAL_PROCESSING_ERROR
+
+def GetProcessingStatus_Python(request_id: str) -> str:
+    """Python wrapper for processing status"""
+    try:
+        return get_processing_status(request_id)
+    except Exception as e:
+        print(f"GetProcessingStatus_Python error: {e}")
+        return ProcessingStatus.NONE
+
+def CancelBloodPressureAnalysis_Python(request_id: str) -> int:
+    """Python wrapper for cancellation"""
+    try:
+        result = cancel_blood_pressure_analysis(request_id)
+        return 1 if result else 0
+    except Exception as e:
+        print(f"CancelBloodPressureAnalysis_Python error: {e}")
+        return 0
+
+def GetVersionInfo_Python() -> str:
+    """Python wrapper for version info"""
+    try:
+        return get_version_info()
+    except Exception as e:
+        print(f"GetVersionInfo_Python error: {e}")
+        return "ERROR: Version unavailable"
+
+def GenerateRequestId_Python() -> str:
+    """Python wrapper for request ID generation"""
+    try:
+        return generate_request_id()
+    except Exception as e:
+        print(f"GenerateRequestId_Python error: {e}")
+        return "ERROR: ID generation failed"
+
+# Test function
+def test_export_functions():
+    """Test export functions"""
+    print("=== Testing Export Functions ===")
+    
+    # Initialize test
+    init_result = InitializeDLL_Python("models")
+    print(f"InitializeDLL result: {init_result}")
+    
+    # Version info test
+    version = GetVersionInfo_Python()
+    print(f"Version: {version}")
+    
+    # Request ID generation test
+    request_id = GenerateRequestId_Python()
+    print(f"Generated Request ID: {request_id}")
+    
+    # Status test
+    status = GetProcessingStatus_Python("test_123")
+    print(f"Status: {status}")
+    
+    print("=== Export Functions Test Complete ===")
+
+if __name__ == "__main__":
+    # Test execution
+    test_export_functions()
