@@ -64,7 +64,7 @@ struct BloodPressureEstimator::Impl {
         // session_ptrがnullptrならSBP、そうでなければDBPを使う（例）
         Ort::Session* session = session_ptr ? static_cast<Ort::Session*>(session_ptr) : &sbp_session;
         // 入力名・出力名はモデルに合わせて要調整
-        const char* input_names[] = {"input"};
+        const char* input_names[] = {"float_input"};
         const char* output_names[] = {"output"};
         std::vector<int64_t> input_shape = {static_cast<int64_t>(input.size())};
         Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
