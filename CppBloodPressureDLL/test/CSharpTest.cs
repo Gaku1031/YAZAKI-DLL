@@ -450,18 +450,17 @@ namespace BloodPressureDllTest
                 try
                 {
                     string sampleVideo = "sample_video.webm";
-                    string sampleVideoPath = Path.GetFullPath(sampleVideo);
-                    if (!File.Exists(sampleVideoPath))
+                    if (!File.Exists(sampleVideo))
                     {
-                        Console.WriteLine($"   [ERROR] サンプル動画が見つかりません: {sampleVideoPath}");
+                        Console.WriteLine($"   [ERROR] サンプル動画が見つかりません: {sampleVideo}");
                         Console.WriteLine("   [DEBUG] カレントディレクトリのファイル一覧:");
                         foreach (var f in Directory.GetFiles(".", "*", SearchOption.TopDirectoryOnly))
                             Console.WriteLine($"     {f}");
                         return;
                     }
                     
-                    var fileInfo = new FileInfo(sampleVideoPath);
-                    Console.WriteLine($"   サンプル動画: {sampleVideoPath} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
+                    var fileInfo = new FileInfo(sampleVideo);
+                    Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
                     Console.WriteLine($"   ファイルサイズ: {fileInfo.Length} bytes");
                     Console.WriteLine($"   最終更新日時: {fileInfo.LastWriteTime}");
                     
@@ -469,7 +468,7 @@ namespace BloodPressureDllTest
                     try
                     {
                         byte[] header = new byte[16];
-                        using (var stream = File.OpenRead(sampleVideoPath))
+                        using (var stream = File.OpenRead(sampleVideo))
                         {
                             stream.Read(header, 0, header.Length);
                         }
@@ -515,7 +514,7 @@ namespace BloodPressureDllTest
                     Console.WriteLine($"   ffmpegで画像シーケンスに一時変換: {framePattern}");
                     var ffmpegProc = new System.Diagnostics.Process();
                     ffmpegProc.StartInfo.FileName = ffmpegExe;
-                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideoPath}\" -q:v 2 \"{framePattern}\"";
+                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -q:v 2 \"{framePattern}\"";
                     ffmpegProc.StartInfo.UseShellExecute = false;
                     ffmpegProc.StartInfo.RedirectStandardOutput = true;
                     ffmpegProc.StartInfo.RedirectStandardError = true;
