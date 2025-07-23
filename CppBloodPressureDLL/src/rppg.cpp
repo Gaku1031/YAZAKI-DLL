@@ -7,6 +7,8 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <numeric>
+#include <fstream>
+#include <vector>
 
 // OpenCV DNN for face detection
 #include <opencv2/dnn.hpp>
@@ -21,12 +23,70 @@ struct RPPGProcessor::Impl {
     // OpenCV DNN Face Detection
     cv::dnn::Net face_detector;
     bool dnn_initialized = false;
+    std::string model_dir;
     
-    Impl() {
+    Impl(const std::string& model_directory = "") : model_dir(model_directory) {
         // Initialize OpenCV DNN face detector
         try {
-            face_detector = cv::dnn::readNetFromTensorflow("opencv_face_detector_uint8.pb", "opencv_face_detector.pbtxt");
+            std::string pb_path = "opencv_face_detector_uint8.pb";
+            std::string pbtxt_path = "opencv_face_detector.pbtxt";
+            
+            // Try multiple paths for OpenCV DNN files
+            std::vector<std::string> pb_paths = {
+                pb_path,  // Current directory
+                model_dir + "/" + pb_path,  // Model directory
+                "models/" + pb_path,  // Models subdirectory
+                "../models/" + pb_path  // Parent models directory
+            };
+            
+            std::vector<std::string> pbtxt_paths = {
+                pbtxt_path,  // Current directory
+                model_dir + "/" + pbtxt_path,  // Model directory
+                "models/" + pbtxt_path,  // Models subdirectory
+                "../models/" + pbtxt_path  // Parent models directory
+            };
+            
+            bool pb_found = false;
+            bool pbtxt_found = false;
+            std::string final_pb_path, final_pbtxt_path;
+            
+            // Find pb file
+            for (const auto& path : pb_paths) {
+                std::ifstream f(path, std::ios::binary);
+                if (f.good()) {
+                    final_pb_path = path;
+                    pb_found = true;
+                    std::cout << "[RPPG] Found OpenCV DNN pb file: " << path << std::endl;
+                    break;
+                }
+            }
+            
+            // Find pbtxt file
+            for (const auto& path : pbtxt_paths) {
+                std::ifstream f(path, std::ios::binary);
+                if (f.good()) {
+                    final_pbtxt_path = path;
+                    pbtxt_found = true;
+                    std::cout << "[RPPG] Found OpenCV DNN pbtxt file: " << path << std::endl;
+                    break;
+                }
+            }
+            
+            if (!pb_found || !pbtxt_found) {
+                std::cerr << "[RPPG] OpenCV DNN files not found. Tried paths:" << std::endl;
+                for (const auto& path : pb_paths) {
+                    std::cerr << "  PB: " << path << std::endl;
+                }
+                for (const auto& path : pbtxt_paths) {
+                    std::cerr << "  PBTXT: " << path << std::endl;
+                }
+                dnn_initialized = false;
+                return;
+            }
+            
+            face_detector = cv::dnn::readNetFromTensorflow(final_pb_path, final_pbtxt_path);
             dnn_initialized = true;
+            std::cout << "[RPPG] OpenCV DNN face detector initialized successfully" << std::endl;
         } catch (const cv::Exception& e) {
             std::cerr << "Failed to load OpenCV DNN face detector: " << e.what() << std::endl;
             dnn_initialized = false;
@@ -79,8 +139,8 @@ struct RPPGProcessor::Impl {
     }
 };
 
-RPPGProcessor::RPPGProcessor() : pImpl(std::make_unique<Impl>()) {
-    // MediaPipe Face Mesh Graphは既にImplコンストラクタで初期化済み
+RPPGProcessor::RPPGProcessor(const std::string& model_dir) : pImpl(std::make_unique<Impl>(model_dir)) {
+    // OpenCV DNN Face Detectionは既にImplコンストラクタで初期化済み
 }
 
 RPPGProcessor::~RPPGProcessor() = default;

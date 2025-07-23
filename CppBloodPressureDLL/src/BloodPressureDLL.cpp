@@ -40,6 +40,7 @@ namespace {
     
     std::atomic<bool> initialized{false};
     static std::unique_ptr<BloodPressureEstimator> g_estimator;
+    static std::string g_model_dir;
     
     // thread_local std::string tl_return_str;
     // thread_local std::string tl_error_str;
@@ -138,6 +139,7 @@ int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
         }
         // 推論器初期化
         g_estimator = std::make_unique<BloodPressureEstimator>(modelDir);
+        g_model_dir = modelDir;
         snprintf(outBuf, bufSize, "ORT_ENV_OK");
         return 0;
     } catch (const std::exception& e) {
@@ -197,7 +199,9 @@ int EstimateBloodPressureFromVideo(
 {
     try {
         if (!g_estimator) return -1;
-        RPPGProcessor rppg;
+        // Get model directory from stored global variable
+        std::string model_dir = g_model_dir.empty() ? "models" : g_model_dir;
+        RPPGProcessor rppg(model_dir);
         RPPGResult rppg_result = rppg.processVideo(videoPath);
         if (rppg_result.peak_times.empty()) {
             FILE* f = fopen("dll_error.log", "a");
@@ -242,7 +246,8 @@ int StartBloodPressureAnalysisRequest(
             snprintf(outBuf, bufSize, "DLL not initialized");
             return 1001;
         }
-        RPPGProcessor rppg;
+        std::string model_dir = g_model_dir.empty() ? "models" : g_model_dir;
+        RPPGProcessor rppg(model_dir);
         RPPGResult rppg_result = rppg.processVideo(moviePath);
         if (rppg_result.peak_times.empty()) {
             if (callback) callback(requestId, 0, 0, "", "[{\"code\":1006,\"message\":\"No peaks detected or video read error\",\"isRetriable\":false}]");

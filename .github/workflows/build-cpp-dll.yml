@@ -888,6 +888,40 @@ jobs:
             exit 1
           }
 
+          # FIX: Copy OpenCV DNN files to current directory for DLL access
+          Write-Host "FIX: Copying OpenCV DNN files to current directory..." -ForegroundColor Yellow
+          if (Test-Path "models/opencv_face_detector_uint8.pb") {
+            Copy-Item "models/opencv_face_detector_uint8.pb" "." -Force
+            Write-Host "Copied opencv_face_detector_uint8.pb to current directory" -ForegroundColor Green
+          }
+          if (Test-Path "models/opencv_face_detector.pbtxt") {
+            Copy-Item "models/opencv_face_detector.pbtxt" "." -Force
+            Write-Host "Copied opencv_face_detector.pbtxt to current directory" -ForegroundColor Green
+          }
+
+          # Also copy ONNX files to current directory as backup
+          Write-Host "FIX: Copying ONNX files to current directory as backup..." -ForegroundColor Yellow
+          if (Test-Path "models/systolicbloodpressure.onnx") {
+            Copy-Item "models/systolicbloodpressure.onnx" "." -Force
+            Write-Host "Copied systolicbloodpressure.onnx to current directory" -ForegroundColor Green
+          }
+          if (Test-Path "models/diastolicbloodpressure.onnx") {
+            Copy-Item "models/diastolicbloodpressure.onnx" "." -Force
+            Write-Host "Copied diastolicbloodpressure.onnx to current directory" -ForegroundColor Green
+          }
+
+          # Verify files are now accessible from current directory
+          Write-Host "Verifying files in current directory after copy..." -ForegroundColor Yellow
+          $currentDirFiles = @("opencv_face_detector_uint8.pb", "opencv_face_detector.pbtxt", "systolicbloodpressure.onnx", "diastolicbloodpressure.onnx")
+          foreach ($file in $currentDirFiles) {
+            if (Test-Path $file) {
+              $size = (Get-Item $file).Length
+              Write-Host "  $file: EXISTS in current directory ($([math]::Round($size / 1KB, 2)) KB)" -ForegroundColor Green
+            } else {
+              Write-Host "  $file: NOT FOUND in current directory" -ForegroundColor Red
+            }
+          }
+
           # Try to load DLL manually to test dependencies
           Write-Host "Testing DLL loading..." -ForegroundColor Yellow
           Write-Host "Note: C++ DLLs cannot be loaded directly in PowerShell" -ForegroundColor Yellow

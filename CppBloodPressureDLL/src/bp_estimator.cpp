@@ -80,7 +80,7 @@ struct BloodPressureEstimator::Impl {
 };
 
 BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
-    : pImpl(new Impl(model_dir))
+    : pImpl(new Impl(model_dir)), model_directory(model_dir)
 {
     // ファイル存在チェック等はImplのコンストラクタで行う
 }
@@ -99,4 +99,8 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
     // DBP推定
     int dbp = static_cast<int>(std::round(pImpl->run(&pImpl->dbp_session, input)));
     return {sbp, dbp};
+}
+
+std::string BloodPressureEstimator::get_model_dir() const {
+    return model_directory;
 } 

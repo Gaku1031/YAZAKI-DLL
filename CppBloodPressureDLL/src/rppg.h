@@ -12,7 +12,7 @@ struct RPPGResult {
 
 class RPPGProcessor {
 public:
-    RPPGProcessor();
+    RPPGProcessor(const std::string& model_dir = "");
     ~RPPGProcessor();
     RPPGResult processVideo(const std::string& videoPath);
     RPPGResult processImagesFromPaths(const std::vector<std::string>& imagePaths, double fps = 30.0);
