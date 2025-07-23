@@ -517,7 +517,7 @@ jobs:
             
             # Verify video file integrity
             Write-Host "Verifying video file integrity..." -ForegroundColor Yellow
-            $videoInfo = Get-Item "sample_video.webm"
+            $videoInfo = Get-Item "./sample_video.webm"
             Write-Host "Video file size: $([math]::Round($videoInfo.Length / 1KB, 2)) KB" -ForegroundColor Cyan
             Write-Host "Video file extension: $($videoInfo.Extension)" -ForegroundColor Cyan
             
@@ -994,8 +994,8 @@ jobs:
 
           # Additional video file verification before test
           Write-Host "Additional video file verification before test..." -ForegroundColor Yellow
-          if (Test-Path "sample_video.webm") {
-            $videoFile = Get-Item "sample_video.webm"
+          if (Test-Path "./sample_video.webm") {
+            $videoFile = Get-Item "./sample_video.webm"
             Write-Host "Video file details:" -ForegroundColor Cyan
             Write-Host "  Name: $($videoFile.Name)" -ForegroundColor Cyan
             Write-Host "  Size: $([math]::Round($videoFile.Length / 1KB, 2)) KB" -ForegroundColor Cyan
@@ -1004,7 +1004,7 @@ jobs:
             
             # Check file header to verify it's a valid video file
             try {
-              $bytes = [System.IO.File]::ReadAllBytes("sample_video.webm")
+              $bytes = [System.IO.File]::ReadAllBytes("./sample_video.webm")
               $header = $bytes[0..([Math]::Min(15, $bytes.Length-1))]
               $headerHex = ($header | ForEach-Object { $_.ToString("X2") }) -join " "
               Write-Host "  File header (hex): $headerHex" -ForegroundColor Cyan
