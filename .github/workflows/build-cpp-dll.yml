@@ -517,12 +517,16 @@ jobs:
           Write-Host "DEBUG: dst path = $dst"
           if (Test-Path $src) {
               Write-Host "DEBUG: src file exists"
+              $srcAbs = (Resolve-Path $src).Path
+              $dstAbs = (Resolve-Path .).Path + "\sample_video.webm"
+              Write-Host "DEBUG: srcAbs = $srcAbs"
+              Write-Host "DEBUG: dstAbs = $dstAbs"
               if (Test-Path $dst) {
                   Write-Host "DEBUG: dst file already exists, removing"
                   Remove-Item $dst -Force -ErrorAction SilentlyContinue
               }
               try {
-                  [System.IO.File]::Copy($src, $dst, $true)
+                  Copy-Item $srcAbs $dstAbs -Force
               } catch {
                   Write-Host "ERROR: Exception during copy: $($_.Exception.Message)" -ForegroundColor Red
                   exit 1
