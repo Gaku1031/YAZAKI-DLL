@@ -148,15 +148,25 @@ RPPGProcessor::RPPGProcessor(const std::string& model_dir) : pImpl(std::make_uni
 RPPGProcessor::~RPPGProcessor() = default;
 
 RPPGResult RPPGProcessor::processVideo(const std::string& videoPath) {
-    // 1. 一時ディレクトリ作成
     namespace fs = std::filesystem;
     std::string temp_dir = "temp_frames_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
     fs::create_directory(temp_dir);
 
-    // 2. ffmpegで画像シーケンスに変換
-    std::string ffmpeg_cmd = "ffmpeg -y -i \"" + videoPath + "\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\"";
+    // 2. ffmpegで画像シーケンスに変換（Windowsでは .\ffmpeg.exe を優先）
+    std::string ffmpeg_bin = "ffmpeg";
+#ifdef _WIN32
+    ffmpeg_bin = ".\\ffmpeg.exe";
+#endif
+    std::string ffmpeg_log = temp_dir + "/ffmpeg_out.log";
+    std::string ffmpeg_cmd = ffmpeg_bin + " -y -i \"" + videoPath + "\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\" > \"" + ffmpeg_log + "\" 2>&1";
     int ret = system(ffmpeg_cmd.c_str());
     if (ret != 0) {
+        // ffmpegのログ内容をdll_error.logに転記
+        std::ifstream flog(ffmpeg_log);
+        std::ofstream err("dll_error.log", std::ios::app);
+        err << "[ffmpeg error log]" << std::endl;
+        if (flog) err << flog.rdbuf() << std::endl;
+        err << "[ffmpeg command] " << ffmpeg_cmd << std::endl;
         fs::remove_all(temp_dir);
         throw std::runtime_error("ffmpeg failed to extract frames from video: " + videoPath);
     }
