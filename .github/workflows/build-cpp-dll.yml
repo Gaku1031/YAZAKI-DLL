@@ -510,25 +510,16 @@ jobs:
           cd CppBloodPressureDLL/test
 
           # Copy the real sample video for testing
-          if (Test-Path "../../sample-data/sample_1M.webm") {
-            [System.IO.File]::Copy("../../sample-data/sample_1M.webm", "sample_video.webm", $true)
-            $size = [math]::Round((Get-Item "sample_video.webm").Length / 1MB, 2)
-            Write-Host "Real sample video copied for testing: sample_video.webm ($size MB)" -ForegroundColor Green
-            
-            # Verify video file integrity
-            Write-Host "Verifying video file integrity..." -ForegroundColor Yellow
-            $videoInfo = Get-Item "./sample_video.webm"
-            Write-Host "Video file size: $([math]::Round($videoInfo.Length / 1KB, 2)) KB" -ForegroundColor Cyan
-            Write-Host "Video file extension: $($videoInfo.Extension)" -ForegroundColor Cyan
-            
-            # Check if file is actually a video file (not empty or corrupted)
-            if ($videoInfo.Length -lt 1024) {
-              Write-Host "ERROR: Video file is too small, may be corrupted" -ForegroundColor Red
-              exit 1
-            }
+          $workspace = $env:GITHUB_WORKSPACE
+          $src = Join-Path $workspace "sample-data/sample_1M.webm"
+          $dst = "sample_video.webm"
+          if (Test-Path $src) {
+              [System.IO.File]::Copy($src, $dst, $true)
+              $size = [math]::Round((Get-Item $dst).Length / 1MB, 2)
+              Write-Host "Real sample video copied for testing: $dst ($size MB)" -ForegroundColor Green
           } else {
-            Write-Host "ERROR: sample-data/sample_1M.webm not found. Please provide a real sample video." -ForegroundColor Red
-            exit 1
+              Write-Host "ERROR: sample-data/sample_1M.webm not found. Please provide a real sample video." -ForegroundColor Red
+              exit 1
           }
 
           # Copy OpenCV DNN model files
