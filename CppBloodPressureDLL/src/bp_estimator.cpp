@@ -64,7 +64,7 @@ struct BloodPressureEstimator::Impl {
         Ort::Session* session = session_ptr ? static_cast<Ort::Session*>(session_ptr) : &sbp_session;
         // 入力名・出力名はモデルに合わせて要調整
         const char* input_names[] = {"float_input"};
-        const char* output_names[] = {"output"};
+        const char* output_names[] = {"variable"};
         std::vector<int64_t> input_shape = {1, static_cast<int64_t>(input.size())};
         Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
         Ort::Value input_tensor = Ort::Value::CreateTensor<float>(memory_info, const_cast<float*>(input.data()), input.size(), input_shape.data(), input_shape.size());
