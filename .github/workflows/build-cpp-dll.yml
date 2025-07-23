@@ -788,9 +788,10 @@ jobs:
             exit 1
           }
         shell: powershell
-    
+
       - name: Check ffmpeg existence
         run: |
+          cd CppBloodPressureDLL/test
           Write-Host "Checking ffmpeg existence..."
           if (Test-Path "./ffmpeg.exe") {
             Write-Host "ffmpeg.exe found in current directory"
