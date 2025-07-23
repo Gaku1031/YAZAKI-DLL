@@ -822,7 +822,17 @@ jobs:
             exit 1
           }
         shell: powershell
-
+      
+      - name: OpenCV ffmpeg DLL search and copy
+        run: |
+          $ffmpegDll = Get-ChildItem -Path "../../opencv" -Recurse -Filter "opencv_ffmpeg*.dll" | Select-Object -First 1
+          if ($ffmpegDll) {
+            Copy-Item $ffmpegDll.FullName "." -Force
+            Write-Host "OpenCV ffmpeg DLL copied from: $($ffmpegDll.FullName)" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: OpenCV ffmpeg DLL not found in any expected location" -ForegroundColor Yellow
+          }
+        shell: powershell
       - name: Run C# Integration Test
         run: |
           cd CppBloodPressureDLL/test
