@@ -30,26 +30,21 @@ jobs:
           dir test_env\sample-data
         shell: cmd
 
-      - name: Create csproj in test_env
+      - name: Copy TestApp.csproj and Program.cs.template
         run: |
-          cd test_env
-          dotnet new console -o . --force
-        shell: cmd
-
-      - name: Copy Program.cs.template to Program.cs
-        run: |
+          copy TestApp.csproj test_env\TestApp.csproj
           copy Program.cs.template test_env\Program.cs
         shell: cmd
 
       - name: Build C# test app
         run: |
           cd test_env
-          dotnet build -c Release
+          dotnet build -c Release -p:Platform=x64
         shell: cmd
 
       - name: Run C# BP estimation test app
         run: |
           cd test_env
           set PATH=%CD%;%PATH%
-          dotnet run -c Release
+          dotnet run -c Release -p:Platform=x64
         shell: cmd
