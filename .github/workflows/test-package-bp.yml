@@ -48,3 +48,8 @@ jobs:
           set PATH=%CD%;%PATH%
           dotnet run -c Release -p:Platform=x64
         shell: cmd
+
+      - name: Install Visual C++ Redistributable
+        run: |
+          choco install vcredist140 -y
+        shell: cmd
