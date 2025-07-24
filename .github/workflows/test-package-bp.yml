@@ -1,0 +1,88 @@
+name: Test BloodPressureDLL Package (推定まで)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-package:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "6.0.x"
+
+      - name: Prepare test directory
+        run: |
+          mkdir test_env
+          xcopy /E /I /Y CppBloodPressureDLL\package test_env\
+          xcopy /E /I /Y sample-data test_env\sample-data
+        shell: cmd
+
+      - name: List test_env contents
+        run: |
+          dir test_env
+          dir test_env\models
+          dir test_env\sample-data
+        shell: cmd
+
+      - name: Create C# test app for BP estimation
+        run: |
+          cd test_env
+          dotnet new console -n TestApp -o .
+          del Program.cs
+          echo using System; > Program.cs
+          echo using System.Runtime.InteropServices; >> Program.cs
+          echo using System.IO; >> Program.cs
+          echo class Program { >> Program.cs
+          echo   [DllImport("BloodPressureDLL.dll", EntryPoint = "InitBloodPressureDLL")] >> Program.cs
+          echo   public static extern int Init(); >> Program.cs
+          echo   [DllImport("BloodPressureDLL.dll", EntryPoint = "EstimateBloodPressureFromVideo")] >> Program.cs
+          echo   public static extern int Estimate(string videoPath, string csvPath); >> Program.cs
+          echo   static void Main() { >> Program.cs
+          echo     try { >> Program.cs
+          echo       int initResult = Init(); >> Program.cs
+          echo       Console.WriteLine("InitBloodPressureDLL result: " + initResult); >> Program.cs
+          echo       if (initResult != 0) { Console.WriteLine("DLL初期化失敗"); return; } >> Program.cs
+          echo       string video = "sample-data\\sample_1M.webm"; >> Program.cs
+          echo       string csv = "bp_result_test.csv"; >> Program.cs
+          echo       if (!File.Exists(video)) { Console.WriteLine("動画ファイルが見つかりません: " + video); return; } >> Program.cs
+          echo       int estResult = Estimate(video, csv); >> Program.cs
+          echo       Console.WriteLine("EstimateBloodPressureFromVideo result: " + estResult); >> Program.cs
+          echo       if (estResult != 0) { Console.WriteLine("推定失敗"); return; } >> Program.cs
+          echo       if (File.Exists(csv)) { >> Program.cs
+          echo         Console.WriteLine("CSV出力成功: " + csv); >> Program.cs
+          echo         foreach (var line in File.ReadAllLines(csv)) Console.WriteLine(line); >> Program.cs
+          echo       } else { >> Program.cs
+          echo         Console.WriteLine("CSV出力失敗"); >> Program.cs
+          echo       } >> Program.cs
+          echo     } catch (Exception ex) { >> Program.cs
+          echo       Console.WriteLine("エラー: " + ex.Message); >> Program.cs
+          echo     } >> Program.cs
+          echo   } >> Program.cs
+          echo } >> Program.cs
+          dotnet build -c Release
+        shell: cmd
+
+      - name: Run C# BP estimation test app
+        run: |
+          cd test_env
+          set PATH=%CD%;%PATH%
+          dotnet run -c Release
+        shell: cmd
+
+      - name: Check for CSV output
+        run: |
+          cd test_env
+          if exist bp_result_test.csv (
+            echo "血圧推定CSV出力を確認しました。"
+            type bp_result_test.csv
+          ) else (
+            echo "CSV出力がありません。"
+            exit /b 1
+          )
+        shell: cmd

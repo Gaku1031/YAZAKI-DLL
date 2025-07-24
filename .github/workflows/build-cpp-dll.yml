@@ -5,10 +5,6 @@ on:
     branches: [main, develop]
     paths:
       - "CppBloodPressureDLL/**"
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - "CppBloodPressureDLL/**"
   workflow_dispatch:
     inputs:
       build_type:
@@ -392,6 +388,20 @@ jobs:
           Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
         shell: powershell
 
+      - name: Copy onnxruntime lib directory to test
+        run: |
+          $src = "onnxruntime/onnxruntime-win-x64-1.22.1/lib"
+          $dst = "CppBloodPressureDLL/test"
+          if (Test-Path $src) {
+            Copy-Item "$src/*" $dst -Recurse -Force
+            Write-Host "onnxruntime lib directory copied to test"
+          } else {
+            Write-Host "onnxruntime lib directory not found"
+            exit 1
+          }
+        shell: powershell
+
+      
       - name: Show onnxruntime.dll file size and version
         run: |
           $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
@@ -406,19 +416,6 @@ jobs:
             }
           } else {
             Write-Host "onnxruntime.dll not found"
-          }
-        shell: powershell
-
-      - name: Copy onnxruntime lib directory to test
-        run: |
-          $src = "onnxruntime/onnxruntime-win-x64-1.22.1/lib"
-          $dst = "CppBloodPressureDLL/test"
-          if (Test-Path $src) {
-            Copy-Item "$src/*" $dst -Recurse -Force
-            Write-Host "onnxruntime lib directory copied to test"
-          } else {
-            Write-Host "onnxruntime lib directory not found"
-            exit 1
           }
         shell: powershell
 
