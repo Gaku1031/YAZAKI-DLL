@@ -32,8 +32,7 @@ jobs:
 
       - name: Copy Program.cs.template to Program.cs
         run: |
-          cd test_env
-          copy Program.cs.template Program.cs
+          copy Program.cs.template test_env\Program.cs
         shell: cmd
 
       - name: Build C# test app
