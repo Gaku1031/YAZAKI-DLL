@@ -10,17 +10,25 @@ class Program {
     [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern int StartBloodPressureAnalysisRequest(StringBuilder outBuf, int bufSize, string requestId, int height, int weight, int sex, string moviePath, BPCallback callback);
     static void Main() {
-        // 依存DLLとmodelsディレクトリの存在チェック
+        // 依存DLLとmodelsディレクトリの存在・サイズチェック
         string[] requiredFiles = { "BloodPressureDLL.dll", "onnxruntime.dll", "opencv_world480.dll", "zlib.dll" };
         foreach (var file in requiredFiles) {
             if (!File.Exists(file)) {
                 Console.WriteLine($"[ERROR] {file} not found in current directory!");
                 return;
+            } else {
+                var info = new FileInfo(file);
+                Console.WriteLine($"[INFO] {file} size: {info.Length} bytes");
             }
         }
         if (!Directory.Exists("models")) {
             Console.WriteLine("[ERROR] models directory not found!");
             return;
+        } else {
+            foreach (var f in Directory.GetFiles("models")) {
+                var info = new FileInfo(f);
+                Console.WriteLine($"[INFO] models/{info.Name} size: {info.Length} bytes");
+            }
         }
         var outBuf = new StringBuilder(1024);
         string modelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");
