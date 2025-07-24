@@ -35,36 +35,37 @@ jobs:
           cd test_env
           dotnet new console -n TestApp -o .
           del Program.cs
-          echo using System; > Program.cs
-          echo using System.Runtime.InteropServices; >> Program.cs
-          echo using System.Text; >> Program.cs
+          REM --- heredocでProgram.csを一括出力 ---
+          echo ^using System; > Program.cs
+          echo ^using System.Runtime.InteropServices; >> Program.cs
+          echo ^using System.Text; >> Program.cs
           echo class Program { >> Program.cs
-          echo   [UnmanagedFunctionPointer(CallingConvention.Cdecl)] >> Program.cs
-          echo   public delegate void BPCallback(string requestId, int maxBP, int minBP, string csv, string errorsJson); >> Program.cs
-          echo   [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)] >> Program.cs
-          echo   public static extern int InitializeBP(StringBuilder outBuf, int bufSize, string modelDir); >> Program.cs
-          echo   [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)] >> Program.cs
-          echo   public static extern int StartBloodPressureAnalysisRequest(StringBuilder outBuf, int bufSize, string requestId, int height, int weight, int sex, string moviePath, BPCallback callback); >> Program.cs
-          echo   static void Main() { >> Program.cs
-          echo     var outBuf = new StringBuilder(1024); >> Program.cs
-          echo     int initResult = InitializeBP(outBuf, outBuf.Capacity, "models"); >> Program.cs
-          echo     Console.WriteLine($"InitializeBP result: {initResult}, outBuf: '{outBuf}'"); >> Program.cs
-          echo     if (initResult != 0) { Console.WriteLine("DLL初期化失敗"); return; } >> Program.cs
-          echo     string requestId = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_TEST001_000000001"; >> Program.cs
-          echo     int height = 170, weight = 65, sex = 1; >> Program.cs
-          echo     string video = "sample-data\\sample_1M.webm"; >> Program.cs
-          echo     bool callbackCalled = false; >> Program.cs
-          echo     BPCallback callback = (reqId, maxBP, minBP, csv, errorsJson) => { >> Program.cs
-          echo       Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={maxBP}, DBP={minBP}"); >> Program.cs
-          echo       if (!string.IsNullOrEmpty(csv)) Console.WriteLine($"[CALLBACK] CSV length: {csv.Length}"); >> Program.cs
-          echo       if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]") Console.WriteLine($"[CALLBACK] Errors: {errorsJson}"); >> Program.cs
-          echo       callbackCalled = true; >> Program.cs
-          echo     }; >> Program.cs
-          echo     outBuf.Clear(); >> Program.cs
-          echo     int ret = StartBloodPressureAnalysisRequest(outBuf, outBuf.Capacity, requestId, height, weight, sex, video, callback); >> Program.cs
-          echo     Console.WriteLine($"StartBloodPressureAnalysisRequest returned: {ret}, outBuf: '{outBuf}'"); >> Program.cs
-          echo     if (!callbackCalled) { Console.WriteLine("[ERROR] コールバックが呼ばれませんでした"); } >> Program.cs
-          echo   } >> Program.cs
+          echo     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] >> Program.cs
+          echo     public delegate void BPCallback(string requestId, int maxBP, int minBP, string csv, string errorsJson); >> Program.cs
+          echo     [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)] >> Program.cs
+          echo     public static extern int InitializeBP(StringBuilder outBuf, int bufSize, string modelDir); >> Program.cs
+          echo     [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)] >> Program.cs
+          echo     public static extern int StartBloodPressureAnalysisRequest(StringBuilder outBuf, int bufSize, string requestId, int height, int weight, int sex, string moviePath, BPCallback callback); >> Program.cs
+          echo     static void Main() { >> Program.cs
+          echo         var outBuf = new StringBuilder(1024); >> Program.cs
+          echo         int initResult = InitializeBP(outBuf, outBuf.Capacity, "models"); >> Program.cs
+          echo         Console.WriteLine($"InitializeBP result: {initResult}, outBuf: '{outBuf}'"); >> Program.cs
+          echo         if (initResult != 0) { Console.WriteLine("DLL初期化失敗"); return; } >> Program.cs
+          echo         string requestId = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_TEST001_000000001"; >> Program.cs
+          echo         int height = 170, weight = 65, sex = 1; >> Program.cs
+          echo         string video = "sample-data\\sample_1M.webm"; >> Program.cs
+          echo         bool callbackCalled = false; >> Program.cs
+          echo         BPCallback callback = (reqId, maxBP, minBP, csv, errorsJson) => { >> Program.cs
+          echo             Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={maxBP}, DBP={minBP}"); >> Program.cs
+          echo             if (!string.IsNullOrEmpty(csv)) Console.WriteLine($"[CALLBACK] CSV length: {csv.Length}"); >> Program.cs
+          echo             if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]") Console.WriteLine($"[CALLBACK] Errors: {errorsJson}"); >> Program.cs
+          echo             callbackCalled = true; >> Program.cs
+          echo         }; >> Program.cs
+          echo         outBuf.Clear(); >> Program.cs
+          echo         int ret = StartBloodPressureAnalysisRequest(outBuf, outBuf.Capacity, requestId, height, weight, sex, video, callback); >> Program.cs
+          echo         Console.WriteLine($"StartBloodPressureAnalysisRequest returned: {ret}, outBuf: '{outBuf}'"); >> Program.cs
+          echo         if (!callbackCalled) { Console.WriteLine("[ERROR] コールバックが呼ばれませんでした"); } >> Program.cs
+          echo     } >> Program.cs
           echo } >> Program.cs
           dotnet build -c Release
         shell: cmd
