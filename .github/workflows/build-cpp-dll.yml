@@ -1415,7 +1415,21 @@ jobs:
             $indent = "  " * ($_.FullName.Split("\").Count - $PWD.ToString().Split("\").Count - 1)
             Write-Host "$indent$($_.Name)" -ForegroundColor Cyan
           }
-        shell: powershell
+
+          # C#ラッパー
+          if (Test-Path "BloodPressureWrapper.cs") {
+            Copy-Item "BloodPressureWrapper.cs" "dist_cpp/" -Force
+            Write-Host "C#ラッパー(BloodPressureWrapper.cs) copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: BloodPressureWrapper.cs not found" -ForegroundColor Yellow
+          }
+          # ドキュメント
+          if (Test-Path "INTEGRATION_GUIDE.md") {
+            Copy-Item "INTEGRATION_GUIDE.md" "dist_cpp/" -Force
+            Write-Host "INTEGRATION_GUIDE.md copied" -ForegroundColor Green
+          } else {
+            Write-Host "Warning: INTEGRATION_GUIDE.md not found" -ForegroundColor Yellow
+          }
 
       - name: Upload Complete Distribution Package
         uses: actions/upload-artifact@v4
