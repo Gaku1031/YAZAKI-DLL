@@ -30,15 +30,15 @@ jobs:
           dir test_env\sample-data
         shell: cmd
 
-      - name: Copy Program.cs.template to Program.cs
-        run: |
-          copy Program.cs.template test_env\Program.cs
-        shell: cmd
-
       - name: Create csproj in test_env
         run: |
           cd test_env
           dotnet new console -o . --force
+        shell: cmd
+
+      - name: Copy Program.cs.template to Program.cs
+        run: |
+          copy Program.cs.template test_env\Program.cs
         shell: cmd
 
       - name: Build C# test app
