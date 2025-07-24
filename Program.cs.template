@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.IO;
 class Program {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void BPCallback(string requestId, int maxBP, int minBP, string csv, string errorsJson);
@@ -9,8 +10,21 @@ class Program {
     [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern int StartBloodPressureAnalysisRequest(StringBuilder outBuf, int bufSize, string requestId, int height, int weight, int sex, string moviePath, BPCallback callback);
     static void Main() {
+        // 依存DLLとmodelsディレクトリの存在チェック
+        string[] requiredFiles = { "BloodPressureDLL.dll", "onnxruntime.dll", "opencv_world480.dll", "zlib.dll" };
+        foreach (var file in requiredFiles) {
+            if (!File.Exists(file)) {
+                Console.WriteLine($"[ERROR] {file} not found in current directory!");
+                return;
+            }
+        }
+        if (!Directory.Exists("models")) {
+            Console.WriteLine("[ERROR] models directory not found!");
+            return;
+        }
         var outBuf = new StringBuilder(1024);
-        int initResult = InitializeBP(outBuf, outBuf.Capacity, "models");
+        string modelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");
+        int initResult = InitializeBP(outBuf, outBuf.Capacity, modelDir);
         Console.WriteLine($"InitializeBP result: {initResult}, outBuf: '{outBuf}'");
         if (initResult != 0) { Console.WriteLine("DLL初期化失敗"); return; }
         string requestId = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_TEST001_000000001";
