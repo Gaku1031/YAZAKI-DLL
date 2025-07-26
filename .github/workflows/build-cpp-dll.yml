@@ -401,7 +401,6 @@ jobs:
           }
         shell: powershell
 
-      
       - name: Show onnxruntime.dll file size and version
         run: |
           $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
@@ -752,38 +751,52 @@ jobs:
             }
           }
 
-      - name: Download ffmpeg.exe for distribution
+      - name: Install MSYS2 and build tools for ffmpeg
         run: |
-          $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-          $zipPath = "ffmpeg.zip"
-          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath
-          Expand-Archive -Path $zipPath -DestinationPath "ffmpeg"
-          Write-Host "Listing all files under ffmpeg/ after extraction:" -ForegroundColor Yellow
-          Get-ChildItem -Path "ffmpeg" -Recurse | ForEach-Object { Write-Host $_.FullName }
-          $ffmpegExe = Get-ChildItem -Path "ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-          if (!(Test-Path "dist_cpp")) { New-Item -ItemType Directory -Path "dist_cpp" | Out-Null }
-          if (!(Test-Path "deployment")) { New-Item -ItemType Directory -Path "deployment" | Out-Null }
-          if ($ffmpegExe) {
-            Write-Host "ffmpeg.exe found at: $($ffmpegExe.FullName)" -ForegroundColor Green
-            Copy-Item $ffmpegExe.FullName "dist_cpp/" -Force
-            Write-Host "ffmpeg.exe copied to dist_cpp/" -ForegroundColor Green
-            Copy-Item $ffmpegExe.FullName "deployment/" -Force
-            Write-Host "ffmpeg.exe copied to deployment/" -ForegroundColor Green
-          } else {
-            Write-Host "ffmpeg.exe not found after extraction" -ForegroundColor Red
-            exit 1
-          }
+          choco install -y msys2
+          echo "C:\\tools\\msys64\\usr\\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
+          echo "C:\\tools\\msys64\\mingw64\\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
         shell: powershell
 
-      - name: Copy ffmpeg.exe to test directory for integration test
+      - name: Build slim ffmpeg for distribution
         run: |
-          if (Test-Path "dist_cpp/ffmpeg.exe") {
-            Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
-            Write-Host "ffmpeg.exe copied to CppBloodPressureDLL/test/" -ForegroundColor Green
-          } else {
-            Write-Host "ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
-            exit 1
-          }
+          C:\tools\msys64\usr\bin\bash -lc "
+            pacman -Sy --noconfirm
+            pacman -S --noconfirm git make yasm mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config
+            cd /tmp
+            git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+            cd ffmpeg
+            ./configure \
+              --prefix=/tmp/ffmpeg-install \
+              --arch=x86_64 \
+              --target-os=mingw32 \
+              --enable-gpl \
+              --enable-static \
+              --disable-shared \
+              --disable-doc \
+              --disable-everything \
+              --enable-ffmpeg \
+              --disable-ffplay \
+              --disable-ffprobe \
+              --disable-autodetect \
+              --enable-demuxer=h264,hevc,matroska,webm \
+              --enable-muxer=mpegts,matroska,webm \
+              --enable-parser=h264,hevc \
+              --enable-protocol=file \
+              --enable-avcodec \
+              --enable-avformat \
+              --enable-avutil \
+              --enable-swresample \
+              --enable-swscale
+            make -j2
+            make install
+          "
+        shell: powershell
+
+      - name: Copy slim ffmpeg.exe to dist_cpp and deployment
+        run: |
+          Copy-Item "C:\\tools\\msys64\\tmp\\ffmpeg-install\\bin\\ffmpeg.exe" "dist_cpp/ffmpeg.exe" -Force
+          Copy-Item "C:\\tools\\msys64\\tmp\\ffmpeg-install\\bin\\ffmpeg.exe" "deployment/ffmpeg.exe" -Force
         shell: powershell
 
       - name: Check ffmpeg existence
@@ -844,6 +857,12 @@ jobs:
             Write-Host "Warning: OpenCV ffmpeg DLL not found in any expected location" -ForegroundColor Yellow
           }
         shell: powershell
+      
+      - name: Copy slim ffmpeg.exe to test directory for integration test
+        run: |
+          Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
+        shell: powershell
+
       - name: Run C# Integration Test
         run: |
           cd CppBloodPressureDLL/test
