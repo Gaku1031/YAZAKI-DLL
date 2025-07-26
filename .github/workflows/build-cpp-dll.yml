@@ -826,16 +826,16 @@ jobs:
                 echo "FFmpeg build failed"
                 exit 1
               fi
-      
+
       - name: Create ultra-slim version (optional)
         run: |
           cd /tmp/ffmpeg
-          
+
           echo "Building ultra-slim version with VP8 only..."
-          
+
           # Clean previous build
           make clean
-          
+
           # Ultra minimal configuration - VP8 and PNG only
           ./configure \
             --prefix=/tmp/ffmpeg-ultra \
@@ -870,14 +870,14 @@ jobs:
           # Build ultra-slim version
           make -j$(nproc)
           make install
-          
+
           if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
             echo "Ultra-slim FFmpeg built successfully"
             size=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
             size_mb=$((size / 1024 / 1024))
             echo "Ultra-slim FFmpeg size: ${size_mb} MB"
           fi
-      
+
       - name: Strip binaries to reduce size further
         run: |
           # Strip debug symbols from both versions
@@ -888,7 +888,7 @@ jobs:
             size_after_mb=$((size_after / 1024 / 1024))
             echo "FFmpeg size after stripping: ${size_after_mb} MB"
           fi
-          
+
           if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
             x86_64-w64-mingw32-strip /tmp/ffmpeg-ultra/bin/ffmpeg.exe
             
@@ -899,20 +899,32 @@ jobs:
 
       - name: Copy slim ffmpeg.exe to dist_cpp and deployment
         run: |
-          # Try to copy from MSYS2 build first
-          $msys2Path = "C:\tools\msys64\tmp\ffmpeg-install\bin\ffmpeg.exe"
-          $vsPath = "ffmpeg-install\bin\ffmpeg.exe"
+          # Try to copy from ultra-slim build first, then regular slim build
+          $ultraPath = "/tmp/ffmpeg-ultra/bin/ffmpeg.exe"
+          $slimPath = "/tmp/ffmpeg-install/bin/ffmpeg.exe"
 
-          if (Test-Path $msys2Path) {
-            Copy-Item $msys2Path "dist_cpp/ffmpeg.exe" -Force
-            Copy-Item $msys2Path "deployment/ffmpeg.exe" -Force
-            Write-Host "ffmpeg.exe copied from MSYS2 build" -ForegroundColor Green
-          } elseif (Test-Path $vsPath) {
-            Copy-Item $vsPath "dist_cpp/ffmpeg.exe" -Force
-            Copy-Item $vsPath "deployment/ffmpeg.exe" -Force
-            Write-Host "ffmpeg.exe copied from Visual Studio build" -ForegroundColor Green
+          if (Test-Path $ultraPath) {
+            Copy-Item $ultraPath "dist_cpp/ffmpeg.exe" -Force
+            Copy-Item $ultraPath "deployment/ffmpeg.exe" -Force
+            Write-Host "ffmpeg.exe copied from ultra-slim build" -ForegroundColor Green
+          } elseif (Test-Path $slimPath) {
+            Copy-Item $slimPath "dist_cpp/ffmpeg.exe" -Force
+            Copy-Item $slimPath "deployment/ffmpeg.exe" -Force
+            Write-Host "ffmpeg.exe copied from slim build" -ForegroundColor Green
           } else {
             Write-Host "ERROR: ffmpeg.exe not found in any expected location" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+
+      - name: Copy slim ffmpeg.exe to test directory for integration test
+        run: |
+          # Copy the same ffmpeg.exe that was copied to dist_cpp to the test directory
+          if (Test-Path "dist_cpp/ffmpeg.exe") {
+            Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
+            Write-Host "Slim ffmpeg.exe copied to test directory for integration test" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
             exit 1
           }
         shell: powershell
@@ -974,11 +986,6 @@ jobs:
           } else {
             Write-Host "Warning: OpenCV ffmpeg DLL not found in any expected location" -ForegroundColor Yellow
           }
-        shell: powershell
-
-      - name: Copy slim ffmpeg.exe to test directory for integration test
-        run: |
-          Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
         shell: powershell
 
       - name: Run C# Integration Test
