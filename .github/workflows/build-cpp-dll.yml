@@ -750,49 +750,100 @@ jobs:
               exit 1
             }
           }
+
+      - name: Install cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            yasm \
+            nasm \
+            pkg-config \
+            git \
+            mingw-w64 \
+            mingw-w64-tools
+
+            - name: Build slim FFmpeg for WebM to image conversion
+            run: |
+              # Clone FFmpeg source
+              cd /tmp
+              git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+              cd ffmpeg
+              
+              # Configure for minimal WebM to image conversion (Windows 64-bit)
+              ./configure \
+                --prefix=/tmp/ffmpeg-install \
+                --arch=x86_64 \
+                --target-os=mingw32 \
+                --cross-prefix=x86_64-w64-mingw32- \
+                --pkg-config=pkg-config \
+                --enable-cross-compile \
+                --enable-static \
+                --disable-shared \
+                --disable-doc \
+                --disable-everything \
+                --enable-ffmpeg \
+                --disable-ffplay \
+                --disable-ffprobe \
+                --disable-autodetect \
+                --disable-debug \
+                --enable-avcodec \
+                --enable-avformat \
+                --enable-avutil \
+                --enable-swscale \
+                --enable-demuxer=matroska,webm \
+                --enable-decoder=vp8,vp9 \
+                --enable-encoder=png,mjpeg,bmp \
+                --enable-muxer=image2 \
+                --enable-protocol=file \
+                --enable-filter=scale \
+                --disable-network \
+                --disable-iconv \
+                --disable-bzlib \
+                --disable-libopenjpeg \
+                --disable-libwebp \
+                --disable-libfreetype \
+                --disable-libharfbuzz
+                
+              echo "Configuration completed successfully"
+              
+              # Build
+              make -j$(nproc)
+              
+              # Install
+              make install
+              
+              # Verify the build
+              if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+                echo "FFmpeg built successfully"
+                ls -la /tmp/ffmpeg-install/bin/ffmpeg.exe
+                
+                # Get file size
+                size=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+                size_mb=$((size / 1024 / 1024))
+                echo "FFmpeg size: ${size_mb} MB"
+              else
+                echo "FFmpeg build failed"
+                exit 1
+              fi
       
-      - name: Install MSYS2 and build tools for ffmpeg
+      - name: Create ultra-slim version (optional)
         run: |
-          choco install -y msys2
-          echo "C:\\tools\\msys64\\usr\\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
-          echo "C:\\tools\\msys64\\mingw64\\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
-        shell: powershell
-  
-      - name: Build slim ffmpeg for WebM to image conversion
-        run: |
-          # Create temp directory
-          New-Item -ItemType Directory -Force -Path "C:\temp"
+          cd /tmp/ffmpeg
           
-          # Create build script to avoid PowerShell escaping issues
-          @'
-          #!/bin/bash
-          set -e
+          echo "Building ultra-slim version with VP8 only..."
           
-          # Update package database and install build dependencies
-          pacman -Sy --noconfirm
-          pacman -S --noconfirm git make yasm nasm pkgconf
-          pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config mingw-w64-x86_64-nasm
+          # Clean previous build
+          make clean
           
-          # Set up environment
-          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig"
-          export PATH="/mingw64/bin:$PATH"
-          
-          # Clone FFmpeg source
-          cd /tmp
-          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
-          cd ffmpeg
-          
-          # Check available options first
-          echo "Checking FFmpeg configure options..."
-          ./configure --help | grep -E "(demuxer|decoder|encoder|muxer)" | head -20
-          
-          # Configure for minimal WebM to image conversion build
+          # Ultra minimal configuration - VP8 and PNG only
           ./configure \
-            --prefix=/tmp/ffmpeg-install \
-            --toolchain=mingw \
+            --prefix=/tmp/ffmpeg-ultra \
             --arch=x86_64 \
             --target-os=mingw32 \
-            --enable-gpl \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
             --enable-static \
             --disable-shared \
             --disable-doc \
@@ -801,79 +852,50 @@ jobs:
             --disable-ffplay \
             --disable-ffprobe \
             --disable-autodetect \
+            --disable-debug \
             --enable-avcodec \
             --enable-avformat \
             --enable-avutil \
             --enable-swscale \
-            --enable-demuxer=matroska,webm \
-            --enable-decoder=vp8,vp9 \
-            --enable-encoder=png,mjpeg \
+            --enable-demuxer=matroska \
+            --enable-decoder=vp8 \
+            --enable-encoder=png \
             --enable-muxer=image2 \
             --enable-protocol=file \
             --enable-filter=scale \
             --disable-network \
-            --disable-debug || {
-              echo "Configure failed, checking config.log..."
-              if [ -f ffbuild/config.log ]; then
-                tail -50 ffbuild/config.log
-              fi
-              echo "Trying with even more minimal configuration..."
-              
-              # Fallback configuration - absolutely minimal
-              ./configure \
-                --prefix=/tmp/ffmpeg-install \
-                --toolchain=mingw \
-                --arch=x86_64 \
-                --target-os=mingw32 \
-                --enable-static \
-                --disable-shared \
-                --disable-doc \
-                --disable-everything \
-                --enable-ffmpeg \
-                --disable-ffplay \
-                --disable-ffprobe \
-                --enable-avcodec \
-                --enable-avformat \
-                --enable-avutil \
-                --enable-swscale \
-                --enable-demuxer=matroska \
-                --enable-decoder=vp8 \
-                --enable-encoder=png \
-                --enable-muxer=image2 \
-                --enable-protocol=file \
-                --enable-filter=scale
-            }
+            --disable-iconv \
+            --disable-bzlib
+            
+          # Build ultra-slim version
+          make -j$(nproc)
+          make install
           
-          # Build and install with error checking
-          echo "Starting FFmpeg build..."
-          if ! make -j$(nproc); then
-            echo "Build failed, trying with single thread..."
-            make clean
-            make -j1
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            echo "Ultra-slim FFmpeg built successfully"
+            size=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size: ${size_mb} MB"
           fi
-          
-          if ! make install; then
-            echo "Install failed"
-            exit 1
-          fi
-          
-          # Verify installation and copy executable
+      
+      - name: Strip binaries to reduce size further
+        run: |
+          # Strip debug symbols from both versions
           if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
-            cp /tmp/ffmpeg-install/bin/ffmpeg.exe /c/temp/ffmpeg-slim.exe
-            echo "FFmpeg successfully built and copied"
-          elif [ -f /tmp/ffmpeg-install/bin/ffmpeg ]; then
-            cp /tmp/ffmpeg-install/bin/ffmpeg /c/temp/ffmpeg-slim.exe
-            echo "FFmpeg successfully built and copied without .exe extension"
-          else
-            echo "FFmpeg executable not found after installation"
-            ls -la /tmp/ffmpeg-install/bin/
-            exit 1
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-install/bin/ffmpeg.exe
+            
+            size_after=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+            size_after_mb=$((size_after / 1024 / 1024))
+            echo "FFmpeg size after stripping: ${size_after_mb} MB"
           fi
-          '@ | Out-File -FilePath "C:\temp\build_ffmpeg.sh" -Encoding UTF8
           
-          # Execute the build script
-          C:\tools\msys64\usr\bin\bash -l "C:\temp\build_ffmpeg.sh"
-        shell: powershell
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-ultra/bin/ffmpeg.exe
+            
+            size_ultra_after=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_ultra_after_mb=$((size_ultra_after / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size after stripping: ${size_ultra_after_mb} MB"
+          fi
 
       - name: Copy slim ffmpeg.exe to dist_cpp and deployment
         run: |
