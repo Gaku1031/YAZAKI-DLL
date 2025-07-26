@@ -401,7 +401,6 @@ jobs:
           }
         shell: powershell
 
-      
       - name: Show onnxruntime.dll file size and version
         run: |
           $dllPath = "CppBloodPressureDLL/test/onnxruntime.dll"
@@ -752,36 +751,184 @@ jobs:
             }
           }
 
-      - name: Download ffmpeg.exe for distribution
+      - name: Install cross-compilation dependencies
         run: |
-          $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-          $zipPath = "ffmpeg.zip"
-          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath
-          Expand-Archive -Path $zipPath -DestinationPath "ffmpeg"
-          Write-Host "Listing all files under ffmpeg/ after extraction:" -ForegroundColor Yellow
-          Get-ChildItem -Path "ffmpeg" -Recurse | ForEach-Object { Write-Host $_.FullName }
-          $ffmpegExe = Get-ChildItem -Path "ffmpeg" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-          if (!(Test-Path "dist_cpp")) { New-Item -ItemType Directory -Path "dist_cpp" | Out-Null }
-          if (!(Test-Path "deployment")) { New-Item -ItemType Directory -Path "deployment" | Out-Null }
-          if ($ffmpegExe) {
-            Write-Host "ffmpeg.exe found at: $($ffmpegExe.FullName)" -ForegroundColor Green
-            Copy-Item $ffmpegExe.FullName "dist_cpp/" -Force
-            Write-Host "ffmpeg.exe copied to dist_cpp/" -ForegroundColor Green
-            Copy-Item $ffmpegExe.FullName "deployment/" -Force
-            Write-Host "ffmpeg.exe copied to deployment/" -ForegroundColor Green
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            yasm \
+            nasm \
+            pkg-config \
+            git \
+            mingw-w64 \
+            mingw-w64-tools
+        shell: bash
+
+      - name: Build slim FFmpeg for WebM to image conversion
+        run: |
+          # Clone FFmpeg source
+          cd /tmp
+          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+          cd ffmpeg
+
+          # Configure for minimal WebM to image conversion (Windows 64-bit)
+          ./configure \
+            --prefix=/tmp/ffmpeg-install \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-demuxer=matroska,webm \
+            --enable-decoder=vp8,vp9 \
+            --enable-encoder=png,mjpeg,bmp \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter=scale \
+            --disable-network \
+            --disable-iconv \
+            --disable-bzlib \
+            --disable-libopenjpeg \
+            --disable-libwebp \
+            --disable-libfreetype \
+            --disable-libharfbuzz
+            
+          echo "Configuration completed successfully"
+
+          # Build
+          make -j$(nproc)
+
+          # Install
+          make install
+
+          # Verify the build
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            echo "FFmpeg built successfully"
+            ls -la /tmp/ffmpeg-install/bin/ffmpeg.exe
+            
+            # Get file size
+            size=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "FFmpeg size: ${size_mb} MB"
+          else
+            echo "FFmpeg build failed"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Create ultra-slim version (optional)
+        run: |
+          cd /tmp/ffmpeg
+
+          echo "Building ultra-slim version with VP8 only..."
+
+          # Clean previous build
+          make clean
+
+          # Ultra minimal configuration - VP8 and PNG only
+          ./configure \
+            --prefix=/tmp/ffmpeg-ultra \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-demuxer=matroska \
+            --enable-decoder=vp8 \
+            --enable-encoder=png \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter=scale \
+            --disable-network \
+            --disable-iconv \
+            --disable-bzlib
+            
+          # Build ultra-slim version
+          make -j$(nproc)
+          make install
+
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            echo "Ultra-slim FFmpeg built successfully"
+            size=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size: ${size_mb} MB"
+          fi
+        shell: bash
+
+      - name: Strip binaries to reduce size further
+        run: |
+          # Strip debug symbols from both versions
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-install/bin/ffmpeg.exe
+            
+            size_after=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+            size_after_mb=$((size_after / 1024 / 1024))
+            echo "FFmpeg size after stripping: ${size_after_mb} MB"
+          fi
+
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-ultra/bin/ffmpeg.exe
+            
+            size_ultra_after=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_ultra_after_mb=$((size_ultra_after / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size after stripping: ${size_ultra_after_mb} MB"
+          fi
+        shell: bash
+
+      - name: Copy slim ffmpeg.exe to dist_cpp and deployment
+        run: |
+          # Try to copy from ultra-slim build first, then regular slim build
+          $ultraPath = "/tmp/ffmpeg-ultra/bin/ffmpeg.exe"
+          $slimPath = "/tmp/ffmpeg-install/bin/ffmpeg.exe"
+
+          if (Test-Path $ultraPath) {
+            Copy-Item $ultraPath "dist_cpp/ffmpeg.exe" -Force
+            Copy-Item $ultraPath "deployment/ffmpeg.exe" -Force
+            Write-Host "ffmpeg.exe copied from ultra-slim build" -ForegroundColor Green
+          } elseif (Test-Path $slimPath) {
+            Copy-Item $slimPath "dist_cpp/ffmpeg.exe" -Force
+            Copy-Item $slimPath "deployment/ffmpeg.exe" -Force
+            Write-Host "ffmpeg.exe copied from slim build" -ForegroundColor Green
           } else {
-            Write-Host "ffmpeg.exe not found after extraction" -ForegroundColor Red
+            Write-Host "ERROR: ffmpeg.exe not found in any expected location" -ForegroundColor Red
             exit 1
           }
         shell: powershell
 
-      - name: Copy ffmpeg.exe to test directory for integration test
+      - name: Copy slim ffmpeg.exe to test directory for integration test
         run: |
+          # Copy the same ffmpeg.exe that was copied to dist_cpp to the test directory
           if (Test-Path "dist_cpp/ffmpeg.exe") {
             Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
-            Write-Host "ffmpeg.exe copied to CppBloodPressureDLL/test/" -ForegroundColor Green
+            Write-Host "Slim ffmpeg.exe copied to test directory for integration test" -ForegroundColor Green
           } else {
-            Write-Host "ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
+            Write-Host "ERROR: ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
             exit 1
           }
         shell: powershell
@@ -844,6 +991,7 @@ jobs:
             Write-Host "Warning: OpenCV ffmpeg DLL not found in any expected location" -ForegroundColor Yellow
           }
         shell: powershell
+
       - name: Run C# Integration Test
         run: |
           cd CppBloodPressureDLL/test
