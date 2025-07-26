@@ -757,58 +757,58 @@ jobs:
           echo "C:\\tools\\msys64\\usr\\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
           echo "C:\\tools\\msys64\\mingw64\\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
         shell: powershell
-
-      - name: Build slim ffmpeg for distribution
+  
+      - name: Build slim ffmpeg for WebM to image conversion
         run: |
-          # Try MSYS2/MinGW build first
-          try {
-            C:\tools\msys64\usr\bin\bash -lc "
-              pacman -Sy --noconfirm
-              pacman -S --noconfirm git make yasm mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config mingw-w64-x86_64-nasm
-              cd /tmp
-              git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
-              cd ffmpeg
-              ./configure \
-                --prefix=/tmp/ffmpeg-install \
-                --toolchain=mingw \
-                --arch=x86_64 \
-                --target-os=mingw32 \
-                --enable-gpl \
-                --enable-static \
-                --disable-shared \
-                --disable-doc \
-                --disable-everything \
-                --enable-ffmpeg \
-                --disable-ffplay \
-                --disable-ffprobe \
-                --disable-autodetect \
-                --enable-demuxer=h264,hevc,matroska,webm \
-                --enable-muxer=mpegts,matroska,webm \
-                --enable-parser=h264,hevc \
-                --enable-protocol=file \
-                --enable-avcodec \
-                --enable-avformat \
-                --enable-avutil \
-                --enable-swresample \
-                --enable-swscale \
-                --enable-libx264 \
-                --enable-libx265
-              make -j2
-              make install
-            "
-          } catch {
-            Write-Host "MSYS2/MinGW build failed, trying Visual Studio build..." -ForegroundColor Yellow
+          C:\tools\msys64\usr\bin\bash -lc "
+            # Update package database and install build dependencies
+            pacman -Sy --noconfirm
+            pacman -S --noconfirm git make yasm nasm pkgconf
+            pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config mingw-w64-x86_64-nasm
             
-            # Fallback: Use Visual Studio build tools
-            git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg-vs
-            cd ffmpeg-vs
+            # Clone FFmpeg source
+            cd /tmp
+            git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+            cd ffmpeg
             
-            # Use Visual Studio Developer Command Prompt
-            cmd /c "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat && configure --prefix=../ffmpeg-install --toolchain=msvc --arch=x86_64 --enable-gpl --enable-static --disable-shared --disable-doc --disable-everything --enable-ffmpeg --disable-ffplay --disable-ffprobe --disable-autodetect --enable-demuxer=h264,hevc,matroska,webm --enable-muxer=mpegts,matroska,webm --enable-parser=h264,hevc --enable-protocol=file --enable-avcodec --enable-avformat --enable-avutil --enable-swresample --enable-swscale"
+            # Configure for minimal WebM to image conversion build
+            ./configure \
+              --prefix=/tmp/ffmpeg-install \
+              --toolchain=mingw \
+              --arch=x86_64 \
+              --target-os=mingw32 \
+              --enable-gpl \
+              --enable-static \
+              --disable-shared \
+              --disable-doc \
+              --disable-everything \
+              --enable-ffmpeg \
+              --disable-ffplay \
+              --disable-ffprobe \
+              --disable-autodetect \
+              --enable-avcodec \
+              --enable-avformat \
+              --enable-avutil \
+              --enable-swscale \
+              --disable-swresample \
+              --enable-demuxer=matroska,webm \
+              --enable-decoder=vp8,vp9,av1 \
+              --enable-encoder=png,mjpeg \
+              --enable-muxer=image2 \
+              --enable-protocol=file \
+              --enable-filter=scale \
+              --disable-network \
+              --disable-debug \
+              --disable-postproc \
+              --disable-avdevice
             
-            cmd /c "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat && make -j2"
-            cmd /c "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat && make install"
-          }
+            # Build and install
+            make -j\$(nproc)
+            make install
+            
+            # Copy the built executable to a Windows-accessible location
+            cp /tmp/ffmpeg-install/bin/ffmpeg.exe /c/temp/ffmpeg-slim.exe
+          "
         shell: powershell
 
       - name: Copy slim ffmpeg.exe to dist_cpp and deployment
