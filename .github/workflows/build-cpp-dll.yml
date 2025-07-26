@@ -750,6 +750,7 @@ jobs:
               exit 1
             }
           }
+      
       - name: Install MSYS2 and build tools for ffmpeg
         run: |
           choco install -y msys2
@@ -772,10 +773,18 @@ jobs:
           pacman -S --noconfirm git make yasm nasm pkgconf
           pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config mingw-w64-x86_64-nasm
           
+          # Set up environment
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig"
+          export PATH="/mingw64/bin:$PATH"
+          
           # Clone FFmpeg source
           cd /tmp
           git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
           cd ffmpeg
+          
+          # Check available options first
+          echo "Checking FFmpeg configure options..."
+          ./configure --help | grep -E "(demuxer|decoder|encoder|muxer)" | head -20
           
           # Configure for minimal WebM to image conversion build
           ./configure \
@@ -797,13 +806,43 @@ jobs:
             --enable-avutil \
             --enable-swscale \
             --enable-demuxer=matroska,webm \
-            --enable-decoder=vp8,vp9,av1,libvpx_vp8,libvpx_vp9 \
+            --enable-decoder=vp8,vp9 \
             --enable-encoder=png,mjpeg \
             --enable-muxer=image2 \
             --enable-protocol=file \
             --enable-filter=scale \
             --disable-network \
-            --disable-debug
+            --disable-debug || {
+              echo "Configure failed, checking config.log..."
+              if [ -f ffbuild/config.log ]; then
+                tail -50 ffbuild/config.log
+              fi
+              echo "Trying with even more minimal configuration..."
+              
+              # Fallback configuration - absolutely minimal
+              ./configure \
+                --prefix=/tmp/ffmpeg-install \
+                --toolchain=mingw \
+                --arch=x86_64 \
+                --target-os=mingw32 \
+                --enable-static \
+                --disable-shared \
+                --disable-doc \
+                --disable-everything \
+                --enable-ffmpeg \
+                --disable-ffplay \
+                --disable-ffprobe \
+                --enable-avcodec \
+                --enable-avformat \
+                --enable-avutil \
+                --enable-swscale \
+                --enable-demuxer=matroska \
+                --enable-decoder=vp8 \
+                --enable-encoder=png \
+                --enable-muxer=image2 \
+                --enable-protocol=file \
+                --enable-filter=scale
+            }
           
           # Build and install with error checking
           echo "Starting FFmpeg build..."
