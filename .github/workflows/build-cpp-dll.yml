@@ -762,71 +762,78 @@ jobs:
           # Create temp directory
           New-Item -ItemType Directory -Force -Path "C:\temp"
           
-          C:\tools\msys64\usr\bin\bash -lc "
-            # Update package database and install build dependencies
-            pacman -Sy --noconfirm
-            pacman -S --noconfirm git make yasm nasm pkgconf
-            pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config mingw-w64-x86_64-nasm
-            
-            # Clone FFmpeg source
-            cd /tmp
-            git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
-            cd ffmpeg
-            
-            # Configure for minimal WebM to image conversion build
-            ./configure \
-              --prefix=/tmp/ffmpeg-install \
-              --toolchain=mingw \
-              --arch=x86_64 \
-              --target-os=mingw32 \
-              --enable-gpl \
-              --enable-static \
-              --disable-shared \
-              --disable-doc \
-              --disable-everything \
-              --enable-ffmpeg \
-              --disable-ffplay \
-              --disable-ffprobe \
-              --disable-autodetect \
-              --enable-avcodec \
-              --enable-avformat \
-              --enable-avutil \
-              --enable-swscale \
-              --enable-demuxer=matroska,webm \
-              --enable-decoder=vp8,vp9,av1,libvpx_vp8,libvpx_vp9 \
-              --enable-encoder=png,mjpeg \
-              --enable-muxer=image2 \
-              --enable-protocol=file \
-              --enable-filter=scale \
-              --disable-network \
-              --disable-debug
-            
-            # Build and install with error checking
-            echo \"Starting FFmpeg build...\"
-            if ! make -j\$(nproc); then
-              echo \"Build failed, trying with single thread...\"
-              make clean
-              make -j1
-            fi
-            
-            if ! make install; then
-              echo \"Install failed\"
-              exit 1
-            fi
-            
-            # Verify installation and copy executable
-            if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
-              cp /tmp/ffmpeg-install/bin/ffmpeg.exe /c/temp/ffmpeg-slim.exe
-              echo \"FFmpeg successfully built and copied\"
-            elif [ -f /tmp/ffmpeg-install/bin/ffmpeg ]; then
-              cp /tmp/ffmpeg-install/bin/ffmpeg /c/temp/ffmpeg-slim.exe
-              echo \"FFmpeg successfully built and copied (without .exe extension)\"
-            else
-              echo \"FFmpeg executable not found after installation\"
-              ls -la /tmp/ffmpeg-install/bin/
-              exit 1
-            fi
-          "
+          # Create build script to avoid PowerShell escaping issues
+          @'
+          #!/bin/bash
+          set -e
+          
+          # Update package database and install build dependencies
+          pacman -Sy --noconfirm
+          pacman -S --noconfirm git make yasm nasm pkgconf
+          pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config mingw-w64-x86_64-nasm
+          
+          # Clone FFmpeg source
+          cd /tmp
+          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+          cd ffmpeg
+          
+          # Configure for minimal WebM to image conversion build
+          ./configure \
+            --prefix=/tmp/ffmpeg-install \
+            --toolchain=mingw \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --enable-gpl \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-demuxer=matroska,webm \
+            --enable-decoder=vp8,vp9,av1,libvpx_vp8,libvpx_vp9 \
+            --enable-encoder=png,mjpeg \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter=scale \
+            --disable-network \
+            --disable-debug
+          
+          # Build and install with error checking
+          echo "Starting FFmpeg build..."
+          if ! make -j$(nproc); then
+            echo "Build failed, trying with single thread..."
+            make clean
+            make -j1
+          fi
+          
+          if ! make install; then
+            echo "Install failed"
+            exit 1
+          fi
+          
+          # Verify installation and copy executable
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            cp /tmp/ffmpeg-install/bin/ffmpeg.exe /c/temp/ffmpeg-slim.exe
+            echo "FFmpeg successfully built and copied"
+          elif [ -f /tmp/ffmpeg-install/bin/ffmpeg ]; then
+            cp /tmp/ffmpeg-install/bin/ffmpeg /c/temp/ffmpeg-slim.exe
+            echo "FFmpeg successfully built and copied without .exe extension"
+          else
+            echo "FFmpeg executable not found after installation"
+            ls -la /tmp/ffmpeg-install/bin/
+            exit 1
+          fi
+          '@ | Out-File -FilePath "C:\temp\build_ffmpeg.sh" -Encoding UTF8
+          
+          # Execute the build script
+          C:\tools\msys64\usr\bin\bash -l "C:\temp\build_ffmpeg.sh"
         shell: powershell
 
       - name: Copy slim ffmpeg.exe to dist_cpp and deployment
