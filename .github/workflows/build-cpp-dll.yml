@@ -750,7 +750,6 @@ jobs:
               exit 1
             }
           }
-
       - name: Install MSYS2 and build tools for ffmpeg
         run: |
           choco install -y msys2
@@ -760,6 +759,9 @@ jobs:
   
       - name: Build slim ffmpeg for WebM to image conversion
         run: |
+          # Create temp directory
+          New-Item -ItemType Directory -Force -Path "C:\temp"
+          
           C:\tools\msys64\usr\bin\bash -lc "
             # Update package database and install build dependencies
             pacman -Sy --noconfirm
@@ -790,24 +792,40 @@ jobs:
               --enable-avformat \
               --enable-avutil \
               --enable-swscale \
-              --disable-swresample \
               --enable-demuxer=matroska,webm \
-              --enable-decoder=vp8,vp9,av1 \
+              --enable-decoder=vp8,vp9,av1,libvpx_vp8,libvpx_vp9 \
               --enable-encoder=png,mjpeg \
               --enable-muxer=image2 \
               --enable-protocol=file \
               --enable-filter=scale \
               --disable-network \
-              --disable-debug \
-              --disable-postproc \
-              --disable-avdevice
+              --disable-debug
             
-            # Build and install
-            make -j\$(nproc)
-            make install
+            # Build and install with error checking
+            echo \"Starting FFmpeg build...\"
+            if ! make -j\$(nproc); then
+              echo \"Build failed, trying with single thread...\"
+              make clean
+              make -j1
+            fi
             
-            # Copy the built executable to a Windows-accessible location
-            cp /tmp/ffmpeg-install/bin/ffmpeg.exe /c/temp/ffmpeg-slim.exe
+            if ! make install; then
+              echo \"Install failed\"
+              exit 1
+            fi
+            
+            # Verify installation and copy executable
+            if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+              cp /tmp/ffmpeg-install/bin/ffmpeg.exe /c/temp/ffmpeg-slim.exe
+              echo \"FFmpeg successfully built and copied\"
+            elif [ -f /tmp/ffmpeg-install/bin/ffmpeg ]; then
+              cp /tmp/ffmpeg-install/bin/ffmpeg /c/temp/ffmpeg-slim.exe
+              echo \"FFmpeg successfully built and copied (without .exe extension)\"
+            else
+              echo \"FFmpeg executable not found after installation\"
+              ls -la /tmp/ffmpeg-install/bin/
+              exit 1
+            fi
           "
         shell: powershell
 
