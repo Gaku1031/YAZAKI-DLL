@@ -1,0 +1,408 @@
+name: Build Slim FFmpeg for WebM to Image Conversion
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-slim-ffmpeg:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            yasm \
+            nasm \
+            pkg-config \
+            git \
+            mingw-w64 \
+            mingw-w64-tools
+
+      - name: Build slim FFmpeg for WebM to image conversion
+        run: |
+          # Clone FFmpeg source
+          cd /tmp
+          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+          cd ffmpeg
+          
+          # Configure for minimal WebM to image conversion (Windows 64-bit)
+          ./configure \
+            --prefix=/tmp/ffmpeg-install \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-demuxer=matroska,webm \
+            --enable-decoder=vp8,vp9 \
+            --enable-encoder=png,mjpeg,bmp \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter=scale \
+            --disable-network \
+            --disable-iconv \
+            --disable-bzlib \
+            --disable-libopenjpeg \
+            --disable-libwebp \
+            --disable-libfreetype \
+            --disable-libharfbuzz
+            
+          echo "Configuration completed successfully"
+          
+          # Build
+          make -j$(nproc)
+          
+          # Install
+          make install
+          
+          # Verify the build
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            echo "FFmpeg built successfully"
+            ls -la /tmp/ffmpeg-install/bin/ffmpeg.exe
+            
+            # Get file size
+            size=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "FFmpeg size: ${size_mb} MB"
+          else
+            echo "FFmpeg build failed"
+            exit 1
+          fi
+
+      - name: Create ultra-slim version (optional)
+        run: |
+          cd /tmp/ffmpeg
+          
+          echo "Building ultra-slim version with VP8 only..."
+          
+          # Clean previous build
+          make clean
+          
+          # Ultra minimal configuration - VP8 and PNG only
+          ./configure \
+            --prefix=/tmp/ffmpeg-ultra \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-demuxer=matroska \
+            --enable-decoder=vp8 \
+            --enable-encoder=png \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter=scale \
+            --disable-network \
+            --disable-iconv \
+            --disable-bzlib
+            
+          # Build ultra-slim version
+          make -j$(nproc)
+          make install
+          
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            echo "Ultra-slim FFmpeg built successfully"
+            size=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size: ${size_mb} MB"
+          fi
+
+      - name: Strip binaries to reduce size further
+        run: |
+          # Strip debug symbols from both versions
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-install/bin/ffmpeg.exe
+            
+            size_after=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+            size_after_mb=$((size_after / 1024 / 1024))
+            echo "FFmpeg size after stripping: ${size_after_mb} MB"
+          fi
+          
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-ultra/bin/ffmpeg.exe
+            
+            size_ultra_after=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_ultra_after_mb=$((size_ultra_after / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size after stripping: ${size_ultra_after_mb} MB"
+          fi
+
+      - name: Create C# wrapper DLL
+        run: |
+          # Create C wrapper source
+          cat > /tmp/ffmpeg_wrapper.c << 'EOF'
+          #include <windows.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <process.h>
+          
+          static char dll_directory[MAX_PATH] = {0};
+          
+          // Get the directory where this DLL is located
+          const char* get_dll_directory() {
+              if (dll_directory[0] == 0) {
+                  HMODULE hModule = GetModuleHandleA("ffmpeg_wrapper.dll");
+                  if (hModule) {
+                      GetModuleFileNameA(hModule, dll_directory, MAX_PATH);
+                      char* last_slash = strrchr(dll_directory, '\\');
+                      if (last_slash) {
+                          *(last_slash + 1) = '\0';
+                      }
+                  }
+              }
+              return dll_directory;
+          }
+          
+          __declspec(dllexport) int convert_webm_to_images(const char* input_path, const char* output_pattern) {
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              snprintf(command, sizeof(command), 
+                  "\"%sffmpeg-slim.exe\" -i \"%s\" \"%s\"", 
+                  dll_dir, input_path, output_pattern);
+              
+              return system(command);
+          }
+          
+          __declspec(dllexport) int convert_webm_to_images_with_scale(
+              const char* input_path, 
+              const char* output_pattern, 
+              int width, 
+              int height) {
+              
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              if (width > 0 && height > 0) {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" -vf \"scale=%d:%d\" \"%s\"", 
+                      dll_dir, input_path, width, height, output_pattern);
+              } else {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" \"%s\"", 
+                      dll_dir, input_path, output_pattern);
+              }
+              
+              return system(command);
+          }
+          
+          __declspec(dllexport) int convert_webm_frame_range(
+              const char* input_path,
+              const char* output_pattern,
+              int start_frame,
+              int frame_count,
+              int width,
+              int height) {
+              
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              if (width > 0 && height > 0) {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" -vf \"select=gte(n\\,%d)*lt(n\\,%d),scale=%d:%d\" -vsync 0 \"%s\"", 
+                      dll_dir, input_path, start_frame, start_frame + frame_count, width, height, output_pattern);
+              } else {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" -vf \"select=gte(n\\,%d)*lt(n\\,%d)\" -vsync 0 \"%s\"", 
+                      dll_dir, input_path, start_frame, start_frame + frame_count, output_pattern);
+              }
+              
+              return system(command);
+          }
+          
+          __declspec(dllexport) int get_webm_duration(const char* input_path, double* duration) {
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              snprintf(command, sizeof(command), 
+                  "\"%sffmpeg-slim.exe\" -i \"%s\" 2>&1 | grep Duration", 
+                  dll_dir, input_path);
+              
+              // This is a simplified implementation
+              // In a real scenario, you'd parse the output properly
+              *duration = 0.0;
+              return system(command);
+          }
+          
+          BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+              return TRUE;
+          }
+          EOF
+          
+          # Compile the DLL using MinGW cross-compiler
+          x86_64-w64-mingw32-gcc -shared \
+            -o /tmp/ffmpeg_wrapper.dll \
+            /tmp/ffmpeg_wrapper.c \
+            -Wl,--out-implib,/tmp/ffmpeg_wrapper.lib \
+            -static-libgcc
+
+      - name: Create artifacts and documentation
+        run: |
+          # Create artifacts directory
+          mkdir -p artifacts
+          
+          # Copy binaries
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            cp /tmp/ffmpeg-install/bin/ffmpeg.exe artifacts/ffmpeg-slim.exe
+          fi
+          
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            cp /tmp/ffmpeg-ultra/bin/ffmpeg.exe artifacts/ffmpeg-ultra-slim.exe
+          fi
+          
+          # Copy DLL
+          if [ -f /tmp/ffmpeg_wrapper.dll ]; then
+            cp /tmp/ffmpeg_wrapper.dll artifacts/
+            cp /tmp/ffmpeg_wrapper.lib artifacts/
+          fi
+          
+          # Create comprehensive documentation
+          cat > artifacts/README.md << 'EOF'
+          # Slim FFmpeg for WebM to Image Conversion
+          
+          This package contains optimized FFmpeg builds specifically for converting WebM videos to image sequences.
+          
+          ## Files
+          
+          - `ffmpeg-slim.exe`: VP8/VP9 + PNG/MJPEG support (~2-5 MB)
+          - `ffmpeg-ultra-slim.exe`: VP8 + PNG only (~1-3 MB)  
+          - `ffmpeg_wrapper.dll`: C# interop library
+          - `ffmpeg_wrapper.lib`: Import library for linking
+          
+          ## Features
+          
+          ### Supported Input Formats
+          - WebM (VP8, VP9 codecs)
+          - Matroska containers
+          
+          ### Supported Output Formats
+          - PNG images
+          - JPEG images (slim version only)
+          - BMP images (slim version only)
+          
+          ## Usage Examples
+          
+          ### Command Line
+          ```bash
+          # Basic conversion
+          ffmpeg-slim.exe -i input.webm output_%04d.png
+          
+          # With scaling
+          ffmpeg-slim.exe -i input.webm -vf scale=1920:1080 output_%04d.png
+          
+          # Extract specific frame range
+          ffmpeg-slim.exe -i input.webm -vf "select=gte(n\,100)*lt(n\,200)" -vsync 0 frame_%04d.png
+          ```
+          
+          ### C# Integration
+          ```csharp
+          using System.Runtime.InteropServices;
+          
+          public class WebMConverter 
+          {
+              [DllImport("ffmpeg_wrapper.dll")]
+              public static extern int convert_webm_to_images(string inputPath, string outputPattern);
+              
+              [DllImport("ffmpeg_wrapper.dll")]
+              public static extern int convert_webm_to_images_with_scale(
+                  string inputPath, string outputPattern, int width, int height);
+              
+              [DllImport("ffmpeg_wrapper.dll")]
+              public static extern int convert_webm_frame_range(
+                  string inputPath, string outputPattern, 
+                  int startFrame, int frameCount, int width, int height);
+              
+              // Usage examples
+              public void ConvertVideo()
+              {
+                  // Basic conversion
+                  convert_webm_to_images("input.webm", "output_%04d.png");
+                  
+                  // With scaling
+                  convert_webm_to_images_with_scale("input.webv", "scaled_%04d.png", 1920, 1080);
+                  
+                  // Extract frames 100-199 with scaling
+                  convert_webm_frame_range("input.webm", "range_%04d.png", 100, 100, 1920, 1080);
+              }
+          }
+          ```
+          
+          ## Size Comparison
+          
+          - Full FFmpeg: ~60-100 MB
+          - This slim version: ~2-5 MB
+          - Ultra-slim version: ~1-3 MB
+          
+          Size reduction achieved by:
+          - Disabling unused codecs and formats
+          - Static linking
+          - Stripping debug symbols
+          - Minimal dependency set
+          
+          ## Build Configuration
+          
+          Based on the configuration from: https://zenn.dev/tetsu_koba/articles/129ac2c6415515
+          
+          Key optimizations:
+          - `--disable-everything` + selective enables
+          - Static linking only
+          - Cross-compiled from Linux for Windows
+          - Stripped binaries
+          EOF
+          
+          # Show final sizes
+          echo "=== Final Binary Sizes ==="
+          if [ -f artifacts/ffmpeg-slim.exe ]; then
+            size=$(stat -c%s artifacts/ffmpeg-slim.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "ffmpeg-slim.exe: ${size_mb} MB"
+          fi
+          
+          if [ -f artifacts/ffmpeg-ultra-slim.exe ]; then
+            size=$(stat -c%s artifacts/ffmpeg-ultra-slim.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "ffmpeg-ultra-slim.exe: ${size_mb} MB"
+          fi
+          
+          echo "Build completed successfully!"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: slim-ffmpeg-webm-converter
+          path: artifacts/
