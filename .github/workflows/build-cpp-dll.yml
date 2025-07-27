@@ -1,4 +1,4 @@
-name: Build C++ Blood Pressure DLL
+name: Build C++ Blood Pressure DLL with Performance Testing
 
 on:
   push:
@@ -32,6 +32,7 @@ env:
 jobs:
   build-cpp-dll:
     runs-on: windows-latest
+    name: Build and Test Blood Pressure DLL with Performance Metrics
 
     steps:
       - name: Checkout repository
@@ -1125,6 +1126,46 @@ jobs:
           Write-Host "=== Integration Test Output ===" -ForegroundColor Cyan
           $testOutput | ForEach-Object { Write-Host $_ }
 
+          # Extract and display performance metrics
+          Write-Host "=== PERFORMANCE METRICS SUMMARY ===" -ForegroundColor Green
+          $performanceLogs = Get-ChildItem -Path "." -Filter "performance_log_*.txt" | Sort-Object LastWriteTime -Descending
+          if ($performanceLogs.Count -gt 0) {
+            $latestLog = $performanceLogs[0]
+            Write-Host "Latest performance log: $($latestLog.Name)" -ForegroundColor Cyan
+            $logContent = Get-Content $latestLog.FullName -Encoding UTF8
+            $logContent | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
+            
+            # Extract key metrics for CI summary
+            $totalTimeLine = $logContent | Where-Object { $_ -match "Total Time:" }
+            $initTimeLine = $logContent | Where-Object { $_ -match "Initialization Time:" }
+            $conversionTimeLine = $logContent | Where-Object { $_ -match "Video Conversion Time:" }
+            $analysisTimeLine = $logContent | Where-Object { $_ -match "Blood Pressure Analysis Time:" }
+            $successLine = $logContent | Where-Object { $_ -match "Success:" }
+            
+            Write-Host "=== CI PERFORMANCE SUMMARY ===" -ForegroundColor Yellow
+            if ($successLine) { Write-Host $successLine -ForegroundColor $(if ($successLine -match "True") { "Green" } else { "Red" }) }
+            if ($totalTimeLine) { Write-Host $totalTimeLine -ForegroundColor $(if ($totalTimeLine -match "(\d+\.\d+) ms" -and [double]$matches[1] -le 3000) { "Green" } else { "Red" }) }
+            if ($initTimeLine) { Write-Host $initTimeLine -ForegroundColor Cyan }
+            if ($conversionTimeLine) { Write-Host $conversionTimeLine -ForegroundColor Cyan }
+            if ($analysisTimeLine) { Write-Host $analysisTimeLine -ForegroundColor Cyan }
+            
+            # Performance evaluation
+            if ($totalTimeLine -match "(\d+\.\d+) ms") {
+              $actualTime = [double]$matches[1]
+              $targetTime = 3000.0
+              if ($actualTime -le $targetTime) {
+                Write-Host "PERFORMANCE: Target achieved (≤3 seconds)" -ForegroundColor Green
+                Write-Host "Performance: $([math]::Round($targetTime / $actualTime * 100, 1))% of target" -ForegroundColor Green
+              } else {
+                Write-Host "PERFORMANCE: Target exceeded (>3 seconds)" -ForegroundColor Red
+                $overTime = $actualTime - $targetTime
+                Write-Host "Over time: $([math]::Round($overTime, 0)) ms ($([math]::Round($overTime / $targetTime * 100, 1))% over)" -ForegroundColor Red
+              }
+            }
+          } else {
+            Write-Host "No performance logs found" -ForegroundColor Yellow
+          }
+
           # Check for test results
           $csvFiles = Get-ChildItem -Path "." -Filter "bp_result_*.csv" | Sort-Object LastWriteTime -Descending
           if ($csvFiles.Count -gt 0) {
@@ -1197,6 +1238,71 @@ jobs:
 
           Write-Host "Integration test passed" -ForegroundColor Green
           Write-Host "Test results saved to test-results/" -ForegroundColor Green
+
+          # Additional performance analysis
+          Write-Host "=== ADDITIONAL PERFORMANCE ANALYSIS ===" -ForegroundColor Yellow
+
+          # Check if performance target was met
+          $performanceLogs = Get-ChildItem -Path "." -Filter "performance_log_*.txt" | Sort-Object LastWriteTime -Descending
+          if ($performanceLogs.Count -gt 0) {
+            $latestLog = $performanceLogs[0]
+            $logContent = Get-Content $latestLog.FullName -Encoding UTF8
+            
+            # Extract total time
+            $totalTimeLine = $logContent | Where-Object { $_ -match "Total Time:" }
+            if ($totalTimeLine -match "(\d+\.\d+) ms") {
+              $actualTime = [double]$matches[1]
+              $targetTime = 3000.0
+              
+              Write-Host "Performance Analysis:" -ForegroundColor Cyan
+              Write-Host "  Target Time: $targetTime ms (3 seconds)" -ForegroundColor Cyan
+              Write-Host "  Actual Time: $actualTime ms" -ForegroundColor Cyan
+              
+              if ($actualTime -le $targetTime) {
+                Write-Host "  Status: TARGET ACHIEVED" -ForegroundColor Green
+                Write-Host "  Performance: $([math]::Round($targetTime / $actualTime * 100, 1))% of target" -ForegroundColor Green
+              } else {
+                Write-Host "  Status: TARGET EXCEEDED" -ForegroundColor Red
+                $overTime = $actualTime - $targetTime
+                Write-Host "  Over Time: $([math]::Round($overTime, 0)) ms ($([math]::Round($overTime / $targetTime * 100, 1))% over)" -ForegroundColor Red
+                
+                # Provide recommendations
+                Write-Host "  Recommendations:" -ForegroundColor Yellow
+                if ($actualTime -gt 60000) {
+                  Write-Host "    - Processing time is over 1 minute, significant optimization needed" -ForegroundColor Red
+                } elseif ($actualTime -gt 30000) {
+                  Write-Host "    - Processing time is over 30 seconds, optimization recommended" -ForegroundColor Yellow
+                } elseif ($actualTime -gt 10000) {
+                  Write-Host "    - Processing time is over 10 seconds, minor optimization may help" -ForegroundColor Yellow
+                }
+              }
+              
+              # Extract component times for detailed analysis
+              $initTimeLine = $logContent | Where-Object { $_ -match "Initialization Time:" }
+              $conversionTimeLine = $logContent | Where-Object { $_ -match "Video Conversion Time:" }
+              $analysisTimeLine = $logContent | Where-Object { $_ -match "Blood Pressure Analysis Time:" }
+              
+              if ($initTimeLine -match "(\d+\.\d+) ms") {
+                $initTime = [double]$matches[1]
+                $initPercent = ($initTime / $actualTime) * 100
+                Write-Host "  Initialization: $initTime ms ($([math]::Round($initPercent, 1))%)" -ForegroundColor Cyan
+              }
+              
+              if ($conversionTimeLine -match "(\d+\.\d+) ms") {
+                $conversionTime = [double]$matches[1]
+                $conversionPercent = ($conversionTime / $actualTime) * 100
+                Write-Host "  Video Conversion: $conversionTime ms ($([math]::Round($conversionPercent, 1))%)" -ForegroundColor Cyan
+              }
+              
+              if ($analysisTimeLine -match "(\d+\.\d+) ms") {
+                $analysisTime = [double]$matches[1]
+                $analysisPercent = ($analysisTime / $actualTime) * 100
+                Write-Host "  Blood Pressure Analysis: $analysisTime ms ($([math]::Round($analysisPercent, 1))%)" -ForegroundColor Cyan
+              }
+            }
+          } else {
+            Write-Host "No performance logs found for detailed analysis" -ForegroundColor Yellow
+          }
         shell: powershell
 
       - name: Package Complete Distribution
@@ -1528,6 +1634,14 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+      - name: Upload Performance Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: BloodPressureDLL-PerformanceLogs-${{ env.BUILD_TYPE }}-${{ github.sha }}
+          path: CppBloodPressureDLL/test/performance_log_*.txt
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Upload Build Logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -1560,4 +1674,89 @@ jobs:
           } else {
             Write-Host "opencv_face_detector_uint8.pb not found"
           }
+        shell: powershell
+
+      - name: Final Performance Summary
+        run: |
+          Write-Host "=== FINAL PERFORMANCE SUMMARY ===" -ForegroundColor Green
+          Write-Host "Blood Pressure Estimation Performance Test Results" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+
+          $performanceLogs = Get-ChildItem -Path "CppBloodPressureDLL/test" -Filter "performance_log_*.txt" | Sort-Object LastWriteTime -Descending
+          if ($performanceLogs.Count -gt 0) {
+            $latestLog = $performanceLogs[0]
+            Write-Host "Latest Performance Log: $($latestLog.Name)" -ForegroundColor Yellow
+            
+            $logContent = Get-Content $latestLog.FullName -Encoding UTF8
+            
+            # Extract key metrics
+            $successLine = $logContent | Where-Object { $_ -match "Success:" }
+            $totalTimeLine = $logContent | Where-Object { $_ -match "Total Time:" }
+            $initTimeLine = $logContent | Where-Object { $_ -match "Initialization Time:" }
+            $conversionTimeLine = $logContent | Where-Object { $_ -match "Video Conversion Time:" }
+            $analysisTimeLine = $logContent | Where-Object { $_ -match "Blood Pressure Analysis Time:" }
+            $frameCountLine = $logContent | Where-Object { $_ -match "Frame Count:" }
+            $videoSizeLine = $logContent | Where-Object { $_ -match "Video File Size:" }
+            
+            Write-Host "Key Metrics:" -ForegroundColor Yellow
+            if ($successLine) { Write-Host "  $successLine" -ForegroundColor $(if ($successLine -match "True") { "Green" } else { "Red" }) }
+            if ($totalTimeLine) { Write-Host "  $totalTimeLine" -ForegroundColor $(if ($totalTimeLine -match "(\d+\.\d+) ms" -and [double]$matches[1] -le 3000) { "Green" } else { "Red" }) }
+            if ($initTimeLine) { Write-Host "  $initTimeLine" -ForegroundColor Cyan }
+            if ($conversionTimeLine) { Write-Host "  $conversionTimeLine" -ForegroundColor Cyan }
+            if ($analysisTimeLine) { Write-Host "  $analysisTimeLine" -ForegroundColor Cyan }
+            if ($frameCountLine) { Write-Host "  $frameCountLine" -ForegroundColor Cyan }
+            if ($videoSizeLine) { Write-Host "  $videoSizeLine" -ForegroundColor Cyan }
+            
+            # Performance evaluation
+            if ($totalTimeLine -match "(\d+\.\d+) ms") {
+              $actualTime = [double]$matches[1]
+              $targetTime = 3000.0
+              
+              Write-Host "Performance Evaluation:" -ForegroundColor Yellow
+              Write-Host "  Target: ≤$targetTime ms (3 seconds)" -ForegroundColor Cyan
+              Write-Host "  Actual: $actualTime ms" -ForegroundColor Cyan
+              
+              if ($actualTime -le $targetTime) {
+                Write-Host "  Result: TARGET ACHIEVED" -ForegroundColor Green
+                $performance = ($targetTime / $actualTime) * 100
+                Write-Host "  Performance: $([math]::Round($performance, 1))% of target" -ForegroundColor Green
+              } else {
+                Write-Host "  Result: TARGET EXCEEDED" -ForegroundColor Red
+                $overTime = $actualTime - $targetTime
+                $overPercent = ($overTime / $targetTime) * 100
+                Write-Host "  Over Time: $([math]::Round($overTime, 0)) ms ($([math]::Round($overPercent, 1))% over)" -ForegroundColor Red
+                
+                # Severity assessment
+                if ($actualTime -gt 60000) {
+                  Write-Host "  Severity: CRITICAL - Over 1 minute" -ForegroundColor Red
+                } elseif ($actualTime -gt 30000) {
+                  Write-Host "  Severity: HIGH - Over 30 seconds" -ForegroundColor Yellow
+                } elseif ($actualTime -gt 10000) {
+                  Write-Host "  Severity: MEDIUM - Over 10 seconds" -ForegroundColor Yellow
+                } else {
+                  Write-Host "  Severity: LOW - Minor optimization needed" -ForegroundColor Green
+                }
+              }
+              
+              # Bottleneck analysis
+              Write-Host "Bottleneck Analysis:" -ForegroundColor Yellow
+              $times = @()
+              if ($initTimeLine -match "(\d+\.\d+) ms") { $times += @{Name="Initialization"; Time=[double]$matches[1]} }
+              if ($conversionTimeLine -match "(\d+\.\d+) ms") { $times += @{Name="Video Conversion"; Time=[double]$matches[1]} }
+              if ($analysisTimeLine -match "(\d+\.\d+) ms") { $times += @{Name="Blood Pressure Analysis"; Time=[double]$matches[1]} }
+              
+              if ($times.Count -gt 0) {
+                $maxTime = ($times | Sort-Object Time -Descending)[0]
+                $maxPercent = ($maxTime.Time / $actualTime) * 100
+                Write-Host "  Primary Bottleneck: $($maxTime.Name) ($($maxTime.Time) ms, $([math]::Round($maxPercent, 1))%)" -ForegroundColor Cyan
+              }
+            }
+            
+            Write-Host "Performance logs saved as artifacts for detailed analysis" -ForegroundColor Green
+          } else {
+            Write-Host "No performance logs found" -ForegroundColor Red
+            Write-Host "Performance measurement may have failed" -ForegroundColor Red
+          }
+
+          Write-Host "=== END OF PERFORMANCE SUMMARY ===" -ForegroundColor Green
         shell: powershell
