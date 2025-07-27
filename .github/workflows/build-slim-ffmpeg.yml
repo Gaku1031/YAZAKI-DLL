@@ -104,6 +104,9 @@ jobs:
 
       - name: Verify codec support and create test
         run: |
+          # Create artifacts directory first
+          mkdir -p artifacts
+          
           # Create a simple test script that can be run with the ffmpeg
           cat > /tmp/test_ffmpeg.sh << 'EOF'
           #!/bin/bash
@@ -309,7 +312,7 @@ jobs:
 
       - name: Create artifacts and documentation
         run: |
-          # Create artifacts directory
+          # Create artifacts directory (ensure it exists)
           mkdir -p artifacts
           
           # Copy binaries
