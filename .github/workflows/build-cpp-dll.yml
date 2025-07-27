@@ -835,10 +835,10 @@ jobs:
           foreach ($codec in $requiredCodecs) {
             if ($codecTest -match $codec) {
               $supportedCodecs += $codec
-              Write-Host "  ✓ $codec supported" -ForegroundColor Green
+              Write-Host "  $codec supported" -ForegroundColor Green
             } else {
               $missingCodecs += $codec
-              Write-Host "  ✗ $codec NOT supported" -ForegroundColor Red
+              Write-Host "  $codec NOT supported" -ForegroundColor Red
             }
           }
 
