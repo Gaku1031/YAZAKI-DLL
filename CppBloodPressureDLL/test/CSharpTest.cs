@@ -71,11 +71,8 @@ namespace BloodPressureDllTest
         }
 
         // コールバック関数の実装
-        public static void TestCallback(IntPtr requestIdPtr, int maxBP, int minBP, IntPtr csvDataPtr, IntPtr errorsJsonPtr)
+        public static void TestCallback(string requestId, int maxBP, int minBP, string csvData, string errorsJson)
         {
-            string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
-            string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
-            string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
             Console.WriteLine("=== 血圧解析結果 ===");
             Console.WriteLine($"Request ID: {requestId}");
             Console.WriteLine($"最高血圧: {maxBP} mmHg");
@@ -200,19 +197,51 @@ namespace BloodPressureDllTest
                 var initStopwatch = Stopwatch.StartNew();
                 
                 Console.WriteLine("   DLL初期化を試行中...");
-                var sb = new StringBuilder(256);
+                var sb = new StringBuilder(1024); // バッファサイズを大きくする
                 int initResult = InitializeBP(sb, sb.Capacity, "models");
                 initStopwatch.Stop();
                 metrics.InitializationTime = initStopwatch.Elapsed;
                 
                 Console.WriteLine($"   初期化結果: {initResult}");
                 Console.WriteLine($"   初期化時間: {metrics.InitializationTime.TotalMilliseconds:F2} ms");
+                Console.WriteLine($"   初期化メッセージ: '{sb.ToString()}'");
                 
-                if (initResult != 1)
+                if (initResult != 0)
                 {
                     metrics.IsSuccess = false;
-                    metrics.ErrorMessage = "DLL初期化失敗";
-                    Console.WriteLine("   [ERROR] DLL初期化失敗");
+                    metrics.ErrorMessage = $"DLL初期化失敗: {sb.ToString()}";
+                    Console.WriteLine($"   [ERROR] DLL初期化失敗: {sb.ToString()}");
+                    
+                    // 追加のデバッグ情報
+                    Console.WriteLine("   [DEBUG] 追加デバッグ情報:");
+                    Console.WriteLine($"   - カレントディレクトリ: {Environment.CurrentDirectory}");
+                    Console.WriteLine($"   - Modelsディレクトリ存在: {Directory.Exists("models")}");
+                    if (Directory.Exists("models"))
+                    {
+                        var modelFiles = Directory.GetFiles("models", "*", SearchOption.AllDirectories);
+                        Console.WriteLine($"   - Modelsディレクトリ内ファイル数: {modelFiles.Length}");
+                        foreach (var file in modelFiles)
+                        {
+                            var fileInfo = new FileInfo(file);
+                            var relativePath = file.Replace(Environment.CurrentDirectory, "").TrimStart('\\');
+                            Console.WriteLine($"     {relativePath} ({fileInfo.Length / 1024.0:F2} KB)");
+                        }
+                    }
+                    
+                    // 依存DLLのチェック
+                    string[] requiredDlls = { "opencv_world480.dll", "onnxruntime.dll", "zlib.dll" };
+                    Console.WriteLine("   - 依存DLLチェック:");
+                    foreach (var dll in requiredDlls)
+                    {
+                        bool exists = File.Exists(dll);
+                        Console.WriteLine($"     {dll}: {(exists ? "FOUND" : "NOT FOUND")}");
+                        if (exists)
+                        {
+                            var dllInfo = new FileInfo(dll);
+                            Console.WriteLine($"       Size: {dllInfo.Length / 1024.0:F2} KB");
+                        }
+                    }
+                    
                     return metrics;
                 }
                 
