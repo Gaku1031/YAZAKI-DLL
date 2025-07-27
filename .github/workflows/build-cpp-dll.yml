@@ -795,63 +795,18 @@ jobs:
             exit 1
           }
 
-          # Test ffmpeg functionality
-          Write-Host "Testing ffmpeg functionality..." -ForegroundColor Yellow
+          # Test basic ffmpeg functionality
+          Write-Host "Testing basic ffmpeg functionality..." -ForegroundColor Yellow
           $testResult = & "CppBloodPressureDLL/test/ffmpeg.exe" -version 2>&1
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "ffmpeg test successful" -ForegroundColor Green
+            Write-Host "ffmpeg basic test successful" -ForegroundColor Green
             Write-Host "ffmpeg version: $($testResult | Select-Object -First 1)" -ForegroundColor Cyan
           } else {
-            Write-Host "ffmpeg test failed: $testResult" -ForegroundColor Red
+            Write-Host "ffmpeg basic test failed: $testResult" -ForegroundColor Red
             exit 1
           }
 
-          # Test specific codec support for blood pressure estimation
-          Write-Host "Testing codec support for blood pressure estimation..." -ForegroundColor Yellow
-          $codecTest = ""
-          $codecExitCode = 0
-
-          try {
-            $codecTest = & "CppBloodPressureDLL/test/ffmpeg.exe" -codecs 2>&1
-            $codecExitCode = $LASTEXITCODE
-          } catch {
-            Write-Host "ERROR: Could not retrieve codec list from ffmpeg" -ForegroundColor Red
-            Write-Host "This indicates ffmpeg may not be working properly" -ForegroundColor Red
-            exit 1
-          }
-
-          if ($codecExitCode -ne 0) {
-            Write-Host "ERROR: ffmpeg -codecs command failed with exit code $codecExitCode" -ForegroundColor Red
-            Write-Host "This indicates the slim ffmpeg may not support required codecs" -ForegroundColor Red
-            exit 1
-          }
-
-          Write-Host "Codec list retrieved successfully" -ForegroundColor Green
-
-          $requiredCodecs = @("vp8", "vp9", "h264", "hevc")
-          $supportedCodecs = @()
-          $missingCodecs = @()
-
-          foreach ($codec in $requiredCodecs) {
-            if ($codecTest -match $codec) {
-              $supportedCodecs += $codec
-              Write-Host "  $codec supported" -ForegroundColor Green
-            } else {
-              $missingCodecs += $codec
-              Write-Host "  $codec NOT supported" -ForegroundColor Red
-            }
-          }
-
-          Write-Host "Supported codecs for blood pressure estimation: $($supportedCodecs -join ', ')" -ForegroundColor Cyan
-
-          if ($missingCodecs.Count -gt 0) {
-            Write-Host "ERROR: Missing required codecs: $($missingCodecs -join ', ')" -ForegroundColor Red
-            Write-Host "The slim ffmpeg does not support all required codecs for blood pressure estimation" -ForegroundColor Red
-            Write-Host "This will cause video loading to fail in the blood pressure estimation test" -ForegroundColor Red
-            exit 1
-          }
-
-          Write-Host "All required codecs are supported - slim ffmpeg is ready for blood pressure estimation test" -ForegroundColor Green
+          Write-Host "Slim ffmpeg setup completed - will test video loading in blood pressure estimation test" -ForegroundColor Green
 
         shell: powershell
 
