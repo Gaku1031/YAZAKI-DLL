@@ -1,10 +1,10 @@
 name: Build Slim FFmpeg for WebM to Image Conversion
 
 on:
-  # push:
-  #   branches: [ main, develop ]
-  # pull_request:
-  #   branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
   workflow_dispatch:
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
           cd ffmpeg
           
-          # Configure for minimal WebM to image conversion (Windows 64-bit)
+          # Configure for blood pressure estimation (VP9 to JPEG conversion)
           ./configure \
             --prefix=/tmp/ffmpeg-install \
             --arch=x86_64 \
@@ -56,13 +56,13 @@ jobs:
             --enable-avutil \
             --enable-swscale \
             --enable-avfilter \
-            --enable-demuxer=matroska,webm,ogg \
-            --enable-decoder=vp8,vp9,theora,opus,vorbis \
-            --enable-encoder=png,mjpeg,bmp \
+            --enable-demuxer=matroska,webm,mov,mp4 \
+            --enable-decoder=vp9,h264 \
+            --enable-encoder=mjpeg \
             --enable-muxer=image2 \
             --enable-protocol=file \
             --enable-filter=scale,fps,select \
-            --enable-parser=vp8,vp9 \
+            --enable-parser=vp9,h264 \
             --disable-network \
             --disable-iconv \
             --disable-bzlib \
@@ -117,12 +117,12 @@ jobs:
           # ./ffmpeg-slim.exe -codecs | grep -E "(vp8|vp9|png|webm|matroska)"
           # ./ffmpeg-slim.exe -formats | grep -E "(webm|matroska|image2)"
           
-          echo "To test codec support on Windows, run:"
-          echo "ffmpeg-slim.exe -codecs | findstr \"vp8 vp9 png\""
-          echo "ffmpeg-slim.exe -formats | findstr \"webm matroska image2\""
+          echo "To test blood pressure estimation support on Windows, run:"
+          echo "ffmpeg-ultra-slim.exe -i blood_pressure_video.webm frame_%05d.jpg"
+          echo "ffmpeg-ultra-slim.exe -version"
           echo ""
-          echo "Example usage:"
-          echo "ffmpeg-slim.exe -i input.webm output_%04d.png"
+          echo "Expected video format: VP9 codec in WebM container"
+          echo "Output format: JPEG images for blood pressure analysis"
           EOF
           
           chmod +x /tmp/test_ffmpeg.sh
@@ -137,7 +137,7 @@ jobs:
           # Clean previous build
           make clean
           
-          # Ultra minimal configuration - VP8 and PNG only
+          # Ultra minimal configuration - VP9 to JPEG only (for blood pressure estimation)
           ./configure \
             --prefix=/tmp/ffmpeg-ultra \
             --arch=x86_64 \
@@ -159,13 +159,13 @@ jobs:
             --enable-avutil \
             --enable-swscale \
             --enable-avfilter \
-            --enable-demuxer=matroska \
-            --enable-decoder=vp8 \
-            --enable-encoder=png \
+            --enable-demuxer=matroska,webm \
+            --enable-decoder=vp9 \
+            --enable-encoder=mjpeg \
             --enable-muxer=image2 \
             --enable-protocol=file \
             --enable-filter=scale,select \
-            --enable-parser=vp8 \
+            --enable-parser=vp9 \
             --disable-network \
             --disable-iconv \
             --disable-bzlib
@@ -315,7 +315,7 @@ jobs:
           # Create artifacts directory (ensure it exists)
           mkdir -p artifacts
           
-          # Copy binaries
+          # Copy binaries (no ffprobe needed)
           if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
             cp /tmp/ffmpeg-install/bin/ffmpeg.exe artifacts/ffmpeg-slim.exe
           fi
@@ -332,47 +332,46 @@ jobs:
           
           # Create comprehensive documentation
           cat > artifacts/README.md << 'EOF'
-          # Slim FFmpeg for WebM to Image Conversion
+          # Slim FFmpeg for Blood Pressure Estimation
           
-          This package contains optimized FFmpeg builds specifically for converting WebM videos to image sequences.
+          This package contains optimized FFmpeg builds specifically for blood pressure estimation from video.
           
           ## Files
           
-          - `ffmpeg-slim.exe`: VP8/VP9 + PNG/MJPEG support (~2-5 MB)
-          - `ffmpeg-ultra-slim.exe`: VP8 + PNG only (~1-3 MB)  
+          - `ffmpeg-slim.exe`: VP9/H264 + JPEG support (~2-4 MB)
+          - `ffmpeg-ultra-slim.exe`: VP9 + JPEG only (~1-2 MB)  
           - `ffmpeg_wrapper.dll`: C# interop library
           - `ffmpeg_wrapper.lib`: Import library for linking
           
           ## Features
           
           ### Supported Input Formats
-          - WebM (VP8, VP9 codecs)
+          - WebM (VP9 codec) - Primary target for blood pressure estimation
+          - MP4/MOV (H264 codec) - Additional support in slim version
           - Matroska containers
           
           ### Supported Output Formats
-          - PNG images
-          - JPEG images (slim version only)
-          - BMP images (slim version only)
+          - JPEG images (.jpg) - Primary format for blood pressure estimation
           
           ## Usage Examples
           
           ### Command Line
           ```bash
-          # Basic conversion
-          ffmpeg-slim.exe -i input.webm output_%04d.png
+          # Blood pressure estimation - VP9 WebM to JPEG frames
+          ffmpeg-ultra-slim.exe -i input.webm frame_%05d.jpg
           
-          # With scaling
-          ffmpeg-slim.exe -i input.webm -vf scale=1920:1080 output_%04d.png
+          # With scaling for blood pressure analysis
+          ffmpeg-ultra-slim.exe -i input.webm -vf scale=640:480 frame_%05d.jpg
           
-          # Extract specific frame range
-          ffmpeg-slim.exe -i input.webm -vf "select=gte(n\,100)*lt(n\,200)" -vsync 0 frame_%04d.png
+          # Extract specific time range for analysis
+          ffmpeg-ultra-slim.exe -i input.webm -ss 00:00:10 -t 00:00:05 frame_%05d.jpg
           ```
           
-          ### C# Integration
+          ### C# Integration for Blood Pressure Estimation
           ```csharp
           using System.Runtime.InteropServices;
           
-          public class WebMConverter 
+          public class BloodPressureVideoProcessor 
           {
               [DllImport("ffmpeg_wrapper.dll")]
               public static extern int convert_webm_to_images(string inputPath, string outputPattern);
@@ -386,42 +385,51 @@ jobs:
                   string inputPath, string outputPattern, 
                   int startFrame, int frameCount, int width, int height);
               
-              // Usage examples
-              public void ConvertVideo()
+              // Usage for blood pressure estimation
+              public void ProcessBloodPressureVideo()
               {
-                  // Basic conversion
-                  convert_webm_to_images("input.webm", "output_%04d.png");
+                  // Convert VP9 WebM to JPEG frames
+                  convert_webm_to_images("blood_pressure_video.webm", "frame_%05d.jpg");
                   
-                  // With scaling
-                  convert_webm_to_images_with_scale("input.webv", "scaled_%04d.png", 1920, 1080);
+                  // With specific resolution for analysis
+                  convert_webm_to_images_with_scale("blood_pressure_video.webm", "frame_%05d.jpg", 640, 480);
                   
-                  // Extract frames 100-199 with scaling
-                  convert_webm_frame_range("input.webm", "range_%04d.png", 100, 100, 1920, 1080);
+                  // Extract specific segment for analysis
+                  convert_webm_frame_range("blood_pressure_video.webm", "analysis_%05d.jpg", 300, 150, 640, 480);
               }
           }
           ```
           
+          ## Codec Support
+          
+          ### Standard Version (ffmpeg-slim.exe)
+          - **Decoders**: VP9, H264
+          - **Encoders**: JPEG (mjpeg)
+          - **Containers**: WebM, Matroska, MP4, MOV
+          
+          ### Ultra-slim Version (ffmpeg-ultra-slim.exe)
+          - **Decoders**: VP9 only
+          - **Encoders**: JPEG (mjpeg)
+          - **Containers**: WebM, Matroska
+          
           ## Size Comparison
           
           - Full FFmpeg: ~60-100 MB
-          - This slim version: ~2-5 MB
-          - Ultra-slim version: ~1-3 MB
-          
-          Size reduction achieved by:
-          - Disabling unused codecs and formats
-          - Static linking
-          - Stripping debug symbols
-          - Minimal dependency set
+          - This slim version: ~2-4 MB
+          - Ultra-slim version: ~1-2 MB
           
           ## Build Configuration
           
-          Based on the configuration from: https://zenn.dev/tetsu_koba/articles/129ac2c6415515
-          
-          Key optimizations:
-          - `--disable-everything` + selective enables
-          - Static linking only
-          - Cross-compiled from Linux for Windows
+          Optimized specifically for blood pressure estimation:
+          - VP9 decoder for WebM video input
+          - JPEG encoder for frame extraction
+          - Minimal dependencies
+          - Static linking
           - Stripped binaries
+          
+          No PNG support (not needed for blood pressure estimation)
+          No VP8 support (VP9 is the target codec)
+          No audio codecs (video analysis only)
           EOF
           
           # Show final sizes
