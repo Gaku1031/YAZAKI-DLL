@@ -68,6 +68,8 @@ namespace BloodPressureDllTest
             public long VideoFileSize { get; set; }
             public bool IsSuccess { get; set; }
             public string ErrorMessage { get; set; }
+            public int EstimatedSBP { get; set; }
+            public int EstimatedDBP { get; set; }
         }
 
         // コールバック関数の実装
@@ -287,7 +289,7 @@ namespace BloodPressureDllTest
                 
                 var ffmpegProc = new System.Diagnostics.Process();
                 ffmpegProc.StartInfo.FileName = ffmpegExe;
-                ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -q:v 2 \"{framePattern}\"";
+                ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -ss 20 -t 30 -vf \"scale=640:480,fps=15\" -q:v 2 \"{framePattern}\"";
                 ffmpegProc.StartInfo.UseShellExecute = false;
                 ffmpegProc.StartInfo.RedirectStandardOutput = true;
                 ffmpegProc.StartInfo.RedirectStandardError = true;
@@ -359,6 +361,11 @@ namespace BloodPressureDllTest
                         {
                             Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
                         }
+                        
+                        // 血圧推定値を保存
+                        metrics.EstimatedSBP = sbp;
+                        metrics.EstimatedDBP = dbp;
+                        
                         callbackCalled = true;
                         callbackEvent.Set();
                     } catch (Exception ex) {
@@ -410,6 +417,13 @@ namespace BloodPressureDllTest
                 
                 Console.WriteLine($"   血圧推定時間: {metrics.BloodPressureAnalysisTime.TotalMilliseconds:F2} ms");
                 Console.WriteLine($"   コールバック時間: {metrics.CallbackTime.TotalMilliseconds:F2} ms");
+                
+                // 精度検証情報
+                Console.WriteLine($"\n=== 精度検証情報 ===");
+                Console.WriteLine($"フレーム数: {metrics.FrameCount}");
+                Console.WriteLine($"動画時間: {metrics.FrameCount / 15.0:F1} 秒 (15fps想定)");
+                Console.WriteLine($"推定血圧: SBP={metrics.EstimatedSBP} mmHg, DBP={metrics.EstimatedDBP} mmHg");
+                Console.WriteLine($"推定精度: フレーム数{metrics.FrameCount}での推定値");
                 
                 try { Directory.Delete(tempDir, true); } catch { }
                 
