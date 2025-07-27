@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
     paths:
       - "CppBloodPressureDLL/**"
+  pull_request:
+    branches: [main, develop]
   workflow_dispatch:
     inputs:
       build_type:
@@ -751,186 +753,73 @@ jobs:
             }
           }
 
-      - name: Install cross-compilation dependencies
+      - name: Use slim ffmpeg for blood pressure estimation test
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            yasm \
-            nasm \
-            pkg-config \
-            git \
-            mingw-w64 \
-            mingw-w64-tools
-        shell: bash
+          # Check for slim ffmpeg versions in root directory
+          $slimPath = "ffmpeg-slim.exe"
+          $ultraSlimPath = "ffmpeg-ultra-slim.exe"
 
-      - name: Build slim FFmpeg for WebM to image conversion
-        run: |
-          # Clone FFmpeg source
-          cd /tmp
-          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
-          cd ffmpeg
+          Write-Host "Checking for slim ffmpeg versions..." -ForegroundColor Yellow
 
-          # Configure for minimal WebM to image conversion (Windows 64-bit)
-          ./configure \
-            --prefix=/tmp/ffmpeg-install \
-            --arch=x86_64 \
-            --target-os=mingw32 \
-            --cross-prefix=x86_64-w64-mingw32- \
-            --pkg-config=pkg-config \
-            --enable-cross-compile \
-            --enable-static \
-            --disable-shared \
-            --disable-doc \
-            --disable-everything \
-            --enable-ffmpeg \
-            --disable-ffplay \
-            --disable-ffprobe \
-            --disable-autodetect \
-            --disable-debug \
-            --enable-avcodec \
-            --enable-avformat \
-            --enable-avutil \
-            --enable-swscale \
-            --enable-demuxer=matroska,webm \
-            --enable-decoder=vp8,vp9 \
-            --enable-encoder=png,mjpeg,bmp \
-            --enable-muxer=image2 \
-            --enable-protocol=file \
-            --enable-filter=scale \
-            --disable-network \
-            --disable-iconv \
-            --disable-bzlib \
-            --disable-libopenjpeg \
-            --disable-libwebp \
-            --disable-libfreetype \
-            --disable-libharfbuzz
+          if (Test-Path $ultraSlimPath) {
+            Write-Host "Found ultra-slim ffmpeg: $ultraSlimPath" -ForegroundColor Green
+            $size = [math]::Round((Get-Item $ultraSlimPath).Length / 1MB, 2)
+            Write-Host "Ultra-slim ffmpeg size: $size MB" -ForegroundColor Cyan
             
-          echo "Configuration completed successfully"
-
-          # Build
-          make -j$(nproc)
-
-          # Install
-          make install
-
-          # Verify the build
-          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
-            echo "FFmpeg built successfully"
-            ls -la /tmp/ffmpeg-install/bin/ffmpeg.exe
+            # Copy ultra-slim version to test and distribution directories
+            Copy-Item $ultraSlimPath "dist_cpp/ffmpeg.exe" -Force
+            Copy-Item $ultraSlimPath "deployment/ffmpeg.exe" -Force
+            Copy-Item $ultraSlimPath "CppBloodPressureDLL/test/ffmpeg.exe" -Force
             
-            # Get file size
-            size=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
-            size_mb=$((size / 1024 / 1024))
-            echo "FFmpeg size: ${size_mb} MB"
-          else
-            echo "FFmpeg build failed"
-            exit 1
-          fi
-        shell: bash
-
-      - name: Create ultra-slim version (optional)
-        run: |
-          cd /tmp/ffmpeg
-
-          echo "Building ultra-slim version with VP8 only..."
-
-          # Clean previous build
-          make clean
-
-          # Ultra minimal configuration - VP8 and PNG only
-          ./configure \
-            --prefix=/tmp/ffmpeg-ultra \
-            --arch=x86_64 \
-            --target-os=mingw32 \
-            --cross-prefix=x86_64-w64-mingw32- \
-            --pkg-config=pkg-config \
-            --enable-cross-compile \
-            --enable-static \
-            --disable-shared \
-            --disable-doc \
-            --disable-everything \
-            --enable-ffmpeg \
-            --disable-ffplay \
-            --disable-ffprobe \
-            --disable-autodetect \
-            --disable-debug \
-            --enable-avcodec \
-            --enable-avformat \
-            --enable-avutil \
-            --enable-swscale \
-            --enable-demuxer=matroska \
-            --enable-decoder=vp8 \
-            --enable-encoder=png \
-            --enable-muxer=image2 \
-            --enable-protocol=file \
-            --enable-filter=scale \
-            --disable-network \
-            --disable-iconv \
-            --disable-bzlib
+            Write-Host "Using ultra-slim ffmpeg for blood pressure estimation test" -ForegroundColor Green
             
-          # Build ultra-slim version
-          make -j$(nproc)
-          make install
-
-          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
-            echo "Ultra-slim FFmpeg built successfully"
-            size=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
-            size_mb=$((size / 1024 / 1024))
-            echo "Ultra-slim FFmpeg size: ${size_mb} MB"
-          fi
-        shell: bash
-
-      - name: Strip binaries to reduce size further
-        run: |
-          # Strip debug symbols from both versions
-          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
-            x86_64-w64-mingw32-strip /tmp/ffmpeg-install/bin/ffmpeg.exe
-            
-            size_after=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
-            size_after_mb=$((size_after / 1024 / 1024))
-            echo "FFmpeg size after stripping: ${size_after_mb} MB"
-          fi
-
-          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
-            x86_64-w64-mingw32-strip /tmp/ffmpeg-ultra/bin/ffmpeg.exe
-            
-            size_ultra_after=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
-            size_ultra_after_mb=$((size_ultra_after / 1024 / 1024))
-            echo "Ultra-slim FFmpeg size after stripping: ${size_ultra_after_mb} MB"
-          fi
-        shell: bash
-
-      - name: Copy slim ffmpeg.exe to dist_cpp and deployment
-        run: |
-          # Try to copy from ultra-slim build first, then regular slim build
-          $ultraPath = "/tmp/ffmpeg-ultra/bin/ffmpeg.exe"
-          $slimPath = "/tmp/ffmpeg-install/bin/ffmpeg.exe"
-
-          if (Test-Path $ultraPath) {
-            Copy-Item $ultraPath "dist_cpp/ffmpeg.exe" -Force
-            Copy-Item $ultraPath "deployment/ffmpeg.exe" -Force
-            Write-Host "ffmpeg.exe copied from ultra-slim build" -ForegroundColor Green
           } elseif (Test-Path $slimPath) {
+            Write-Host "Found slim ffmpeg: $slimPath" -ForegroundColor Green
+            $size = [math]::Round((Get-Item $slimPath).Length / 1MB, 2)
+            Write-Host "Slim ffmpeg size: $size MB" -ForegroundColor Cyan
+            
+            # Copy slim version to test and distribution directories
             Copy-Item $slimPath "dist_cpp/ffmpeg.exe" -Force
             Copy-Item $slimPath "deployment/ffmpeg.exe" -Force
-            Write-Host "ffmpeg.exe copied from slim build" -ForegroundColor Green
+            Copy-Item $slimPath "CppBloodPressureDLL/test/ffmpeg.exe" -Force
+            
+            Write-Host "Using slim ffmpeg for blood pressure estimation test" -ForegroundColor Green
+            
           } else {
-            Write-Host "ERROR: ffmpeg.exe not found in any expected location" -ForegroundColor Red
+            Write-Host "ERROR: Neither ffmpeg-slim.exe nor ffmpeg-ultra-slim.exe found in root directory" -ForegroundColor Red
+            Write-Host "Please ensure one of these files is available for testing" -ForegroundColor Red
             exit 1
           }
-        shell: powershell
 
-      - name: Copy slim ffmpeg.exe to test directory for integration test
-        run: |
-          # Copy the same ffmpeg.exe that was copied to dist_cpp to the test directory
-          if (Test-Path "dist_cpp/ffmpeg.exe") {
-            Copy-Item "dist_cpp/ffmpeg.exe" "CppBloodPressureDLL/test/ffmpeg.exe" -Force
-            Write-Host "Slim ffmpeg.exe copied to test directory for integration test" -ForegroundColor Green
+          # Test ffmpeg functionality
+          Write-Host "Testing ffmpeg functionality..." -ForegroundColor Yellow
+          $testResult = & "CppBloodPressureDLL/test/ffmpeg.exe" -version 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "ffmpeg test successful" -ForegroundColor Green
+            Write-Host "ffmpeg version: $($testResult | Select-Object -First 1)" -ForegroundColor Cyan
           } else {
-            Write-Host "ERROR: ffmpeg.exe not found in dist_cpp/" -ForegroundColor Red
+            Write-Host "ffmpeg test failed: $testResult" -ForegroundColor Red
             exit 1
           }
+
+          # Test specific codec support for blood pressure estimation
+          Write-Host "Testing codec support for blood pressure estimation..." -ForegroundColor Yellow
+          $codecTest = & "CppBloodPressureDLL/test/ffmpeg.exe" -codecs 2>&1
+
+          $requiredCodecs = @("vp8", "vp9", "h264", "hevc")
+          $supportedCodecs = @()
+
+          foreach ($codec in $requiredCodecs) {
+            if ($codecTest -match $codec) {
+              $supportedCodecs += $codec
+              Write-Host "  $codec supported" -ForegroundColor Green
+            } else {
+              Write-Host "  $codec not supported" -ForegroundColor Yellow
+            }
+          }
+
+          Write-Host "Supported codecs for blood pressure estimation: $($supportedCodecs -join ', ')" -ForegroundColor Cyan
+
         shell: powershell
 
       - name: Check ffmpeg existence
@@ -991,7 +880,7 @@ jobs:
             Write-Host "Warning: OpenCV ffmpeg DLL not found in any expected location" -ForegroundColor Yellow
           }
         shell: powershell
-
+      
       - name: Run C# Integration Test
         run: |
           cd CppBloodPressureDLL/test
