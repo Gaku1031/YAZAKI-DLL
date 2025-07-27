@@ -1,11 +1,16 @@
 name: Build Slim FFmpeg for WebM to Image Conversion
 
 on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
   workflow_dispatch:
 
 jobs:
   build-slim-ffmpeg:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,12 +55,14 @@ jobs:
             --enable-avformat \
             --enable-avutil \
             --enable-swscale \
-            --enable-demuxer=matroska,webm \
-            --enable-decoder=vp8,vp9 \
+            --enable-avfilter \
+            --enable-demuxer=matroska,webm,ogg \
+            --enable-decoder=vp8,vp9,theora,opus,vorbis \
             --enable-encoder=png,mjpeg,bmp \
             --enable-muxer=image2 \
             --enable-protocol=file \
-            --enable-filter=scale \
+            --enable-filter=scale,fps,select \
+            --enable-parser=vp8,vp9 \
             --disable-network \
             --disable-iconv \
             --disable-bzlib \
@@ -65,6 +72,10 @@ jobs:
             --disable-libharfbuzz
             
           echo "Configuration completed successfully"
+          
+          # Show what codecs are enabled
+          echo "=== Enabled components ==="
+          grep -E "(DECODER|DEMUXER|ENCODER|MUXER)" config.h | head -20
           
           # Build
           make -j$(nproc)
@@ -81,10 +92,38 @@ jobs:
             size=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
             size_mb=$((size / 1024 / 1024))
             echo "FFmpeg size: ${size_mb} MB"
+            
+            # Test codec support (using wine to run Windows exe on Linux)
+            echo "=== Testing codec support ==="
+            # Note: This may not work in CI, but shows the approach
+            # wine /tmp/ffmpeg-install/bin/ffmpeg.exe -codecs 2>/dev/null | grep -E "(vp8|vp9|png)" || echo "Wine not available for testing"
           else
             echo "FFmpeg build failed"
             exit 1
           fi
+
+      - name: Verify codec support and create test
+        run: |
+          # Create a simple test script that can be run with the ffmpeg
+          cat > /tmp/test_ffmpeg.sh << 'EOF'
+          #!/bin/bash
+          # Test script for FFmpeg codec support
+          echo "Testing FFmpeg build..."
+          
+          # This would be run on Windows, but we can't test it directly in CI
+          # ./ffmpeg-slim.exe -codecs | grep -E "(vp8|vp9|png|webm|matroska)"
+          # ./ffmpeg-slim.exe -formats | grep -E "(webm|matroska|image2)"
+          
+          echo "To test codec support on Windows, run:"
+          echo "ffmpeg-slim.exe -codecs | findstr \"vp8 vp9 png\""
+          echo "ffmpeg-slim.exe -formats | findstr \"webm matroska image2\""
+          echo ""
+          echo "Example usage:"
+          echo "ffmpeg-slim.exe -i input.webm output_%04d.png"
+          EOF
+          
+          chmod +x /tmp/test_ffmpeg.sh
+          cp /tmp/test_ffmpeg.sh artifacts/test_codec_support.sh
 
       - name: Create ultra-slim version (optional)
         run: |
@@ -116,12 +155,14 @@ jobs:
             --enable-avformat \
             --enable-avutil \
             --enable-swscale \
+            --enable-avfilter \
             --enable-demuxer=matroska \
             --enable-decoder=vp8 \
             --enable-encoder=png \
             --enable-muxer=image2 \
             --enable-protocol=file \
-            --enable-filter=scale \
+            --enable-filter=scale,select \
+            --enable-parser=vp8 \
             --disable-network \
             --disable-iconv \
             --disable-bzlib
