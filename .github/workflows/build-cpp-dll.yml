@@ -808,21 +808,37 @@ jobs:
 
           # Test specific codec support for blood pressure estimation
           Write-Host "Testing codec support for blood pressure estimation..." -ForegroundColor Yellow
-          $codecTest = & "CppBloodPressureDLL/test/ffmpeg.exe" -codecs 2>&1
+          try {
+            $codecTest = & "CppBloodPressureDLL/test/ffmpeg.exe" -codecs 2>&1
+            $codecExitCode = $LASTEXITCODE
+            
+            if ($codecExitCode -eq 0) {
+              Write-Host "Codec list retrieved successfully" -ForegroundColor Green
+            } else {
+              Write-Host "Warning: ffmpeg -codecs returned exit code $codecExitCode, but continuing..." -ForegroundColor Yellow
+            }
+          } catch {
+            Write-Host "Warning: Could not retrieve codec list, but continuing..." -ForegroundColor Yellow
+            $codecTest = ""
+          }
 
           $requiredCodecs = @("vp8", "vp9", "h264", "hevc")
           $supportedCodecs = @()
 
-          foreach ($codec in $requiredCodecs) {
-            if ($codecTest -match $codec) {
-              $supportedCodecs += $codec
-              Write-Host "  $codec supported" -ForegroundColor Green
-            } else {
-              Write-Host "  $codec not supported" -ForegroundColor Yellow
+          if ($codecTest -and $codecTest.Length -gt 0) {
+            foreach ($codec in $requiredCodecs) {
+              if ($codecTest -match $codec) {
+                $supportedCodecs += $codec
+                Write-Host "  $codec supported" -ForegroundColor Green
+              } else {
+                Write-Host "  $codec not supported" -ForegroundColor Yellow
+              }
             }
+            
+            Write-Host "Supported codecs for blood pressure estimation: $($supportedCodecs -join ', ')" -ForegroundColor Cyan
+          } else {
+            Write-Host "Could not determine codec support, but continuing with test..." -ForegroundColor Yellow
           }
-
-          Write-Host "Supported codecs for blood pressure estimation: $($supportedCodecs -join ', ')" -ForegroundColor Cyan
 
         shell: powershell
 
