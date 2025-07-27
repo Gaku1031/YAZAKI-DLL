@@ -276,4 +276,66 @@ int StartBloodPressureAnalysisRequest(
         return 1006;
     }
 }
+__declspec(dllexport)
+int AnalyzeBloodPressureFromImages(
+    char* outBuf, int bufSize,
+    const char** imagePaths, int numImages, int height, int weight, int sex, BPCallback callback)
+{
+    try {
+        if (!g_estimator) {
+            if (callback) callback("", 0, 0, "", "[{\"code\":1001,\"message\":\"DLL not initialized\",\"isRetriable\":false}]");
+            snprintf(outBuf, bufSize, "DLL not initialized");
+            return 1001;
+        }
+        
+        if (!imagePaths || numImages <= 0) {
+            if (callback) callback("", 0, 0, "", "[{\"code\":1002,\"message\":\"Invalid image paths or count\",\"isRetriable\":false}]");
+            snprintf(outBuf, bufSize, "Invalid image paths or count");
+            return 1002;
+        }
+        
+        std::string model_dir = g_model_dir.empty() ? "models" : g_model_dir;
+        RPPGProcessor rppg(model_dir);
+        
+        // 画像パスをstd::vectorに変換
+        std::vector<std::string> image_paths;
+        for (int i = 0; i < numImages; ++i) {
+            if (imagePaths[i]) {
+                image_paths.push_back(imagePaths[i]);
+            }
+        }
+        
+        if (image_paths.empty()) {
+            if (callback) callback("", 0, 0, "", "[{\"code\":1003,\"message\":\"No valid image paths provided\",\"isRetriable\":false}]");
+            snprintf(outBuf, bufSize, "No valid image paths provided");
+            return 1003;
+        }
+        
+        RPPGResult rppg_result = rppg.processImagesFromPaths(image_paths, 30.0);
+        if (rppg_result.peak_times.empty()) {
+            if (callback) callback("", 0, 0, "", "[{\"code\":1006,\"message\":\"No peaks detected from images\",\"isRetriable\":false}]");
+            snprintf(outBuf, bufSize, "No peaks detected from images");
+            return 1006;
+        }
+        
+        // ピーク時刻配列: std::vector<double> peak_times
+        std::vector<double> peaks(rppg_result.peak_times.begin(), rppg_result.peak_times.end());
+        auto result = g_estimator->estimate_bp(peaks, height, weight, sex);
+        std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
+        
+        if (callback) callback("", result.first, result.second, csv.c_str(), "[]");
+        snprintf(outBuf, bufSize, "OK");
+        return 0;
+        
+    } catch (const std::exception& e) {
+        if (callback) callback("", 0, 0, "", (std::string("[{\"code\":1006,\"message\":\"") + e.what() + "\",\"isRetriable\":false}]").c_str());
+        snprintf(outBuf, bufSize, "%s", e.what());
+        return 1006;
+    } catch (...) {
+        if (callback) callback("", 0, 0, "", "[{\"code\":1006,\"message\":\"Unknown exception\",\"isRetriable\":false}]");
+        snprintf(outBuf, bufSize, "Unknown exception");
+        return 1006;
+    }
+}
+
 } // extern "C"

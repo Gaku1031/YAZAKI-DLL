@@ -1,0 +1,455 @@
+name: Build Slim FFmpeg for WebM to Image Conversion
+
+on:
+  # push:
+  #   branches: [ main, develop ]
+  # pull_request:
+  #   branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-slim-ffmpeg:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            yasm \
+            nasm \
+            pkg-config \
+            git \
+            mingw-w64 \
+            mingw-w64-tools
+
+      - name: Build slim FFmpeg for WebM to image conversion
+        run: |
+          # Clone FFmpeg source
+          cd /tmp
+          git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+          cd ffmpeg
+          
+          # Configure for blood pressure estimation (VP9 to JPEG conversion)
+          ./configure \
+            --prefix=/tmp/ffmpeg-install \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-avfilter \
+            --enable-demuxer=matroska,webm,mov,mp4 \
+            --enable-decoder=vp9,h264 \
+            --enable-encoder=mjpeg \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter=scale,fps,select \
+            --enable-parser=vp9,h264 \
+            --disable-network \
+            --disable-iconv \
+            --disable-bzlib \
+            --disable-libopenjpeg \
+            --disable-libwebp \
+            --disable-libfreetype \
+            --disable-libharfbuzz
+            
+          echo "Configuration completed successfully"
+          
+          # Show what codecs are enabled
+          echo "=== Enabled components ==="
+          grep -E "(DECODER|DEMUXER|ENCODER|MUXER)" config.h | head -20
+          
+          # Build
+          make -j$(nproc)
+          
+          # Install
+          make install
+          
+          # Verify the build
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            echo "FFmpeg built successfully"
+            ls -la /tmp/ffmpeg-install/bin/ffmpeg.exe
+            
+            # Get file size
+            size=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "FFmpeg size: ${size_mb} MB"
+            
+            # Test codec support (using wine to run Windows exe on Linux)
+            echo "=== Testing codec support ==="
+            # Note: This may not work in CI, but shows the approach
+            # wine /tmp/ffmpeg-install/bin/ffmpeg.exe -codecs 2>/dev/null | grep -E "(vp8|vp9|png)" || echo "Wine not available for testing"
+          else
+            echo "FFmpeg build failed"
+            exit 1
+          fi
+
+      - name: Verify codec support and create test
+        run: |
+          # Create artifacts directory first
+          mkdir -p artifacts
+          
+          # Create a simple test script that can be run with the ffmpeg
+          cat > /tmp/test_ffmpeg.sh << 'EOF'
+          #!/bin/bash
+          # Test script for FFmpeg codec support
+          echo "Testing FFmpeg build..."
+          
+          # This would be run on Windows, but we can't test it directly in CI
+          # ./ffmpeg-slim.exe -codecs | grep -E "(vp8|vp9|png|webm|matroska)"
+          # ./ffmpeg-slim.exe -formats | grep -E "(webm|matroska|image2)"
+          
+          echo "To test blood pressure estimation support on Windows, run:"
+          echo "ffmpeg-ultra-slim.exe -i blood_pressure_video.webm frame_%05d.jpg"
+          echo "ffmpeg-ultra-slim.exe -version"
+          echo ""
+          echo "Expected video format: VP9 codec in WebM container"
+          echo "Output format: JPEG images for blood pressure analysis"
+          EOF
+          
+          chmod +x /tmp/test_ffmpeg.sh
+          cp /tmp/test_ffmpeg.sh artifacts/test_codec_support.sh
+
+      - name: Create ultra-slim version (optional)
+        run: |
+          cd /tmp/ffmpeg
+          
+          echo "Building ultra-slim version with VP8 only..."
+          
+          # Clean previous build
+          make clean
+          
+          # Ultra minimal configuration - VP9 to JPEG only (for blood pressure estimation)
+          ./configure \
+            --prefix=/tmp/ffmpeg-ultra \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-avfilter \
+            --enable-demuxer=matroska,webm \
+            --enable-decoder=vp9 \
+            --enable-encoder=mjpeg \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter=scale,select \
+            --enable-parser=vp9 \
+            --disable-network \
+            --disable-iconv \
+            --disable-bzlib
+            
+          # Build ultra-slim version
+          make -j$(nproc)
+          make install
+          
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            echo "Ultra-slim FFmpeg built successfully"
+            size=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size: ${size_mb} MB"
+          fi
+
+      - name: Strip binaries to reduce size further
+        run: |
+          # Strip debug symbols from both versions
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-install/bin/ffmpeg.exe
+            
+            size_after=$(stat -c%s /tmp/ffmpeg-install/bin/ffmpeg.exe)
+            size_after_mb=$((size_after / 1024 / 1024))
+            echo "FFmpeg size after stripping: ${size_after_mb} MB"
+          fi
+          
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            x86_64-w64-mingw32-strip /tmp/ffmpeg-ultra/bin/ffmpeg.exe
+            
+            size_ultra_after=$(stat -c%s /tmp/ffmpeg-ultra/bin/ffmpeg.exe)
+            size_ultra_after_mb=$((size_ultra_after / 1024 / 1024))
+            echo "Ultra-slim FFmpeg size after stripping: ${size_ultra_after_mb} MB"
+          fi
+
+      - name: Create C# wrapper DLL
+        run: |
+          # Create C wrapper source
+          cat > /tmp/ffmpeg_wrapper.c << 'EOF'
+          #include <windows.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <process.h>
+          
+          static char dll_directory[MAX_PATH] = {0};
+          
+          // Get the directory where this DLL is located
+          const char* get_dll_directory() {
+              if (dll_directory[0] == 0) {
+                  HMODULE hModule = GetModuleHandleA("ffmpeg_wrapper.dll");
+                  if (hModule) {
+                      GetModuleFileNameA(hModule, dll_directory, MAX_PATH);
+                      char* last_slash = strrchr(dll_directory, '\\');
+                      if (last_slash) {
+                          *(last_slash + 1) = '\0';
+                      }
+                  }
+              }
+              return dll_directory;
+          }
+          
+          __declspec(dllexport) int convert_webm_to_images(const char* input_path, const char* output_pattern) {
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              snprintf(command, sizeof(command), 
+                  "\"%sffmpeg-slim.exe\" -i \"%s\" \"%s\"", 
+                  dll_dir, input_path, output_pattern);
+              
+              return system(command);
+          }
+          
+          __declspec(dllexport) int convert_webm_to_images_with_scale(
+              const char* input_path, 
+              const char* output_pattern, 
+              int width, 
+              int height) {
+              
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              if (width > 0 && height > 0) {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" -vf \"scale=%d:%d\" \"%s\"", 
+                      dll_dir, input_path, width, height, output_pattern);
+              } else {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" \"%s\"", 
+                      dll_dir, input_path, output_pattern);
+              }
+              
+              return system(command);
+          }
+          
+          __declspec(dllexport) int convert_webm_frame_range(
+              const char* input_path,
+              const char* output_pattern,
+              int start_frame,
+              int frame_count,
+              int width,
+              int height) {
+              
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              if (width > 0 && height > 0) {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" -vf \"select=gte(n\\,%d)*lt(n\\,%d),scale=%d:%d\" -vsync 0 \"%s\"", 
+                      dll_dir, input_path, start_frame, start_frame + frame_count, width, height, output_pattern);
+              } else {
+                  snprintf(command, sizeof(command), 
+                      "\"%sffmpeg-slim.exe\" -i \"%s\" -vf \"select=gte(n\\,%d)*lt(n\\,%d)\" -vsync 0 \"%s\"", 
+                      dll_dir, input_path, start_frame, start_frame + frame_count, output_pattern);
+              }
+              
+              return system(command);
+          }
+          
+          __declspec(dllexport) int get_webm_duration(const char* input_path, double* duration) {
+              char command[4096];
+              const char* dll_dir = get_dll_directory();
+              
+              snprintf(command, sizeof(command), 
+                  "\"%sffmpeg-slim.exe\" -i \"%s\" 2>&1 | grep Duration", 
+                  dll_dir, input_path);
+              
+              // This is a simplified implementation
+              // In a real scenario, you'd parse the output properly
+              *duration = 0.0;
+              return system(command);
+          }
+          
+          BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+              return TRUE;
+          }
+          EOF
+          
+          # Compile the DLL using MinGW cross-compiler
+          x86_64-w64-mingw32-gcc -shared \
+            -o /tmp/ffmpeg_wrapper.dll \
+            /tmp/ffmpeg_wrapper.c \
+            -Wl,--out-implib,/tmp/ffmpeg_wrapper.lib \
+            -static-libgcc
+
+      - name: Create artifacts and documentation
+        run: |
+          # Create artifacts directory (ensure it exists)
+          mkdir -p artifacts
+          
+          # Copy binaries (no ffprobe needed)
+          if [ -f /tmp/ffmpeg-install/bin/ffmpeg.exe ]; then
+            cp /tmp/ffmpeg-install/bin/ffmpeg.exe artifacts/ffmpeg-slim.exe
+          fi
+          
+          if [ -f /tmp/ffmpeg-ultra/bin/ffmpeg.exe ]; then
+            cp /tmp/ffmpeg-ultra/bin/ffmpeg.exe artifacts/ffmpeg-ultra-slim.exe
+          fi
+          
+          # Copy DLL
+          if [ -f /tmp/ffmpeg_wrapper.dll ]; then
+            cp /tmp/ffmpeg_wrapper.dll artifacts/
+            cp /tmp/ffmpeg_wrapper.lib artifacts/
+          fi
+          
+          # Create comprehensive documentation
+          cat > artifacts/README.md << 'EOF'
+          # Slim FFmpeg for Blood Pressure Estimation
+          
+          This package contains optimized FFmpeg builds specifically for blood pressure estimation from video.
+          
+          ## Files
+          
+          - `ffmpeg-slim.exe`: VP9/H264 + JPEG support (~2-4 MB)
+          - `ffmpeg-ultra-slim.exe`: VP9 + JPEG only (~1-2 MB)  
+          - `ffmpeg_wrapper.dll`: C# interop library
+          - `ffmpeg_wrapper.lib`: Import library for linking
+          
+          ## Features
+          
+          ### Supported Input Formats
+          - WebM (VP9 codec) - Primary target for blood pressure estimation
+          - MP4/MOV (H264 codec) - Additional support in slim version
+          - Matroska containers
+          
+          ### Supported Output Formats
+          - JPEG images (.jpg) - Primary format for blood pressure estimation
+          
+          ## Usage Examples
+          
+          ### Command Line
+          ```bash
+          # Blood pressure estimation - VP9 WebM to JPEG frames
+          ffmpeg-ultra-slim.exe -i input.webm frame_%05d.jpg
+          
+          # With scaling for blood pressure analysis
+          ffmpeg-ultra-slim.exe -i input.webm -vf scale=640:480 frame_%05d.jpg
+          
+          # Extract specific time range for analysis
+          ffmpeg-ultra-slim.exe -i input.webm -ss 00:00:10 -t 00:00:05 frame_%05d.jpg
+          ```
+          
+          ### C# Integration for Blood Pressure Estimation
+          ```csharp
+          using System.Runtime.InteropServices;
+          
+          public class BloodPressureVideoProcessor 
+          {
+              [DllImport("ffmpeg_wrapper.dll")]
+              public static extern int convert_webm_to_images(string inputPath, string outputPattern);
+              
+              [DllImport("ffmpeg_wrapper.dll")]
+              public static extern int convert_webm_to_images_with_scale(
+                  string inputPath, string outputPattern, int width, int height);
+              
+              [DllImport("ffmpeg_wrapper.dll")]
+              public static extern int convert_webm_frame_range(
+                  string inputPath, string outputPattern, 
+                  int startFrame, int frameCount, int width, int height);
+              
+              // Usage for blood pressure estimation
+              public void ProcessBloodPressureVideo()
+              {
+                  // Convert VP9 WebM to JPEG frames
+                  convert_webm_to_images("blood_pressure_video.webm", "frame_%05d.jpg");
+                  
+                  // With specific resolution for analysis
+                  convert_webm_to_images_with_scale("blood_pressure_video.webm", "frame_%05d.jpg", 640, 480);
+                  
+                  // Extract specific segment for analysis
+                  convert_webm_frame_range("blood_pressure_video.webm", "analysis_%05d.jpg", 300, 150, 640, 480);
+              }
+          }
+          ```
+          
+          ## Codec Support
+          
+          ### Standard Version (ffmpeg-slim.exe)
+          - **Decoders**: VP9, H264
+          - **Encoders**: JPEG (mjpeg)
+          - **Containers**: WebM, Matroska, MP4, MOV
+          
+          ### Ultra-slim Version (ffmpeg-ultra-slim.exe)
+          - **Decoders**: VP9 only
+          - **Encoders**: JPEG (mjpeg)
+          - **Containers**: WebM, Matroska
+          
+          ## Size Comparison
+          
+          - Full FFmpeg: ~60-100 MB
+          - This slim version: ~2-4 MB
+          - Ultra-slim version: ~1-2 MB
+          
+          ## Build Configuration
+          
+          Optimized specifically for blood pressure estimation:
+          - VP9 decoder for WebM video input
+          - JPEG encoder for frame extraction
+          - Minimal dependencies
+          - Static linking
+          - Stripped binaries
+          
+          No PNG support (not needed for blood pressure estimation)
+          No VP8 support (VP9 is the target codec)
+          No audio codecs (video analysis only)
+          EOF
+          
+          # Show final sizes
+          echo "=== Final Binary Sizes ==="
+          if [ -f artifacts/ffmpeg-slim.exe ]; then
+            size=$(stat -c%s artifacts/ffmpeg-slim.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "ffmpeg-slim.exe: ${size_mb} MB"
+          fi
+          
+          if [ -f artifacts/ffmpeg-ultra-slim.exe ]; then
+            size=$(stat -c%s artifacts/ffmpeg-ultra-slim.exe)
+            size_mb=$((size / 1024 / 1024))
+            echo "ffmpeg-ultra-slim.exe: ${size_mb} MB"
+          fi
+          
+          echo "Build completed successfully!"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: slim-ffmpeg-webm-converter
+          path: artifacts/

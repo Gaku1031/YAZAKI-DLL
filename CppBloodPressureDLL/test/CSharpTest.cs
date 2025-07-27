@@ -5,6 +5,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text; // StringBuilderを追加
+using System.Diagnostics; // Stopwatchを追加
 
 namespace BloodPressureDllTest
 {
@@ -55,12 +56,23 @@ namespace BloodPressureDllTest
             return Marshal.PtrToStringAnsi(ptr);
         }
 
-        // コールバック関数の実装
-        public static void TestCallback(IntPtr requestIdPtr, int maxBP, int minBP, IntPtr csvDataPtr, IntPtr errorsJsonPtr)
+        // 処理時間計測結果を格納するクラス
+        public class PerformanceMetrics
         {
-            string requestId = Marshal.PtrToStringAnsi(requestIdPtr);
-            string csvData = Marshal.PtrToStringAnsi(csvDataPtr);
-            string errorsJson = Marshal.PtrToStringAnsi(errorsJsonPtr);
+            public TimeSpan TotalTime { get; set; }
+            public TimeSpan InitializationTime { get; set; }
+            public TimeSpan VideoConversionTime { get; set; }
+            public TimeSpan BloodPressureAnalysisTime { get; set; }
+            public TimeSpan CallbackTime { get; set; }
+            public int FrameCount { get; set; }
+            public long VideoFileSize { get; set; }
+            public bool IsSuccess { get; set; }
+            public string ErrorMessage { get; set; }
+        }
+
+        // コールバック関数の実装
+        public static void TestCallback(string requestId, int maxBP, int minBP, string csvData, string errorsJson)
+        {
             Console.WriteLine("=== 血圧解析結果 ===");
             Console.WriteLine($"Request ID: {requestId}");
             Console.WriteLine($"最高血圧: {maxBP} mmHg");
@@ -168,27 +180,46 @@ namespace BloodPressureDllTest
                 return "重症高血圧";
         }
 
-        public static void TestComprehensiveDLL()
+        // 処理時間計測付きの血圧推定テスト
+        public static PerformanceMetrics TestBloodPressureEstimationWithTiming()
         {
-            Console.WriteLine("=== C++ Blood Pressure DLL テスト ===");
+            var metrics = new PerformanceMetrics();
+            var totalStopwatch = Stopwatch.StartNew();
+            
+            Console.WriteLine("=== 血圧推定処理時間計測テスト ===");
+            Console.WriteLine("目標処理時間: 2-3秒");
+            Console.WriteLine("計測開始時刻: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"));
             
             try
             {
-                // 1. DLL初期化テスト
-                Console.WriteLine("\n1. DLL初期化テスト");
+                // 1. DLL初期化時間計測
+                Console.WriteLine("\n1. DLL初期化時間計測");
+                var initStopwatch = Stopwatch.StartNew();
                 
-                // 事前チェック
-                Console.WriteLine("   事前チェック:");
-                Console.WriteLine($"   - カレントディレクトリ: {Environment.CurrentDirectory}");
-                Console.WriteLine($"   - DLLファイル存在: {File.Exists("BloodPressureDLL.dll")}");
-                Console.WriteLine($"   - Modelsディレクトリ存在: {Directory.Exists("models")}");
+                Console.WriteLine("   DLL初期化を試行中...");
+                var sb = new StringBuilder(1024); // バッファサイズを大きくする
+                int initResult = InitializeBP(sb, sb.Capacity, "models");
+                initStopwatch.Stop();
+                metrics.InitializationTime = initStopwatch.Elapsed;
                 
-                if (Directory.Exists("models"))
+                Console.WriteLine($"   初期化結果: {initResult}");
+                Console.WriteLine($"   初期化時間: {metrics.InitializationTime.TotalMilliseconds:F2} ms");
+                Console.WriteLine($"   初期化メッセージ: '{sb.ToString()}'");
+                
+                if (initResult != 0)
                 {
-                    Console.WriteLine("   - Modelsディレクトリ内容:");
-                    try
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = $"DLL初期化失敗: {sb.ToString()}";
+                    Console.WriteLine($"   [ERROR] DLL初期化失敗: {sb.ToString()}");
+                    
+                    // 追加のデバッグ情報
+                    Console.WriteLine("   [DEBUG] 追加デバッグ情報:");
+                    Console.WriteLine($"   - カレントディレクトリ: {Environment.CurrentDirectory}");
+                    Console.WriteLine($"   - Modelsディレクトリ存在: {Directory.Exists("models")}");
+                    if (Directory.Exists("models"))
                     {
                         var modelFiles = Directory.GetFiles("models", "*", SearchOption.AllDirectories);
+                        Console.WriteLine($"   - Modelsディレクトリ内ファイル数: {modelFiles.Length}");
                         foreach (var file in modelFiles)
                         {
                             var fileInfo = new FileInfo(file);
@@ -196,416 +227,322 @@ namespace BloodPressureDllTest
                             Console.WriteLine($"     {relativePath} ({fileInfo.Length / 1024.0:F2} KB)");
                         }
                     }
-                    catch (Exception e)
+                    
+                    // 依存DLLのチェック
+                    string[] requiredDlls = { "opencv_world480.dll", "onnxruntime.dll", "zlib.dll" };
+                    Console.WriteLine("   - 依存DLLチェック:");
+                    foreach (var dll in requiredDlls)
                     {
-                        Console.WriteLine($"     [ERROR] Modelsディレクトリ読み取りエラー: {e.Message}");
+                        bool exists = File.Exists(dll);
+                        Console.WriteLine($"     {dll}: {(exists ? "FOUND" : "NOT FOUND")}");
+                        if (exists)
+                        {
+                            var dllInfo = new FileInfo(dll);
+                            Console.WriteLine($"       Size: {dllInfo.Length / 1024.0:F2} KB");
+                        }
                     }
+                    
+                    return metrics;
                 }
                 
-                // 依存DLLチェック
-                Console.WriteLine("   - 依存DLLチェック:");
-                string[] requiredDlls = { "opencv_world480.dll", "onnxruntime.dll", "zlib.dll" };
-                foreach (var dll in requiredDlls)
+                Console.WriteLine("   [SUCCESS] DLL初期化成功");
+                
+                // 2. 動画変換時間計測
+                Console.WriteLine("\n2. 動画変換時間計測");
+                var conversionStopwatch = Stopwatch.StartNew();
+                
+                string sampleVideo = "sample_video.webm";
+                if (!File.Exists(sampleVideo))
                 {
-                    Console.WriteLine($"     {dll}: {File.Exists(dll)}");
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = $"サンプル動画が見つかりません: {sampleVideo}";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    return metrics;
                 }
                 
-                Console.WriteLine("   DLL初期化を試行中...");
+                var videoFileInfo = new FileInfo(sampleVideo);
+                metrics.VideoFileSize = videoFileInfo.Length;
+                Console.WriteLine($"   サンプル動画: {sampleVideo} ({videoFileInfo.Length / 1024 / 1024.0:F2} MB)");
                 
-                // Critical: Add safety wrapper for DLL initialization
-                Console.WriteLine("   Step 1: Attempting to call InitializeBP");
-                Console.Out.Flush();
+                // ffmpeg.exeのパスを決定
+                string ffmpegExe = "ffmpeg.exe";
+                if (File.Exists("ffmpeg.exe"))
+                    ffmpegExe = Path.GetFullPath("ffmpeg.exe");
+                else if (File.Exists("../ffmpeg.exe"))
+                    ffmpegExe = Path.GetFullPath("../ffmpeg.exe");
+
+                if (!File.Exists(ffmpegExe) && ffmpegExe != "ffmpeg.exe")
+                {
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = "ffmpeg.exeが見つかりません";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    return metrics;
+                }
+
+                // webm→画像シーケンス一時変換
+                string tempDir = Path.Combine(Path.GetTempPath(), $"frames_{Guid.NewGuid().ToString().Replace("-", "")}");
+                Directory.CreateDirectory(tempDir);
+                string framePattern = Path.Combine(tempDir, "frame_%05d.jpg");
+                Console.WriteLine($"   ffmpegで画像シーケンスに一時変換: {framePattern}");
                 
-                // 初期化前ファイル確認
-                Console.WriteLine("   - 初期化前ファイル確認:");
-                string[] requiredFiles = {
-                    "models/systolicbloodpressure.onnx",
-                    "models/diastolicbloodpressure.onnx",
-                    "models/opencv_face_detector_uint8.pb",
-                    "models/opencv_face_detector.pbtxt"
+                var ffmpegProc = new System.Diagnostics.Process();
+                ffmpegProc.StartInfo.FileName = ffmpegExe;
+                ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -q:v 2 \"{framePattern}\"";
+                ffmpegProc.StartInfo.UseShellExecute = false;
+                ffmpegProc.StartInfo.RedirectStandardOutput = true;
+                ffmpegProc.StartInfo.RedirectStandardError = true;
+                ffmpegProc.Start();
+                
+                string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
+                string ffmpegOut = ffmpegProc.StandardOutput.ReadToEnd();
+                bool exited = ffmpegProc.WaitForExit(60000); // 60秒でタイムアウト
+                
+                conversionStopwatch.Stop();
+                metrics.VideoConversionTime = conversionStopwatch.Elapsed;
+                
+                Console.WriteLine($"   ffmpeg終了コード: {ffmpegProc.ExitCode}");
+                Console.WriteLine($"   動画変換時間: {metrics.VideoConversionTime.TotalMilliseconds:F2} ms");
+                
+                if (!exited)
+                {
+                    ffmpegProc.Kill();
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = "ffmpeg変換がタイムアウトしました";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    try { Directory.Delete(tempDir, true); } catch { }
+                    return metrics;
+                }
+                
+                if (ffmpegProc.ExitCode != 0)
+                {
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = $"ffmpeg変換が失敗しました (終了コード: {ffmpegProc.ExitCode})";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
+                    try { Directory.Delete(tempDir, true); } catch { }
+                    return metrics;
+                }
+                
+                var frameFiles = Directory.GetFiles(tempDir, "frame_*.jpg").OrderBy(f => f).ToArray();
+                if (frameFiles.Length == 0)
+                {
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = "ffmpeg画像変換失敗: フレームファイルが生成されませんでした";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    try { Directory.Delete(tempDir, true); } catch { }
+                    return metrics;
+                }
+                
+                metrics.FrameCount = frameFiles.Length;
+                Console.WriteLine($"   ffmpeg変換成功（{frameFiles.Length}フレーム）");
+                
+                // 3. 血圧推定時間計測
+                Console.WriteLine("\n3. 血圧推定時間計測");
+                var analysisStopwatch = Stopwatch.StartNew();
+                var callbackStopwatch = Stopwatch.StartNew();
+                
+                int height = 170, weight = 70, sex = 1;
+                bool callbackCalled = false;
+                AutoResetEvent callbackEvent = new AutoResetEvent(false);
+                BPCallback callback = (reqId, sbp, dbp, csv, errorsJson) =>
+                {
+                    callbackStopwatch.Stop();
+                    metrics.CallbackTime = callbackStopwatch.Elapsed;
+                    
+                    try {
+                        Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={sbp}, DBP={dbp}");
+                        if (!string.IsNullOrEmpty(csv))
+                        {
+                            Console.WriteLine($"[CALLBACK] CSV length: {csv.Length}");
+                        }
+                        if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
+                        {
+                            Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
+                        }
+                        callbackCalled = true;
+                        callbackEvent.Set();
+                    } catch (Exception ex) {
+                        Console.WriteLine($"[FATAL ERROR] コールバック内で例外発生: {ex.Message}");
+                        Console.WriteLine($"スタックトレース: {ex.StackTrace}");
+                        throw;
+                    }
                 };
                 
-                foreach (var file in requiredFiles)
+                Console.WriteLine("   血圧推定リクエスト送信中（画像配列）...");
+                var outBuf = new StringBuilder(256);
+                int resultCode = AnalyzeBloodPressureFromImages(outBuf, outBuf.Capacity, frameFiles, frameFiles.Length, height, weight, sex, callback);
+                
+                if (resultCode != 0)
                 {
-                    if (File.Exists(file))
-                    {
-                        var fileInfo = new FileInfo(file);
-                        Console.WriteLine($"     {file}: EXISTS ({fileInfo.Length / 1024.0:F2} KB)");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"     {file}: NOT FOUND");
-                    }
+                    analysisStopwatch.Stop();
+                    metrics.BloodPressureAnalysisTime = analysisStopwatch.Elapsed;
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = $"DLLからエラー返却: {outBuf.ToString()}";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    try { Directory.Delete(tempDir, true); } catch { }
+                    return metrics;
                 }
                 
-                Console.WriteLine("   Step 2: Calling InitializeBP function");
-                Console.Out.Flush();
-                
-                int initResult;
-                try 
+                if (!callbackEvent.WaitOne(30000))
                 {
-                    var sb = new StringBuilder(256);
-                    initResult = InitializeBP(sb, sb.Capacity, "models");
-                    Console.WriteLine("   Step 3: InitializeBP call completed successfully");
-                    Console.Out.Flush();
-                }
-                catch (AccessViolationException ex)
-                {
-                    Console.WriteLine($"   [FATAL] AccessViolationException during InitializeBP: {ex.Message}");
-                    Console.WriteLine($"   This indicates memory corruption in the DLL initialization");
-                    Console.WriteLine($"   Stack trace: {ex.StackTrace}");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"   [ERROR] Exception during InitializeBP: {ex.GetType().Name}: {ex.Message}");
-                    Console.WriteLine($"   Stack trace: {ex.StackTrace}");
-                    return;
+                    analysisStopwatch.Stop();
+                    metrics.BloodPressureAnalysisTime = analysisStopwatch.Elapsed;
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = "コールバックが30秒以内に呼ばれませんでした";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    try { Directory.Delete(tempDir, true); } catch { }
+                    return metrics;
                 }
                 
-                Console.WriteLine($"   初期化結果: {initResult}");
-                if (initResult == 1)
+                if (!callbackCalled)
                 {
-                    Console.WriteLine("   [SUCCESS] DLL初期化成功");
+                    analysisStopwatch.Stop();
+                    metrics.BloodPressureAnalysisTime = analysisStopwatch.Elapsed;
+                    metrics.IsSuccess = false;
+                    metrics.ErrorMessage = "コールバックが呼ばれませんでした";
+                    Console.WriteLine($"   [ERROR] {metrics.ErrorMessage}");
+                    try { Directory.Delete(tempDir, true); } catch { }
+                    return metrics;
+                }
+                
+                analysisStopwatch.Stop();
+                metrics.BloodPressureAnalysisTime = analysisStopwatch.Elapsed;
+                
+                Console.WriteLine($"   血圧推定時間: {metrics.BloodPressureAnalysisTime.TotalMilliseconds:F2} ms");
+                Console.WriteLine($"   コールバック時間: {metrics.CallbackTime.TotalMilliseconds:F2} ms");
+                
+                try { Directory.Delete(tempDir, true); } catch { }
+                
+                // 4. 総合結果
+                totalStopwatch.Stop();
+                metrics.TotalTime = totalStopwatch.Elapsed;
+                metrics.IsSuccess = true;
+                
+                Console.WriteLine("\n=== 処理時間計測結果 ===");
+                Console.WriteLine($"総処理時間: {metrics.TotalTime.TotalMilliseconds:F2} ms ({metrics.TotalTime.TotalSeconds:F3} 秒)");
+                Console.WriteLine($"初期化時間: {metrics.InitializationTime.TotalMilliseconds:F2} ms");
+                Console.WriteLine($"動画変換時間: {metrics.VideoConversionTime.TotalMilliseconds:F2} ms");
+                Console.WriteLine($"血圧推定時間: {metrics.BloodPressureAnalysisTime.TotalMilliseconds:F2} ms");
+                Console.WriteLine($"コールバック時間: {metrics.CallbackTime.TotalMilliseconds:F2} ms");
+                Console.WriteLine($"動画ファイルサイズ: {metrics.VideoFileSize / 1024 / 1024.0:F2} MB");
+                Console.WriteLine($"フレーム数: {metrics.FrameCount}");
+                
+                // 目標時間との比較
+                double targetTimeMs = 3000; // 3秒
+                double actualTimeMs = metrics.TotalTime.TotalMilliseconds;
+                
+                Console.WriteLine($"\n=== パフォーマンス評価 ===");
+                Console.WriteLine($"目標時間: {targetTimeMs:F0} ms (3秒)");
+                Console.WriteLine($"実際時間: {actualTimeMs:F2} ms");
+                
+                if (actualTimeMs <= targetTimeMs)
+                {
+                    Console.WriteLine($"[SUCCESS] 目標時間内で完了 ({actualTimeMs:F2} ms <= {targetTimeMs:F0} ms)");
+                    Console.WriteLine($"[PERFORMANCE] 目標達成率: {(targetTimeMs / actualTimeMs * 100):F1}%");
                 }
                 else
                 {
-                    Console.WriteLine("   [ERROR] DLL初期化失敗");
-                    if (File.Exists("dll_error.log"))
-                    {
-                        Console.WriteLine("--- dll_error.log ---");
-                        Console.WriteLine(File.ReadAllText("dll_error.log"));
-                        Console.WriteLine("--- end of dll_error.log ---");
-                    }
-                    if (File.Exists("dll_load.log"))
-                    {
-                        Console.WriteLine("--- dll_load.log ---");
-                        Console.WriteLine(File.ReadAllText("dll_load.log"));
-                        Console.WriteLine("--- end of dll_load.log ---");
-                    }
-                    return;
+                    double overTime = actualTimeMs - targetTimeMs;
+                    Console.WriteLine($"[WARNING] 目標時間を超過 ({actualTimeMs:F2} ms > {targetTimeMs:F0} ms)");
+                    Console.WriteLine($"[PERFORMANCE] 超過時間: {overTime:F2} ms ({(overTime / targetTimeMs * 100):F1}%超過)");
                 }
                 
-                // 2. バージョン情報取得テスト
-                Console.WriteLine("\n2. バージョン情報取得テスト");
-                try
+                // 各段階の時間分析
+                Console.WriteLine($"\n=== 時間分析 ===");
+                double initPercent = (metrics.InitializationTime.TotalMilliseconds / actualTimeMs) * 100;
+                double conversionPercent = (metrics.VideoConversionTime.TotalMilliseconds / actualTimeMs) * 100;
+                double analysisPercent = (metrics.BloodPressureAnalysisTime.TotalMilliseconds / actualTimeMs) * 100;
+                double callbackPercent = (metrics.CallbackTime.TotalMilliseconds / actualTimeMs) * 100;
+                
+                Console.WriteLine($"初期化: {initPercent:F1}% ({metrics.InitializationTime.TotalMilliseconds:F2} ms)");
+                Console.WriteLine($"動画変換: {conversionPercent:F1}% ({metrics.VideoConversionTime.TotalMilliseconds:F2} ms)");
+                Console.WriteLine($"血圧推定: {analysisPercent:F1}% ({metrics.BloodPressureAnalysisTime.TotalMilliseconds:F2} ms)");
+                Console.WriteLine($"コールバック: {callbackPercent:F1}% ({metrics.CallbackTime.TotalMilliseconds:F2} ms)");
+                
+                // ボトルネック分析
+                Console.WriteLine($"\n=== ボトルネック分析 ===");
+                var times = new[]
                 {
-                    Console.WriteLine("   GetVersionInfo関数を呼び出し中...");
-                    var sb = new StringBuilder(256);
-                    int result = GetVersionInfo(sb, sb.Capacity);
-                    string version = sb.ToString();
-                    Console.WriteLine("   GetVersionInfo関数呼び出し完了");
-                    if (result != 0)
-                    {
-                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {version}");
-                        return;
-                    }
-                    if (string.IsNullOrEmpty(version))
-                    {
-                        Console.WriteLine("   [ERROR] バージョン情報が空です");
-                        return;
-                    }
-                    Console.WriteLine($"   バージョン: {version}");
-                    Console.WriteLine("   [SUCCESS] バージョン情報取得成功");
+                    ("初期化", metrics.InitializationTime.TotalMilliseconds),
+                    ("動画変換", metrics.VideoConversionTime.TotalMilliseconds),
+                    ("血圧推定", metrics.BloodPressureAnalysisTime.TotalMilliseconds),
+                    ("コールバック", metrics.CallbackTime.TotalMilliseconds)
+                };
+                
+                var maxTime = times.Max(t => t.Item2);
+                var bottleneck = times.First(t => t.Item2 == maxTime);
+                Console.WriteLine($"最大ボトルネック: {bottleneck.Item1} ({bottleneck.Item2:F2} ms)");
+                
+                // 改善提案
+                Console.WriteLine($"\n=== 改善提案 ===");
+                if (conversionPercent > 50)
+                {
+                    Console.WriteLine("- 動画変換時間が全体の50%以上を占めています");
+                    Console.WriteLine("- 動画の事前変換や圧縮率の調整を検討してください");
                 }
-                catch (DllNotFoundException ex)
+                if (analysisPercent > 50)
                 {
-                    Console.WriteLine($"   [ERROR] DLLが見つかりません: {ex.Message}");
-                    return;
+                    Console.WriteLine("- 血圧推定時間が全体の50%以上を占めています");
+                    Console.WriteLine("- モデルの最適化やフレーム数の削減を検討してください");
                 }
-                catch (EntryPointNotFoundException ex)
+                if (initPercent > 20)
                 {
-                    Console.WriteLine($"   [ERROR] 関数が見つかりません: {ex.Message}");
-                    return;
-                }
-                catch (AccessViolationException ex)
-                {
-                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
-                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
-                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"   [ERROR] バージョン情報取得で予期しないエラー: {ex.Message}");
-                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
-                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
-                    return;
+                    Console.WriteLine("- 初期化時間が全体の20%以上を占めています");
+                    Console.WriteLine("- モデルの事前読み込みやキャッシュを検討してください");
                 }
                 
-                // 3. リクエストID生成テスト
-                Console.WriteLine("\n3. リクエストID生成テスト");
-                try
+                Console.WriteLine($"\n[SUCCESS] 血圧推定処理時間計測テスト完了");
+                Console.WriteLine("=== 血圧推定処理時間計測テスト完了 ===");
+                
+                return metrics;
+            }
+            catch (Exception ex)
+            {
+                totalStopwatch.Stop();
+                metrics.TotalTime = totalStopwatch.Elapsed;
+                metrics.IsSuccess = false;
+                metrics.ErrorMessage = $"予期しないエラー: {ex.Message}";
+                Console.WriteLine($"\n[ERROR] {metrics.ErrorMessage}");
+                Console.WriteLine($"例外の種類: {ex.GetType().Name}");
+                Console.WriteLine($"スタックトレース: {ex.StackTrace}");
+                return metrics;
+            }
+        }
+
+        public static void TestComprehensiveDLL()
+        {
+            Console.WriteLine("=== C++ Blood Pressure DLL テスト ===");
+            
+            try
+            {
+                // 処理時間計測付きの血圧推定テストを実行
+                var performanceMetrics = TestBloodPressureEstimationWithTiming();
+                
+                // 結果をファイルに保存
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string performanceLogFile = $"performance_log_{timestamp}.txt";
+                
+                using (var writer = new StreamWriter(performanceLogFile, false, Encoding.UTF8))
                 {
-                    Console.WriteLine("   GenerateRequestId関数を呼び出し中...");
-                    var sb = new StringBuilder(256);
-                    int result = GenerateRequestId(sb, sb.Capacity);
-                    string requestId = sb.ToString();
-                    Console.WriteLine("   GenerateRequestId関数呼び出し完了");
-                    
-                    if (string.IsNullOrEmpty(requestId))
-                    {
-                        Console.WriteLine("   [ERROR] リクエストIDが空です");
-                        return;
-                    }
-                    Console.WriteLine($"   生成されたID: {requestId}");
-                    if (requestId.Contains("failed"))
-                    {
-                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {requestId}");
-                        return;
-                    }
-                    Console.WriteLine("   [SUCCESS] リクエストID生成成功");
-                }
-                catch (AccessViolationException ex)
-                {
-                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
-                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
-                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"   [ERROR] リクエストID生成で予期しないエラー: {ex.Message}");
-                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
-                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
-                    return;
+                    writer.WriteLine("=== Blood Pressure Estimation Performance Log ===");
+                    writer.WriteLine($"Test Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    writer.WriteLine($"Success: {performanceMetrics.IsSuccess}");
+                    writer.WriteLine($"Total Time: {performanceMetrics.TotalTime.TotalMilliseconds:F2} ms");
+                    writer.WriteLine($"Initialization Time: {performanceMetrics.InitializationTime.TotalMilliseconds:F2} ms");
+                    writer.WriteLine($"Video Conversion Time: {performanceMetrics.VideoConversionTime.TotalMilliseconds:F2} ms");
+                    writer.WriteLine($"Blood Pressure Analysis Time: {performanceMetrics.BloodPressureAnalysisTime.TotalMilliseconds:F2} ms");
+                    writer.WriteLine($"Callback Time: {performanceMetrics.CallbackTime.TotalMilliseconds:F2} ms");
+                    writer.WriteLine($"Video File Size: {performanceMetrics.VideoFileSize / 1024 / 1024.0:F2} MB");
+                    writer.WriteLine($"Frame Count: {performanceMetrics.FrameCount}");
+                    writer.WriteLine($"Error Message: {performanceMetrics.ErrorMessage ?? "None"}");
                 }
                 
-                // 4. 処理状況取得テスト
-                Console.WriteLine("\n4. 処理状況取得テスト");
-                try
-                {
-                    Console.WriteLine("   処理状況取得を試行中...");
-                    Console.WriteLine("   GetProcessingStatus関数を呼び出し中...");
-                    Console.WriteLine("   引数: test_request");
-                    
-                    // 段階的なテスト
-                    Console.WriteLine("   Step 1: 関数呼び出し前の状態確認");
-                    Console.WriteLine("   Step 2: GetProcessingStatus関数呼び出し開始");
-                    
-                    // より詳細なデバッグ情報
-                    Console.WriteLine("   Step 2.1: 関数ポインタの確認");
-                    Console.WriteLine("   Step 2.2: 引数の準備");
-                    string testArg = "test_request";
-                    Console.WriteLine($"   Step 2.3: 引数値: {testArg}");
-                    
-                    var sb = new StringBuilder(256);
-                    int result = GetProcessingStatus(sb, sb.Capacity, testArg);
-                    string status = sb.ToString();
-                    
-                    Console.WriteLine("   Step 3: GetProcessingStatus関数呼び出し完了");
-                    Console.WriteLine("   Step 4: 戻り値の確認");
-                    
-                    if (result != 0)
-                    {
-                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {status}");
-                        return;
-                    }
-                    if (string.IsNullOrEmpty(status))
-                    {
-                        Console.WriteLine("   [ERROR] 処理状況が空です");
-                        return;
-                    }
-                    
-                    Console.WriteLine($"   処理状況: {status}");
-                    if (status.Contains("failed"))
-                    {
-                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {status}");
-                        return;
-                    }
-                    Console.WriteLine("   [SUCCESS] 処理状況取得成功");
-                }
-                catch (AccessViolationException ex)
-                {
-                    Console.WriteLine($"   [ERROR] メモリアクセス違反: {ex.Message}");
-                    Console.WriteLine("   これは文字列のライフタイム問題の可能性があります");
-                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
-                    return;
-                }
-                catch (DllNotFoundException ex)
-                {
-                    Console.WriteLine($"   [ERROR] DLLが見つかりません: {ex.Message}");
-                    return;
-                }
-                catch (EntryPointNotFoundException ex)
-                {
-                    Console.WriteLine($"   [ERROR] 関数が見つかりません: {ex.Message}");
-                    return;
-                }
-                catch (BadImageFormatException ex)
-                {
-                    Console.WriteLine($"   [ERROR] DLLの形式が不正です: {ex.Message}");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"   [ERROR] 処理状況取得で予期しないエラー: {ex.Message}");
-                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
-                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
-                    return;
-                }
+                Console.WriteLine($"パフォーマンスログ保存: {performanceLogFile}");
                 
-                // 5. 血圧推定テスト
-                Console.WriteLine("\n5. 血圧推定テスト");
-                try
+                if (!performanceMetrics.IsSuccess)
                 {
-                    string sampleVideo = "sample_video.webm";
-                    if (!File.Exists(sampleVideo))
-                    {
-                        Console.WriteLine($"   [ERROR] サンプル動画が見つかりません: {sampleVideo}");
-                        Console.WriteLine("   [DEBUG] カレントディレクトリのファイル一覧:");
-                        foreach (var f in Directory.GetFiles(".", "*", SearchOption.TopDirectoryOnly))
-                            Console.WriteLine($"     {f}");
-                        return;
-                    }
-                    
-                    var fileInfo = new FileInfo(sampleVideo);
-                    Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
-                    Console.WriteLine($"   ファイルサイズ: {fileInfo.Length} bytes");
-                    Console.WriteLine($"   最終更新日時: {fileInfo.LastWriteTime}");
-                    
-                    // ファイルヘッダーをチェックしてビデオファイルかどうか確認
-                    try
-                    {
-                        byte[] header = new byte[16];
-                        using (var stream = File.OpenRead(sampleVideo))
-                        {
-                            stream.Read(header, 0, header.Length);
-                        }
-                        string headerHex = BitConverter.ToString(header).Replace("-", " ");
-                        Console.WriteLine($"   ファイルヘッダー: {headerHex}");
-                        
-                        // WebM/Matroskaファイルのシグネチャをチェック
-                        if (header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3)
-                        {
-                            Console.WriteLine("   [INFO] ファイルは有効なWebM/Matroskaファイルです");
-                        }
-                        else
-                        {
-                            Console.WriteLine("   [WARNING] ファイルヘッダーがWebM/Matroska形式と一致しません");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"   [WARNING] ファイルヘッダーの読み取りに失敗: {ex.Message}");
-                    }
-
-                    // ffmpeg.exeのパスを決定
-                    string ffmpegExe = "ffmpeg.exe";
-                    if (File.Exists("ffmpeg.exe"))
-                        ffmpegExe = Path.GetFullPath("ffmpeg.exe");
-                    else if (File.Exists("../ffmpeg.exe"))
-                        ffmpegExe = Path.GetFullPath("../ffmpeg.exe");
-                    // それ以外はPATHに頼る
-
-                    if (!File.Exists(ffmpegExe) && ffmpegExe != "ffmpeg.exe")
-                    {
-                        Console.WriteLine($"   [ERROR] ffmpeg.exeが見つかりません。配布物に同梱されているか、PATHが通っているか確認してください。");
-                        Console.WriteLine("   [DEBUG] testディレクトリのファイル一覧:");
-                        foreach (var f in Directory.GetFiles(".", "*", SearchOption.TopDirectoryOnly))
-                            Console.WriteLine("   " + f);
-                        return;
-                    }
-
-                    // webm→画像シーケンス一時変換
-                    string tempDir = Path.Combine(Path.GetTempPath(), $"frames_{Guid.NewGuid().ToString().Replace("-", "")}");
-                    Directory.CreateDirectory(tempDir);
-                    string framePattern = Path.Combine(tempDir, "frame_%05d.jpg");
-                    Console.WriteLine($"   ffmpegで画像シーケンスに一時変換: {framePattern}");
-                    var ffmpegProc = new System.Diagnostics.Process();
-                    ffmpegProc.StartInfo.FileName = ffmpegExe;
-                    ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -q:v 2 \"{framePattern}\"";
-                    ffmpegProc.StartInfo.UseShellExecute = false;
-                    ffmpegProc.StartInfo.RedirectStandardOutput = true;
-                    ffmpegProc.StartInfo.RedirectStandardError = true;
-                    ffmpegProc.Start();
-                    Console.WriteLine("   [DEBUG] ffmpegプロセス開始");
-                    string ffmpegErr = ffmpegProc.StandardError.ReadToEnd();
-                    string ffmpegOut = ffmpegProc.StandardOutput.ReadToEnd();
-                    bool exited = ffmpegProc.WaitForExit(60000); // 60秒でタイムアウト
-                    
-                    Console.WriteLine($"   [DEBUG] ffmpeg終了コード: {ffmpegProc.ExitCode}");
-                    if (!string.IsNullOrEmpty(ffmpegOut))
-                        Console.WriteLine($"   [DEBUG] ffmpeg stdout: {ffmpegOut}");
-                    if (!string.IsNullOrEmpty(ffmpegErr))
-                        Console.WriteLine($"   [DEBUG] ffmpeg stderr: {ffmpegErr}");
-                    
-                    if (!exited) {
-                        ffmpegProc.Kill();
-                        Console.WriteLine("   [ERROR] ffmpeg変換がタイムアウトしました");
-                        Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
-                        try { Directory.Delete(tempDir, true); } catch { }
-                        return;
-                    }
-                    
-                    if (ffmpegProc.ExitCode != 0) {
-                        Console.WriteLine($"   [ERROR] ffmpeg変換が失敗しました (終了コード: {ffmpegProc.ExitCode})");
-                        Console.WriteLine($"   [ffmpeg stderr] {ffmpegErr}");
-                        try { Directory.Delete(tempDir, true); } catch { }
-                        return;
-                    }
-                    var frameFiles = Directory.GetFiles(tempDir, "frame_*.jpg").OrderBy(f => f).ToArray();
-                    if (frameFiles.Length == 0)
-                    {
-                        Console.WriteLine($"   [ERROR] ffmpeg画像変換失敗: {ffmpegErr}");
-                        try { Directory.Delete(tempDir, true); } catch { }
-                        return;
-                    }
-                    Console.WriteLine($"   ffmpeg変換成功（{frameFiles.Length}フレーム）");
-
-                    // 画像ファイルを1枚ずつimreadして解析 → DLLの新APIで推定
-                    int height = 170, weight = 70, sex = 1;
-                    bool callbackCalled = false;
-                    AutoResetEvent callbackEvent = new AutoResetEvent(false);
-                    BPCallback callback = (reqId, sbp, dbp, csv, errorsJson) =>
-                    {
-                        try {
-                            Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={sbp}, DBP={dbp}");
-                            if (!string.IsNullOrEmpty(csv))
-                            {
-                                Console.WriteLine($"[CALLBACK] CSV length: {csv.Length}");
-                            }
-                            if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
-                            {
-                                Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
-                            }
-                            callbackCalled = true;
-                            callbackEvent.Set();
-                        } catch (Exception ex) {
-                            Console.WriteLine($"[FATAL ERROR] コールバック内で例外発生: {ex.Message}");
-                            Console.WriteLine($"スタックトレース: {ex.StackTrace}");
-                            throw;
-                        }
-                    };
-                    Console.WriteLine("   血圧推定リクエスト送信中（画像配列）...");
-                    var sb = new StringBuilder(256);
-                    int resultCode = AnalyzeBloodPressureFromImages(sb, sb.Capacity, frameFiles, frameFiles.Length, height, weight, sex, callback);
-                    if (resultCode != 0)
-                    {
-                        Console.WriteLine($"   [ERROR] DLLからエラー返却: {sb.ToString()}");
-                        return;
-                    }
-                    if (!callbackEvent.WaitOne(30000))
-                    {
-                        Console.WriteLine("   [ERROR] コールバックが30秒以内に呼ばれませんでした");
-                    }
-                    else if (!callbackCalled)
-                    {
-                        Console.WriteLine("   [ERROR] コールバックが呼ばれませんでした");
-                    }
-                    else
-                    {
-                        Console.WriteLine("   [SUCCESS] 血圧推定テスト完了");
-                    }
-                    try { Directory.Delete(tempDir, true); } catch { }
+                    Console.WriteLine($"\n[ERROR] 血圧推定テスト失敗: {performanceMetrics.ErrorMessage}");
                     return;
-
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"   [ERROR] 血圧推定テストで予期しないエラー: {ex.Message}");
-                    Console.WriteLine($"   例外の種類: {ex.GetType().Name}");
-                    Console.WriteLine($"   スタックトレース: {ex.StackTrace}");
                 }
                 
                 Console.WriteLine("\n[SUCCESS] すべてのテストが完了しました");
@@ -634,59 +571,9 @@ namespace BloodPressureDllTest
                 Console.WriteLine($"[FATAL] UnobservedTaskException: {e.Exception?.ToString()}");
             };
             Console.WriteLine($"[DEBUG] Is64BitProcess: {Environment.Is64BitProcess}");
-            try
-            {
-                // 1. DLL初期化
-                var sb = new StringBuilder(1024);
-                int result = InitializeBP(sb, sb.Capacity, "models");
-                Console.WriteLine($"InitializeBP result: {result}");
-                Console.WriteLine($"InitializeBP buffer: '{sb}'");
-                if (result != 0) return;
-
-                // 2. バージョン情報
-                sb.Clear();
-                result = GetVersionInfo(sb, sb.Capacity);
-                Console.WriteLine($"GetVersionInfo result: {result}");
-                Console.WriteLine($"GetVersionInfo buffer: '{sb}'");
-                if (result != 0) return;
-
-                // 推論テスト
-                // double[] peakTimes = new double[] { 0.1, 0.5, 1.0, 1.5, 2.0 }; // ダミーデータ
-                // int height = 170;
-                // int weight = 65;
-                // int sex = 1; // 男性=1, 女性=0
-                // int sbp, dbp;
-                // int estResult = EstimateBloodPressure(peakTimes, peakTimes.Length, height, weight, sex, out sbp, out dbp);
-                // Console.WriteLine($"EstimateBloodPressure result: {estResult}");
-                // Console.WriteLine($"推定SBP: {sbp}, 推定DBP: {dbp}");
-
-                // 仕様準拠の推論テスト
-                string requestId = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_TEST001_000000001";
-                int height2 = 170;
-                int weight2 = 65;
-                int sex2 = 1; // 男性=1, 女性=2
-                string moviePath = "sample_video.webm";
-                BPCallback callback = (reqId, maxBP, minBP, measureRowData, errorsJson) => {
-                    Console.WriteLine($"[CALLBACK] requestId={reqId}, SBP={maxBP}, DBP={minBP}");
-                    if (!string.IsNullOrEmpty(measureRowData))
-                    {
-                        Console.WriteLine($"[CALLBACK] CSV length: {measureRowData.Length}");
-                    }
-                    if (!string.IsNullOrEmpty(errorsJson) && errorsJson != "[]")
-                    {
-                        Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
-                    }
-                };
-                var outBuf = new StringBuilder(1024);
-                int ret = StartBloodPressureAnalysisRequest(outBuf, outBuf.Capacity, requestId, height2, weight2, sex2, moviePath, callback);
-                Console.WriteLine($"StartBloodPressureAnalysisRequest returned: {ret}, outBuf: '{outBuf}'");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"アプリケーションエラー: {ex.Message}");
-                Console.WriteLine($"スタックトレース: {ex.StackTrace}");
-                Environment.Exit(1);
-            }
+            
+            // 処理時間計測付きのテストを実行
+            TestComprehensiveDLL();
         }
     }
 }
