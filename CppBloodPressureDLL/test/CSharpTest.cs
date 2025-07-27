@@ -260,9 +260,9 @@ namespace BloodPressureDllTest
                     return metrics;
                 }
                 
-                var fileInfo = new FileInfo(sampleVideo);
-                metrics.VideoFileSize = fileInfo.Length;
-                Console.WriteLine($"   サンプル動画: {sampleVideo} ({fileInfo.Length / 1024 / 1024.0:F2} MB)");
+                var videoFileInfo = new FileInfo(sampleVideo);
+                metrics.VideoFileSize = videoFileInfo.Length;
+                Console.WriteLine($"   サンプル動画: {sampleVideo} ({videoFileInfo.Length / 1024 / 1024.0:F2} MB)");
                 
                 // ffmpeg.exeのパスを決定
                 string ffmpegExe = "ffmpeg.exe";
