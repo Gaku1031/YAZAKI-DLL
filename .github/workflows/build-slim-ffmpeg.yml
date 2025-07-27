@@ -10,10 +10,9 @@ on:
 jobs:
   build-slim-ffmpeg:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install cross-compilation dependencies
         run: |
@@ -402,7 +401,7 @@ jobs:
           echo "Build completed successfully!"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: slim-ffmpeg-webm-converter
           path: artifacts/
