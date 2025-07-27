@@ -755,6 +755,10 @@ jobs:
 
       - name: Use slim ffmpeg for blood pressure estimation test
         run: |
+          # Create necessary directories first
+          if (!(Test-Path "dist_cpp")) { New-Item -ItemType Directory -Path "dist_cpp" -Force | Out-Null }
+          if (!(Test-Path "deployment")) { New-Item -ItemType Directory -Path "deployment" -Force | Out-Null }
+
           # Check for slim ffmpeg versions in root directory
           $slimPath = "ffmpeg-slim.exe"
           $ultraSlimPath = "ffmpeg-ultra-slim.exe"
@@ -880,7 +884,7 @@ jobs:
             Write-Host "Warning: OpenCV ffmpeg DLL not found in any expected location" -ForegroundColor Yellow
           }
         shell: powershell
-      
+
       - name: Run C# Integration Test
         run: |
           cd CppBloodPressureDLL/test
