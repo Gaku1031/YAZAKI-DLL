@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text; // StringBuilderを追加
 using System.Diagnostics; // Stopwatchを追加
-using System.Diagnostics.PerformanceCounter; // PerformanceCounterを追加
 
 namespace BloodPressureDllTest
 {
