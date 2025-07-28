@@ -201,7 +201,9 @@ namespace BloodPressureDllTest
                 // まずコールバックからタイミング情報を確認
                 if (!string.IsNullOrEmpty(errorsJson) && errorsJson.Contains("timing_info"))
                 {
-                    Console.WriteLine("\n=== DETAILED TIMING ANALYSIS (from callback) ===");
+                    Console.WriteLine("\n" + new string('=', 60));
+                    Console.WriteLine("DETAILED TIMING ANALYSIS (from callback)");
+                    Console.WriteLine(new string('=', 60));
                     // 簡易的なJSON解析（実際のプロジェクトではNewtonsoft.Json等を使用）
                     int startIndex = errorsJson.IndexOf("\"timing_info\":\"") + 15;
                     int endIndex = errorsJson.LastIndexOf("\"");
@@ -211,7 +213,9 @@ namespace BloodPressureDllTest
                         timingInfo = timingInfo.Replace("\\n", "\n").Replace("\\t", "\t");
                         Console.WriteLine(timingInfo);
                     }
-                    Console.WriteLine("=== END OF DETAILED TIMING ANALYSIS ===");
+                    Console.WriteLine(new string('=', 60));
+                    Console.WriteLine("END OF DETAILED TIMING ANALYSIS");
+                    Console.WriteLine(new string('=', 60));
                 }
                 // ファイルからも読み取り（バックアップ）
                 else if (File.Exists("detailed_timing.log"))
