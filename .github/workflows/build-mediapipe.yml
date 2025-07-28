@@ -25,24 +25,61 @@ jobs:
 
       - name: Install Bazel
         run: |
-          # Check if Bazel is already installed
-          $bazelVersion = bazel --version 2>$null
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "Bazel is already installed: $bazelVersion"
-          } else {
-              Write-Host "Installing Bazel..."
-              choco install bazel -y
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Error "Failed to install Bazel"
+          Write-Host "Setting up Bazel..."
+          
+          # Remove any existing problematic Bazel installations
+          Write-Host "Cleaning up existing Bazel installations..."
+          choco uninstall bazel -y 2>$null
+          Remove-Item -Path "C:\bazel" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "$env:USERPROFILE\.bazel" -Recurse -Force -ErrorAction SilentlyContinue
+          
+          # Install Bazel using Chocolatey with specific version
+          Write-Host "Installing Bazel via Chocolatey..."
+          choco install bazel --version=6.4.0 -y
+          
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "Chocolatey installation failed, trying direct download..."
+              
+              # Fallback: Download Bazel directly
+              $bazelDir = "C:\bazel"
+              New-Item -ItemType Directory -Force -Path $bazelDir | Out-Null
+              
+              $bazelVersion = "6.4.0"
+              $bazelUrl = "https://github.com/bazelbuild/bazel/releases/download/$bazelVersion/bazel-$bazelVersion-windows-x86_64.exe"
+              $bazelExe = "$bazelDir\bazel.exe"
+              
+              Write-Host "Downloading Bazel $bazelVersion from: $bazelUrl"
+              
+              try {
+                  Invoke-WebRequest -Uri $bazelUrl -OutFile $bazelExe -UseBasicParsing
+                  Write-Host "Bazel downloaded successfully"
+                  
+                  # Add to PATH
+                  $env:PATH = "$bazelDir;$env:PATH"
+                  [Environment]::SetEnvironmentVariable("PATH", "$bazelDir;$env:PATH", "Machine")
+                  
+              } catch {
+                  Write-Error "Failed to download Bazel: $($_.Exception.Message)"
                   exit 1
               }
           }
-
-          # Update PATH to include Bazel
+          
+          # Refresh environment and verify
+          Write-Host "Refreshing environment..."
           $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-
-          # Verify Bazel is accessible
+          
+          # Verify Bazel installation
+          Write-Host "Verifying Bazel installation..."
           bazel --version
+          
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "Bazel installed successfully"
+          } else {
+              Write-Error "Bazel verification failed"
+              Write-Host "Available Bazel installations:"
+              Get-Command bazel -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Source)" }
+              exit 1
+          }
         shell: powershell
 
       - name: Install Python and dependencies
