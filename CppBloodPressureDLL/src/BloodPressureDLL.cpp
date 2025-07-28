@@ -328,12 +328,25 @@ int StartBloodPressureAnalysisRequest(
         std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
         
         // タイミング情報をファイルに出力
-        std::string timing_info = rppg.get_timing_summary() + g_estimator->get_timing_summary();
+        printf("[DEBUG] About to get timing summaries...\n");
+        std::string rppg_timing = rppg.get_timing_summary();
+        printf("[DEBUG] RPPG timing length: %zu\n", rppg_timing.length());
+        
+        std::string bp_timing = g_estimator->get_timing_summary();
+        printf("[DEBUG] BP timing length: %zu\n", bp_timing.length());
+        
+        std::string timing_info = rppg_timing + bp_timing;
+        printf("[DEBUG] Combined timing length: %zu\n", timing_info.length());
+        
+        if (timing_info.empty()) {
+            printf("[DEBUG] WARNING: Timing info is empty!\n");
+            timing_info = "=== NO TIMING DATA AVAILABLE ===\n";
+        }
+        
         printf("%s", timing_info.c_str());
         fflush(stdout);
         
-        printf("[DEBUG] Timing info length: %zu\n", timing_info.length());
-        printf("[DEBUG] Timing info preview: %.100s...\n", timing_info.c_str());
+        printf("[DEBUG] Timing info preview: %.200s...\n", timing_info.c_str());
         
         // タイミング情報をファイルに保存
         std::ofstream timing_file("detailed_timing.log");
@@ -367,7 +380,15 @@ int StartBloodPressureAnalysisRequest(
         std::string timing_json = "{\"timing_info\":\"" + escaped_timing + "\"}";
         printf("[DEBUG] JSON length: %zu\n", timing_json.length());
         printf("[DEBUG] JSON preview: %.100s...\n", timing_json.c_str());
-        if (callback) callback(requestId, result.first, result.second, csv.c_str(), timing_json.c_str());
+        printf("[DEBUG] About to call callback function...\n");
+        printf("[DEBUG] Callback function pointer: %p\n", (void*)callback);
+        if (callback) {
+            printf("[DEBUG] Calling callback function...\n");
+            callback(requestId, result.first, result.second, csv.c_str(), timing_json.c_str());
+            printf("[DEBUG] Callback function called successfully\n");
+        } else {
+            printf("[DEBUG] Callback function is null!\n");
+        }
         snprintf(outBuf, bufSize, "OK");
         return 0;
     } catch (const std::exception& e) {

@@ -161,6 +161,14 @@ namespace BloodPressureDllTest
         // コールバック関数の実装
         public static void TestCallback(string requestId, int maxBP, int minBP, string csvData, string errorsJson)
         {
+            Console.WriteLine("[DEBUG] TestCallback called!");
+            Console.WriteLine($"[DEBUG] requestId: {requestId}");
+            Console.WriteLine($"[DEBUG] maxBP: {maxBP}");
+            Console.WriteLine($"[DEBUG] minBP: {minBP}");
+            Console.WriteLine($"[DEBUG] csvData length: {csvData?.Length ?? 0}");
+            Console.WriteLine($"[DEBUG] errorsJson length: {errorsJson?.Length ?? 0}");
+            Console.WriteLine($"[DEBUG] errorsJson content: {errorsJson}");
+            
             Console.WriteLine("=== 血圧解析結果 ===");
             Console.WriteLine($"Request ID: {requestId}");
             Console.WriteLine($"最高血圧: {maxBP} mmHg");

@@ -136,12 +136,15 @@ struct RPPGProcessor::Impl {
         std::stringstream ss;
         ss << "\n=== RPPG TIMING ANALYSIS ===\n";
         
+        printf("[DEBUG] RPPG timing_log size: %zu\n", timing_log.size());
+        
         double total_time = 0.0;
         for (const auto& timing : timing_log) {
             double duration = timing.get_duration_ms();
             total_time += duration;
             ss << std::fixed << std::setprecision(2) 
                << timing.stage_name << ": " << duration << " ms\n";
+            printf("[DEBUG] RPPG stage: %s = %.2f ms\n", timing.stage_name.c_str(), duration);
         }
         
         ss << "Total RPPG time: " << total_time << " ms\n";
@@ -155,7 +158,9 @@ struct RPPGProcessor::Impl {
                << timing.stage_name << ": " << percentage << "%\n";
         }
         
-        return ss.str();
+        std::string result = ss.str();
+        printf("[DEBUG] RPPG timing summary length: %zu\n", result.length());
+        return result;
     }
     
     std::vector<cv::Point2f> detectFaceLandmarks(const cv::Mat& frame) {

@@ -105,12 +105,15 @@ struct BloodPressureEstimator::Impl {
         std::stringstream ss;
         ss << "\n=== BP ESTIMATION TIMING ANALYSIS ===\n";
         
+        printf("[DEBUG] BP timing_log size: %zu\n", timing_log.size());
+        
         double total_time = 0.0;
         for (const auto& timing : timing_log) {
             double duration = timing.get_duration_ms();
             total_time += duration;
             ss << std::fixed << std::setprecision(2) 
                << timing.stage_name << ": " << duration << " ms\n";
+            printf("[DEBUG] BP stage: %s = %.2f ms\n", timing.stage_name.c_str(), duration);
         }
         
         ss << "Total BP estimation time: " << total_time << " ms\n";
@@ -124,7 +127,9 @@ struct BloodPressureEstimator::Impl {
                << timing.stage_name << ": " << percentage << "%\n";
         }
         
-        return ss.str();
+        std::string result = ss.str();
+        printf("[DEBUG] BP timing summary length: %zu\n", result.length());
+        return result;
     }
 
     float run(void* session_ptr, const std::vector<float>& input) {
