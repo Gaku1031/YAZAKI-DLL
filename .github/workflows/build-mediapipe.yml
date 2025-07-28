@@ -90,7 +90,11 @@ jobs:
       - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
-          pip install numpy opencv-python
+          pip install numpy opencv-python opencv-contrib-python
+
+          # Verify OpenCV installation
+          python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
+          python -c "import cv2; print(f'OpenCV data path: {cv2.data.haarcascades}')"
         shell: powershell
 
       - name: Clone MediaPipe
@@ -218,8 +222,13 @@ jobs:
               
               bool Initialize() {
                   // Load OpenCV face detection model
-                  if (!face_cascade.load(cv::data::haarcascades + "haarcascade_frontalface_alt.xml")) {
-                      return false;
+                  std::string cascade_path = cv::data::haarcascades + "haarcascade_frontalface_alt.xml";
+                  if (!face_cascade.load(cascade_path)) {
+                      // Try alternative path
+                      cascade_path = "haarcascade_frontalface_alt.xml";
+                      if (!face_cascade.load(cascade_path)) {
+                          return false;
+                      }
                   }
                   initialized = true;
                   return true;
@@ -441,11 +450,10 @@ jobs:
               name = "blood_pressure_mediapipe",
               srcs = ["face_mesh_wrapper.cpp"],
               hdrs = ["face_mesh_wrapper.h"],
-              deps = [
-                  "@opencv//:opencv",
-              ],
               linkopts = [
-                  "/DEFAULTLIB:opencv_world",
+                  "/DEFAULTLIB:opencv_world480",
+                  "/DEFAULTLIB:opencv_imgproc480",
+                  "/DEFAULTLIB:opencv_objdetect480",
               ],
           )
 
@@ -487,6 +495,10 @@ jobs:
           Write-Host "Checking source files:"
           Get-ChildItem -Path "BloodPressureMediaPipe" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
 
+          # Check available OpenCV targets
+          Write-Host "Checking available OpenCV targets..."
+          bazel query "@opencv//:*" 2>$null
+
           # Build the DLL with detailed output
           Write-Host "Building MediaPipe DLL..."
           bazel build //BloodPressureMediaPipe:blood_pressure_mediapipe.dll --config=windows --define MEDIAPIPE_DISABLE_GPU=1 --verbose_failures
@@ -511,6 +523,19 @@ jobs:
               Copy-Item $dllPath.FullName "..\artifacts\BloodPressureMediaPipe.dll"
               Write-Host "Successfully built DLL: $($dllPath.FullName)"
               Write-Host "DLL size: $((Get-Item $dllPath.FullName).Length / 1MB) MB"
+              
+              # Copy OpenCV DLLs
+              Write-Host "Copying OpenCV DLLs..."
+              $opencvDlls = @("opencv_world480.dll", "opencv_imgproc480.dll", "opencv_objdetect480.dll")
+              foreach ($dll in $opencvDlls) {
+                  $dllPath = Get-ChildItem -Path "C:\Windows\System32" -Filter $dll -ErrorAction SilentlyContinue
+                  if ($dllPath) {
+                      Copy-Item $dllPath.FullName "..\artifacts\"
+                      Write-Host "Copied $dll"
+                  } else {
+                      Write-Warning "OpenCV DLL not found: $dll"
+                  }
+              }
           } else {
               Write-Error "DLL not found in build output"
               Write-Host "Contents of bazel-bin:"
