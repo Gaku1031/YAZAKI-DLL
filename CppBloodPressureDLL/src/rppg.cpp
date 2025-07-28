@@ -132,6 +132,11 @@ struct RPPGProcessor::Impl {
         }
     }
     
+    // タイミングログをクリア
+    void clear_timing_log() {
+        timing_log.clear();
+    }
+    
     std::string get_timing_summary() const {
         std::stringstream ss;
         ss << "\n=== RPPG TIMING ANALYSIS ===\n";
@@ -268,6 +273,9 @@ RPPGResult RPPGProcessor::processVideo(const std::string& videoPath) {
 }
 
 RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>& imagePaths, double fps) {
+    // タイミングログをクリア
+    pImpl->clear_timing_log();
+    
     pImpl->start_timing("RPPG Total Processing");
     
     std::vector<std::vector<double>> skin_means;

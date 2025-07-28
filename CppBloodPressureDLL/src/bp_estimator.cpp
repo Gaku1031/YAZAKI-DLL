@@ -101,6 +101,11 @@ struct BloodPressureEstimator::Impl {
         }
     }
     
+    // タイミングログをクリア
+    void clear_timing_log() {
+        timing_log.clear();
+    }
+    
     std::string get_timing_summary() const {
         std::stringstream ss;
         ss << "\n=== BP ESTIMATION TIMING ANALYSIS ===\n";
@@ -159,6 +164,9 @@ BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
 BloodPressureEstimator::~BloodPressureEstimator() = default;
 
 std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double>& peak_times, int height, int weight, int sex) {
+    // タイミングログをクリア
+    pImpl->clear_timing_log();
+    
     pImpl->start_timing("BP Estimation Total");
     
     pImpl->start_timing("RRI Calculation and Outlier Removal");
