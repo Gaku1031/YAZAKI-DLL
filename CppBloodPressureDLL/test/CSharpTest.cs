@@ -195,6 +195,45 @@ namespace BloodPressureDllTest
                 Console.WriteLine("[SUCCESS] エラーなし");
             }
             
+            // 詳細タイミング情報を読み取り
+            try
+            {
+                // まずコールバックからタイミング情報を確認
+                if (!string.IsNullOrEmpty(errorsJson) && errorsJson.Contains("timing_info"))
+                {
+                    Console.WriteLine("\n=== DETAILED TIMING ANALYSIS (from callback) ===");
+                    // 簡易的なJSON解析（実際のプロジェクトではNewtonsoft.Json等を使用）
+                    int startIndex = errorsJson.IndexOf("\"timing_info\":\"") + 15;
+                    int endIndex = errorsJson.LastIndexOf("\"");
+                    if (startIndex > 14 && endIndex > startIndex)
+                    {
+                        string timingInfo = errorsJson.Substring(startIndex, endIndex - startIndex);
+                        timingInfo = timingInfo.Replace("\\n", "\n").Replace("\\t", "\t");
+                        Console.WriteLine(timingInfo);
+                    }
+                    Console.WriteLine("=== END OF DETAILED TIMING ANALYSIS ===");
+                }
+                // ファイルからも読み取り（バックアップ）
+                else if (File.Exists("detailed_timing.log"))
+                {
+                    Console.WriteLine("\n=== DETAILED TIMING ANALYSIS (from file) ===");
+                    string[] timingLines = File.ReadAllLines("detailed_timing.log");
+                    foreach (string line in timingLines)
+                    {
+                        Console.WriteLine(line);
+                    }
+                    Console.WriteLine("=== END OF DETAILED TIMING ANALYSIS ===");
+                }
+                else
+                {
+                    Console.WriteLine("[INFO] 詳細タイミングログファイルが見つかりません");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"[WARNING] タイミング情報読み取りエラー: {e.Message}");
+            }
+            
             // CSVファイルに保存
             if (!string.IsNullOrEmpty(csvData))
             {

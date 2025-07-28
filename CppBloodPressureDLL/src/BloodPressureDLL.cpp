@@ -327,12 +327,34 @@ int StartBloodPressureAnalysisRequest(
         auto result = g_estimator->estimate_bp(peaks, height, weight, sex);
         std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
         
-        // タイミング情報を出力
+        // タイミング情報をファイルに出力
         std::string timing_info = rppg.get_timing_summary() + g_estimator->get_timing_summary();
         printf("%s", timing_info.c_str());
         fflush(stdout);
         
-        if (callback) callback(requestId, result.first, result.second, csv.c_str(), "[]");
+        // タイミング情報をファイルに保存
+        std::ofstream timing_file("detailed_timing.log");
+        if (timing_file.is_open()) {
+            timing_file << "=== DETAILED TIMING ANALYSIS ===" << std::endl;
+            timing_file << timing_info << std::endl;
+            timing_file.close();
+        }
+        
+        // タイミング情報をJSON形式でエラーフィールドに含める
+        std::string escaped_timing = timing_info;
+        // 改行とタブをエスケープ
+        size_t pos = 0;
+        while ((pos = escaped_timing.find('\n', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\n");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped_timing.find('\t', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\t");
+            pos += 2;
+        }
+        std::string timing_json = "{\"timing_info\":\"" + escaped_timing + "\"}";
+        if (callback) callback(requestId, result.first, result.second, csv.c_str(), timing_json.c_str());
         snprintf(outBuf, bufSize, "OK");
         return 0;
     } catch (const std::exception& e) {
