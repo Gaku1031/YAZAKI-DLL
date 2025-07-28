@@ -195,7 +195,12 @@ struct RPPGProcessor::Impl {
             return landmarks;
         }
         
-        // Prepare input blob
+        // フレームサイズが小さすぎる場合はスキップ
+        if (frame.cols < 100 || frame.rows < 100) {
+            return landmarks;
+        }
+        
+        // Prepare input blob with optimized size
         cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(300, 300), cv::Scalar(104.0, 177.0, 123.0), false, false);
         face_detector.setInput(blob);
         
@@ -205,32 +210,41 @@ struct RPPGProcessor::Impl {
         // Process detections
         cv::Mat detectionMat(detections.size[2], detections.size[3], CV_32F, detections.ptr<float>());
         
+        float max_confidence = 0.0;
+        std::vector<cv::Point2f> best_landmarks;
+        
         for (int i = 0; i < detectionMat.rows; i++) {
             float confidence = detectionMat.at<float>(i, 2);
             
-            if (confidence > 0.5) { // Confidence threshold
+            if (confidence > 0.5 && confidence > max_confidence) { // Confidence threshold
                 int x1 = static_cast<int>(detectionMat.at<float>(i, 3) * frame.cols);
                 int y1 = static_cast<int>(detectionMat.at<float>(i, 4) * frame.rows);
                 int x2 = static_cast<int>(detectionMat.at<float>(i, 5) * frame.cols);
                 int y2 = static_cast<int>(detectionMat.at<float>(i, 6) * frame.rows);
                 
+                // 顔のサイズが適切かチェック
+                int face_width = x2 - x1;
+                int face_height = y2 - y1;
+                if (face_width < 50 || face_height < 50) continue; // 小さすぎる顔はスキップ
+                
                 // Create face ROI landmarks (rectangular)
-                landmarks.push_back(cv::Point2f(x1, y1));
-                landmarks.push_back(cv::Point2f(x2, y1));
-                landmarks.push_back(cv::Point2f(x2, y2));
-                landmarks.push_back(cv::Point2f(x1, y2));
+                best_landmarks.clear();
+                best_landmarks.push_back(cv::Point2f(x1, y1));
+                best_landmarks.push_back(cv::Point2f(x2, y1));
+                best_landmarks.push_back(cv::Point2f(x2, y2));
+                best_landmarks.push_back(cv::Point2f(x1, y2));
                 
                 // Add more points for better ROI coverage
-                landmarks.push_back(cv::Point2f((x1 + x2) / 2, y1));
-                landmarks.push_back(cv::Point2f((x1 + x2) / 2, y2));
-                landmarks.push_back(cv::Point2f(x1, (y1 + y2) / 2));
-                landmarks.push_back(cv::Point2f(x2, (y1 + y2) / 2));
+                best_landmarks.push_back(cv::Point2f((x1 + x2) / 2, y1));
+                best_landmarks.push_back(cv::Point2f((x1 + x2) / 2, y2));
+                best_landmarks.push_back(cv::Point2f(x1, (y1 + y2) / 2));
+                best_landmarks.push_back(cv::Point2f(x2, (y1 + y2) / 2));
                 
-                break; // Use first detected face
+                max_confidence = confidence;
             }
         }
         
-        return landmarks;
+        return best_landmarks;
     }
 };
 
@@ -303,9 +317,155 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
     
     pImpl->start_timing("Image Loading and Processing");
     
-    for (const auto& path : imagePaths) {
-        cv::Mat frame = cv::imread(path);
-        if (frame.empty()) continue;
+    // バッチサイズを設定（メモリ効率のため）
+    const int BATCH_SIZE = 50;
+    const int total_frames = static_cast<int>(imagePaths.size());
+    
+    for (int batch_start = 0; batch_start < total_frames; batch_start += BATCH_SIZE) {
+        int batch_end = std::min(batch_start + BATCH_SIZE, total_frames);
+        
+        // バッチ内のフレームを処理
+        for (int i = batch_start; i < batch_end; ++i) {
+            const auto& path = imagePaths[i];
+            cv::Mat frame = cv::imread(path, cv::IMREAD_COLOR);
+            if (frame.empty()) continue;
+            
+            double current_time = frame_count / fps;
+            frame_count++;
+            
+            // 顔検出とROI抽出
+            std::vector<cv::Point2f> landmarks = pImpl->detectFaceLandmarks(frame);
+            if (!landmarks.empty()) {
+                // ROIマスクの作成
+                cv::Mat mask = cv::Mat::zeros(frame.size(), CV_8UC1);
+                std::vector<cv::Point> roi_points;
+                for (const auto& pt : landmarks) {
+                    roi_points.push_back(cv::Point(static_cast<int>(pt.x), static_cast<int>(pt.y)));
+                }
+                if (roi_points.size() >= 3) {
+                    cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
+                    
+                    // 肌色フィルタリング（YCbCr色空間）
+                    cv::Mat frame_ycbcr;
+                    cv::cvtColor(frame, frame_ycbcr, cv::COLOR_BGR2YCrCb);
+                    cv::Mat skin_mask;
+                    cv::inRange(frame_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
+                    
+                    // ROIマスクと肌色マスクの組み合わせ
+                    cv::Mat combined_mask;
+                    cv::bitwise_and(mask, skin_mask, combined_mask);
+                    
+                    // ROI領域の色平均を計算
+                    cv::Scalar mean = cv::mean(frame, combined_mask);
+                    // 有効な平均値のみを保存
+                    if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
+                        skin_means.push_back({mean[0], mean[1], mean[2]});
+                        timestamps.push_back(current_time);
+                    }
+                }
+            }
+        }
+        
+        // バッチ処理後のメモリクリーンアップ
+        if (batch_end % (BATCH_SIZE * 2) == 0) {
+            // 定期的にメモリをクリーンアップ
+            cv::Mat().copyTo(cv::Mat()); // 空のMatでメモリフラグメンテーションを防ぐ
+        }
+    }
+    pImpl->end_timing(); // Image Loading and Processing
+    
+    pImpl->start_timing("Signal Processing");
+    std::vector<double> rppg_signal, time_data, peak_times;
+    if (skin_means.size() > 30) {
+        pImpl->start_timing("Eigen Matrix Operations");
+        int L = 30;
+        int frames = static_cast<int>(skin_means.size());
+        Eigen::MatrixXd C(3, frames);
+        for (int i = 0; i < frames; ++i) {
+            C(0, i) = skin_means[i][0];
+            C(1, i) = skin_means[i][1];
+            C(2, i) = skin_means[i][2];
+        }
+        pImpl->end_timing();
+        
+        pImpl->start_timing("RPPG Algorithm");
+        Eigen::VectorXd H = Eigen::VectorXd::Zero(frames);
+        for (int f = 0; f < frames - L + 1; ++f) {
+            Eigen::MatrixXd block = C.block(0, f, 3, L);
+            Eigen::Vector3d mu_C = block.rowwise().mean();
+            for (int i = 0; i < 3; ++i) {
+                if (mu_C(i) == 0) mu_C(i) = 1e-8;
+            }
+            Eigen::MatrixXd C_normed = block.array().colwise() / mu_C.array();
+            Eigen::MatrixXd M(2, 3);
+            M << 0, 1, -1,
+                -2, 1, 1;
+            Eigen::MatrixXd S = M * C_normed;
+            double alpha = std::sqrt(S.row(0).array().square().mean()) /
+                          (std::sqrt(S.row(1).array().square().mean()) + 1e-8);
+            Eigen::VectorXd P = S.row(0).transpose() + alpha * S.row(1).transpose();
+            double P_mean = P.mean();
+            double P_std = std::max(std::sqrt((P.array() - P_mean).square().mean()), 1e-8);
+            Eigen::VectorXd P_normalized = (P.array() - P_mean) / P_std;
+            H.segment(f, L) += P_normalized;
+        }
+        pImpl->end_timing();
+        
+        pImpl->start_timing("Signal Normalization");
+        double mean = H.mean();
+        double stddev = std::sqrt((H.array() - mean).square().sum() / H.size());
+        Eigen::VectorXd pulse_z = (H.array() - mean) / (stddev + 1e-8);
+        rppg_signal.assign(pulse_z.data(), pulse_z.data() + pulse_z.size());
+        time_data = timestamps;
+        pImpl->end_timing();
+        
+        pImpl->start_timing("Peak Detection");
+        std::vector<size_t> peaks = find_peaks(rppg_signal, 10, 0.0);
+        for (size_t idx : peaks) {
+            if (idx < time_data.size()) {
+                peak_times.push_back(time_data[idx]);
+            }
+        }
+        pImpl->end_timing();
+    }
+    pImpl->end_timing(); // Signal Processing
+    
+    // すべてのアクティブなタイミングを終了
+    pImpl->end_current_timing();
+    
+    RPPGResult result;
+    result.rppg_signal = rppg_signal;
+    result.time_data = time_data;
+    result.peak_times = peak_times;
+    return result;
+} 
+
+RPPGResult RPPGProcessor::processVideoDirect(const std::string& videoPath) {
+    // タイミングログをクリア
+    pImpl->clear_timing_log();
+    
+    pImpl->start_timing("RPPG Total Processing");
+    
+    std::vector<std::vector<double>> skin_means;
+    std::vector<double> timestamps;
+    int frame_count = 0;
+    
+    pImpl->start_timing("Video Loading and Processing");
+    
+    // OpenCVで動画を直接読み込み
+    cv::VideoCapture cap(videoPath);
+    if (!cap.isOpened()) {
+        std::cerr << "[RPPG] Error: Could not open video file: " << videoPath << std::endl;
+        return RPPGResult();
+    }
+    
+    double fps = cap.get(cv::CAP_PROP_FPS);
+    int total_frames = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_COUNT));
+    
+    std::cout << "[RPPG] Video info - FPS: " << fps << ", Total frames: " << total_frames << std::endl;
+    
+    cv::Mat frame;
+    while (cap.read(frame)) {
         double current_time = frame_count / fps;
         frame_count++;
         
@@ -340,8 +500,15 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
                 }
             }
         }
+        
+        // 進捗表示（100フレームごと）
+        if (frame_count % 100 == 0) {
+            std::cout << "[RPPG] Processed " << frame_count << " frames..." << std::endl;
+        }
     }
-    pImpl->end_timing(); // Image Loading and Processing
+    
+    cap.release();
+    pImpl->end_timing(); // Video Loading and Processing
     
     pImpl->start_timing("Signal Processing");
     std::vector<double> rppg_signal, time_data, peak_times;

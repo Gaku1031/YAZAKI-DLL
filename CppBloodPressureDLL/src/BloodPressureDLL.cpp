@@ -316,7 +316,8 @@ int StartBloodPressureAnalysisRequest(
         }
         std::string model_dir = g_model_dir.empty() ? "models" : g_model_dir;
         RPPGProcessor rppg(model_dir);
-        RPPGResult rppg_result = rppg.processVideo(moviePath);
+        // Process video directly (like Python MediaPipe) for better performance
+        RPPGResult rppg_result = rppg.processVideoDirect(moviePath);
         if (rppg_result.peak_times.empty()) {
             if (callback) callback(requestId, 0, 0, "", "[{\"code\":1006,\"message\":\"No peaks detected or video read error\",\"isRetriable\":false}]");
             snprintf(outBuf, bufSize, "No peaks detected or video read error");

@@ -15,6 +15,7 @@ public:
     RPPGProcessor(const std::string& model_dir = "");
     ~RPPGProcessor();
     RPPGResult processVideo(const std::string& videoPath);
+    RPPGResult processVideoDirect(const std::string& videoPath); // 動画直接処理版
     RPPGResult processImagesFromPaths(const std::vector<std::string>& imagePaths, double fps = 30.0);
     std::string get_timing_summary() const;
     
