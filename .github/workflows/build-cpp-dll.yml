@@ -1066,15 +1066,9 @@ jobs:
             exit 1
           }
 
-          # Run test and capture output
+          # Run test and output directly (do not capture to variable)
           Write-Host "Running integration test..." -ForegroundColor Yellow
-
-          # Clear any existing log files before test
-          if (Test-Path "dll_load.log") { Remove-Item "dll_load.log" -Force }
-          if (Test-Path "dll_error.log") { Remove-Item "dll_error.log" -Force }
-
-          $testOutput = dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }} 2>&1
-          $testExitCode = $LASTEXITCODE
+          dotnet run --project CSharpTest.csproj --no-build -c ${{ env.BUILD_TYPE }} | Tee-Object -FilePath "test-results/integration_test_output.txt"
 
           # Check for DLL loading logs immediately after test
           Write-Host "Checking for DLL debug logs..." -ForegroundColor Yellow
@@ -1094,7 +1088,7 @@ jobs:
 
           # Check if test output contains error indicators
           $hasErrors = $false
-          if ($testOutput -match "External component has thrown an exception" -or 
+          if ($LASTEXITCODE -ne 0 -or $testOutput -match "External component has thrown an exception" -or 
               $testOutput -match "エラー:" -or 
               $testOutput -match "ERROR:" -or
               $testOutput -match "Exception") {
@@ -1118,13 +1112,6 @@ jobs:
             Write-Host "This is considered a partial success - DLL is functional" -ForegroundColor Yellow
             $hasErrors = $false
           }
-
-          # Save test output to file
-          $testOutput | Out-File -FilePath "test-results/integration_test_output.txt" -Encoding UTF8
-
-          # Display test output in GitHub Actions log
-          Write-Host "=== Integration Test Output ===" -ForegroundColor Cyan
-          $testOutput | ForEach-Object { Write-Host $_ }
 
           # Extract and display performance metrics
           Write-Host "=== PERFORMANCE METRICS SUMMARY ===" -ForegroundColor Green
@@ -1215,9 +1202,9 @@ jobs:
           Add-Content -Path "test-results/test_summary.txt" -Value ""
 
           # Determine actual test status based on content analysis
-          $actualTestStatus = if ($hasErrors -or $testExitCode -ne 0) { "FAILED" } else { "PASSED" }
+          $actualTestStatus = if ($hasErrors -or $LASTEXITCODE -ne 0) { "FAILED" } else { "PASSED" }
           Add-Content -Path "test-results/test_summary.txt" -Value "Test Status: $actualTestStatus"
-          Add-Content -Path "test-results/test_summary.txt" -Value "Exit Code: $testExitCode"
+          Add-Content -Path "test-results/test_summary.txt" -Value "Exit Code: $LASTEXITCODE"
           Add-Content -Path "test-results/test_summary.txt" -Value "Has Errors: $hasErrors"
           Add-Content -Path "test-results/test_summary.txt" -Value ""
           Add-Content -Path "test-results/test_summary.txt" -Value "Files Generated:"
@@ -1254,7 +1241,7 @@ jobs:
             Add-Content -Path "test-results/test_summary.txt" -Value "- models directory not found"
           }
 
-          if ($hasErrors -or $testExitCode -ne 0) {
+          if ($hasErrors -or $LASTEXITCODE -ne 0) {
             Write-Host "Integration test failed" -ForegroundColor Red
             Write-Host "Test contains errors or exceptions" -ForegroundColor Red
             exit 1
