@@ -61,6 +61,11 @@ struct RPPGProcessor::Impl {
     // タイミング記録
     std::vector<RPPGTiming> timing_log;
     
+    // 顔検出の最適化用変数
+    std::vector<cv::Point2f> last_landmarks;
+    int consecutive_no_face = 0;
+    static const int MAX_NO_FACE_FRAMES = 10;
+    
     Impl(const std::string& model_directory = "") : model_dir(model_directory) {
         // Initialize OpenCV DNN face detector
         try {
@@ -200,6 +205,13 @@ struct RPPGProcessor::Impl {
             return landmarks;
         }
         
+        // 前回の顔位置を再利用（連続で顔が見つからない場合）
+        if (consecutive_no_face < MAX_NO_FACE_FRAMES && !last_landmarks.empty()) {
+            landmarks = last_landmarks;
+            consecutive_no_face++;
+            return landmarks;
+        }
+        
         // Prepare input blob with optimized size
         cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(300, 300), cv::Scalar(104.0, 177.0, 123.0), false, false);
         face_detector.setInput(blob);
@@ -244,7 +256,16 @@ struct RPPGProcessor::Impl {
             }
         }
         
-        return best_landmarks;
+        // 顔が見つかった場合
+        if (!best_landmarks.empty()) {
+            last_landmarks = best_landmarks;
+            consecutive_no_face = 0;
+            landmarks = best_landmarks;
+        } else {
+            consecutive_no_face++;
+        }
+        
+        return landmarks;
     }
 };
 
@@ -318,8 +339,11 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
     pImpl->start_timing("Image Loading and Processing");
     
     // バッチサイズを設定（メモリ効率のため）
-    const int BATCH_SIZE = 50;
+    const int BATCH_SIZE = 100;
     const int total_frames = static_cast<int>(imagePaths.size());
+    
+    // 進捗表示
+    std::cout << "[RPPG] Processing " << total_frames << " frames in batches of " << BATCH_SIZE << std::endl;
     
     for (int batch_start = 0; batch_start < total_frames; batch_start += BATCH_SIZE) {
         int batch_end = std::min(batch_start + BATCH_SIZE, total_frames);
@@ -327,8 +351,13 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
         // バッチ内のフレームを処理
         for (int i = batch_start; i < batch_end; ++i) {
             const auto& path = imagePaths[i];
+            
+            // 画像読み込みを最適化
             cv::Mat frame = cv::imread(path, cv::IMREAD_COLOR);
-            if (frame.empty()) continue;
+            if (frame.empty()) {
+                std::cerr << "[RPPG] Warning: Could not read image: " << path << std::endl;
+                continue;
+            }
             
             double current_time = frame_count / fps;
             frame_count++;
@@ -366,13 +395,20 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
             }
         }
         
-        // バッチ処理後のメモリクリーンアップ
-        if (batch_end % (BATCH_SIZE * 2) == 0) {
-            // 定期的にメモリをクリーンアップ
-            cv::Mat().copyTo(cv::Mat()); // 空のMatでメモリフラグメンテーションを防ぐ
+        // バッチ処理後の進捗表示
+        if (batch_end % (BATCH_SIZE * 2) == 0 || batch_end == total_frames) {
+            std::cout << "[RPPG] Processed " << batch_end << "/" << total_frames << " frames..." << std::endl;
+        }
+        
+        // メモリクリーンアップ（定期的に）
+        if (batch_end % (BATCH_SIZE * 3) == 0) {
+            // 空のMatでメモリフラグメンテーションを防ぐ
+            cv::Mat().copyTo(cv::Mat());
         }
     }
     pImpl->end_timing(); // Image Loading and Processing
+    
+    std::cout << "[RPPG] Total processed frames: " << frame_count << ", Valid skin means: " << skin_means.size() << std::endl;
     
     pImpl->start_timing("Signal Processing");
     std::vector<double> rppg_signal, time_data, peak_times;
