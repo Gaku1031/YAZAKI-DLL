@@ -1703,9 +1703,6 @@ jobs:
       - name: Final Performance Summary
         run: |
           Write-Host "=== FINAL PERFORMANCE SUMMARY ===" -ForegroundColor Green
-          Write-Host "Blood Pressure Estimation Performance Test Results" -ForegroundColor Cyan
-          Write-Host "================================================" -ForegroundColor Cyan
-
           $performanceLogs = Get-ChildItem -Path "CppBloodPressureDLL/test" -Filter "performance_log_*.txt" | Sort-Object LastWriteTime -Descending
           if ($performanceLogs.Count -gt 0) {
             $latestLog = $performanceLogs[0]
@@ -1727,29 +1724,15 @@ jobs:
               "Estimated DBP:"
             )
             foreach ($metric in $metrics) {
-              $line = Select-String -Path $latestLog.FullName -Pattern $metric | Select-Object -First 1
-              if ($line) { Write-Host $line.Line }
+              Select-String -Path $latestLog.FullName -Pattern $metric | Select-Object -First 1 | ForEach-Object { Write-Host $_.Line }
             }
 
-            # ボトルネック分析セクション（5行だけ表示）
-            $bottleneckStart = (Select-String -Path $latestLog.FullName -Pattern "Bottleneck Analysis").LineNumber
-            if ($bottleneckStart) {
-              $bottleneckLines = Get-Content $latestLog.FullName | Select-Object -Skip $bottleneckStart -First 5
-              Write-Host "--- Bottleneck Analysis (Top 5) ---"
-              $bottleneckLines | ForEach-Object { Write-Host $_ }
-            }
+            # ボトルネック分析（パターンで直接抽出、最大5行）
+            Select-String -Path $latestLog.FullName -Pattern "^[0-9]+\. " | Select-Object -First 5 | ForEach-Object { Write-Host "Bottleneck: $($_.Line)" }
 
-            # 改善提案セクション（5行だけ表示）
-            $improveStart = (Select-String -Path $latestLog.FullName -Pattern "Improvement Suggestions").LineNumber
-            if ($improveStart) {
-              $improveLines = Get-Content $latestLog.FullName | Select-Object -Skip $improveStart -First 5
-              Write-Host "--- Improvement Suggestions (Top 5) ---"
-              $improveLines | ForEach-Object { Write-Host $_ }
-            }
+            # 改善提案（^ で始まる行を最大5行）
+            Select-String -Path $latestLog.FullName -Pattern "^ " | Select-Object -First 5 | ForEach-Object { Write-Host "Suggestion: $($_.Line)" }
           } else {
             Write-Host "No performance logs found" -ForegroundColor Red
-            Write-Host "Performance measurement may have failed" -ForegroundColor Red
           }
-
           Write-Host "=== END OF PERFORMANCE SUMMARY ===" -ForegroundColor Green
-        shell: powershell
