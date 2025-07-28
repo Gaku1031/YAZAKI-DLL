@@ -332,12 +332,18 @@ int StartBloodPressureAnalysisRequest(
         printf("%s", timing_info.c_str());
         fflush(stdout);
         
+        printf("[DEBUG] Timing info length: %zu\n", timing_info.length());
+        printf("[DEBUG] Timing info preview: %.100s...\n", timing_info.c_str());
+        
         // タイミング情報をファイルに保存
         std::ofstream timing_file("detailed_timing.log");
         if (timing_file.is_open()) {
             timing_file << "=== DETAILED TIMING ANALYSIS ===" << std::endl;
             timing_file << timing_info << std::endl;
             timing_file.close();
+            printf("[DEBUG] Timing file saved successfully\n");
+        } else {
+            printf("[DEBUG] Failed to open timing file for writing\n");
         }
         
         // タイミング情報をJSON形式でエラーフィールドに含める
@@ -353,7 +359,14 @@ int StartBloodPressureAnalysisRequest(
             escaped_timing.replace(pos, 1, "\\t");
             pos += 2;
         }
+        pos = 0;
+        while ((pos = escaped_timing.find('"', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\\"");
+            pos += 2;
+        }
         std::string timing_json = "{\"timing_info\":\"" + escaped_timing + "\"}";
+        printf("[DEBUG] JSON length: %zu\n", timing_json.length());
+        printf("[DEBUG] JSON preview: %.100s...\n", timing_json.c_str());
         if (callback) callback(requestId, result.first, result.second, csv.c_str(), timing_json.c_str());
         snprintf(outBuf, bufSize, "OK");
         return 0;
