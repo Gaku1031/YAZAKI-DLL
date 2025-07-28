@@ -26,19 +26,29 @@ struct RPPGTiming {
     std::chrono::high_resolution_clock::time_point start_time;
     std::chrono::high_resolution_clock::time_point end_time;
     std::string stage_name;
+    bool is_active;
+    
+    RPPGTiming() : is_active(false) {}
     
     void start(const std::string& name) {
         stage_name = name;
         start_time = std::chrono::high_resolution_clock::now();
+        is_active = true;
     }
     
     void end() {
-        end_time = std::chrono::high_resolution_clock::now();
+        if (is_active) {
+            end_time = std::chrono::high_resolution_clock::now();
+            is_active = false;
+        }
     }
     
     double get_duration_ms() const {
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        return duration.count() / 1000.0;
+        if (!is_active) {
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            return duration.count() / 1000.0;
+        }
+        return 0.0;
     }
 };
 
@@ -129,6 +139,15 @@ struct RPPGProcessor::Impl {
     void end_timing() {
         if (!timing_log.empty()) {
             timing_log.back().end();
+        }
+    }
+    
+    // 現在アクティブなタイミングを終了
+    void end_current_timing() {
+        for (auto& timing : timing_log) {
+            if (timing.is_active) {
+                timing.end();
+            }
         }
     }
     
@@ -380,7 +399,8 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
     }
     pImpl->end_timing(); // Signal Processing
     
-    pImpl->end_timing(); // RPPG Total Processing
+    // すべてのアクティブなタイミングを終了
+    pImpl->end_current_timing();
     
     RPPGResult result;
     result.rppg_signal = rppg_signal;

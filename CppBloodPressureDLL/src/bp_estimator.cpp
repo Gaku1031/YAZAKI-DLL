@@ -17,19 +17,29 @@ struct BPTiming {
     std::chrono::high_resolution_clock::time_point start_time;
     std::chrono::high_resolution_clock::time_point end_time;
     std::string stage_name;
+    bool is_active;
+    
+    BPTiming() : is_active(false) {}
     
     void start(const std::string& name) {
         stage_name = name;
         start_time = std::chrono::high_resolution_clock::now();
+        is_active = true;
     }
     
     void end() {
-        end_time = std::chrono::high_resolution_clock::now();
+        if (is_active) {
+            end_time = std::chrono::high_resolution_clock::now();
+            is_active = false;
+        }
     }
     
     double get_duration_ms() const {
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        return duration.count() / 1000.0;
+        if (!is_active) {
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            return duration.count() / 1000.0;
+        }
+        return 0.0;
     }
 };
 
@@ -98,6 +108,15 @@ struct BloodPressureEstimator::Impl {
     void end_timing() {
         if (!timing_log.empty()) {
             timing_log.back().end();
+        }
+    }
+    
+    // 現在アクティブなタイミングを終了
+    void end_current_timing() {
+        for (auto& timing : timing_log) {
+            if (timing.is_active) {
+                timing.end();
+            }
         }
     }
     
@@ -217,7 +236,8 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
     int dbp = static_cast<int>(std::round(pImpl->run(&pImpl->dbp_session, input)));
     pImpl->end_timing();
     
-    pImpl->end_timing(); // BP Estimation Total
+    // すべてのアクティブなタイミングを終了
+    pImpl->end_current_timing();
     
     return {sbp, dbp};
 }
