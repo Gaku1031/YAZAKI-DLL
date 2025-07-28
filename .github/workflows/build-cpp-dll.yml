@@ -1710,119 +1710,42 @@ jobs:
           if ($performanceLogs.Count -gt 0) {
             $latestLog = $performanceLogs[0]
             Write-Host "Latest Performance Log: $($latestLog.Name)" -ForegroundColor Yellow
-            
-            $logContent = Get-Content $latestLog.FullName -Encoding UTF8
-            
-            # Extract key metrics
-            $successLine = $logContent | Where-Object { $_ -match "Success:" }
-            $totalTimeLine = $logContent | Where-Object { $_ -match "Total Time:" }
-            $initTimeLine = $logContent | Where-Object { $_ -match "Initialization Time:" }
-            $conversionTimeLine = $logContent | Where-Object { $_ -match "Video Conversion Time:" }
-            $analysisTimeLine = $logContent | Where-Object { $_ -match "Blood Pressure Analysis Time:" }
-            $frameCountLine = $logContent | Where-Object { $_ -match "Frame Count:" }
-            $videoSizeLine = $logContent | Where-Object { $_ -match "Video File Size:" }
-            $memoryLine = $logContent | Where-Object { $_ -match "Peak Memory Usage:" }
-            $cpuLine = $logContent | Where-Object { $_ -match "Average CPU Usage:" }
-            $fpsLine = $logContent | Where-Object { $_ -match "Frames Per Second:" }
-            $sbpLine = $logContent | Where-Object { $_ -match "Estimated SBP:" }
-            $dbpLine = $logContent | Where-Object { $_ -match "Estimated DBP:" }
-            
-            Write-Host "Key Metrics:" -ForegroundColor Yellow
-            if ($successLine) { Write-Host "  $successLine" -ForegroundColor $(if ($successLine -match "True") { "Green" } else { "Red" }) }
-            if ($totalTimeLine) { Write-Host "  $totalTimeLine" -ForegroundColor $(if ($totalTimeLine -match "(\d+\.\d+) ms" -and [double]$matches[1] -le 3000) { "Green" } else { "Red" }) }
-            if ($initTimeLine) { Write-Host "  $initTimeLine" -ForegroundColor Cyan }
-            if ($conversionTimeLine) { Write-Host "  $conversionTimeLine" -ForegroundColor Cyan }
-            if ($analysisTimeLine) { Write-Host "  $analysisTimeLine" -ForegroundColor Cyan }
-            if ($frameCountLine) { Write-Host "  $frameCountLine" -ForegroundColor Cyan }
-            if ($videoSizeLine) { Write-Host "  $videoSizeLine" -ForegroundColor Cyan }
-            if ($memoryLine) { Write-Host "  $memoryLine" -ForegroundColor Cyan }
-            if ($cpuLine) { Write-Host "  $cpuLine" -ForegroundColor Cyan }
-            if ($fpsLine) { Write-Host "  $fpsLine" -ForegroundColor Cyan }
-            if ($sbpLine) { Write-Host "  $sbpLine" -ForegroundColor Green }
-            if ($dbpLine) { Write-Host "  $dbpLine" -ForegroundColor Green }
-            
-            # Performance evaluation with detailed analysis
-            if ($totalTimeLine -match "(\d+\.\d+) ms") {
-              $actualTime = [double]$matches[1]
-              $targetTime = 3000.0
-              
-              Write-Host "Performance Evaluation:" -ForegroundColor Yellow
-              Write-Host "  Target: ≤$targetTime ms (3 seconds)" -ForegroundColor Cyan
-              Write-Host "  Actual: $actualTime ms" -ForegroundColor Cyan
-              
-              if ($actualTime -le $targetTime) {
-                Write-Host "  Result: TARGET ACHIEVED" -ForegroundColor Green
-                $performance = ($targetTime / $actualTime) * 100
-                Write-Host "  Performance: $([math]::Round($performance, 1))% of target" -ForegroundColor Green
-              } else {
-                Write-Host "  Result: TARGET EXCEEDED" -ForegroundColor Red
-                $overTime = $actualTime - $targetTime
-                $overPercent = ($overTime / $targetTime) * 100
-                Write-Host "  Over Time: $([math]::Round($overTime, 0)) ms ($([math]::Round($overPercent, 1))% over)" -ForegroundColor Red
-                
-                # Severity assessment
-                if ($actualTime -gt 60000) {
-                  Write-Host "  Severity: CRITICAL - Over 1 minute" -ForegroundColor Red
-                } elseif ($actualTime -gt 30000) {
-                  Write-Host "  Severity: HIGH - Over 30 seconds" -ForegroundColor Yellow
-                } elseif ($actualTime -gt 10000) {
-                  Write-Host "  Severity: MEDIUM - Over 10 seconds" -ForegroundColor Yellow
-                } else {
-                  Write-Host "  Severity: LOW - Minor optimization needed" -ForegroundColor Green
-                }
-              }
-              
-              # Detailed bottleneck analysis
-              Write-Host "Detailed Bottleneck Analysis:" -ForegroundColor Yellow
-              $bottleneckSection = $logContent | Select-Object -Skip ($logContent | Select-String "Bottleneck Analysis" -Context 0,20).LineNumber
-              $bottleneckSection | Where-Object { $_ -match "^\d+\." } | ForEach-Object {
-                Write-Host "  $_" -ForegroundColor Cyan
-              }
-              
-              # Improvement suggestions
-              Write-Host "Improvement Suggestions:" -ForegroundColor Yellow
-              $improvementSection = $logContent | Select-Object -Skip ($logContent | Select-String "Improvement Suggestions" -Context 0,20).LineNumber
-              $improvementSection | Where-Object { $_ -match "^- " -or $_ -match "" } | ForEach-Object {
-                Write-Host "  $_" -ForegroundColor Yellow
-              }
-              
-              # Resource usage analysis
-              Write-Host "Resource Usage Analysis:" -ForegroundColor Yellow
-              if ($memoryLine -match "(\d+\.\d+) MB") {
-                $memoryUsage = [double]$matches[1]
-                if ($memoryUsage > 1000) {
-                  Write-Host "  Memory: HIGH usage ($memoryUsage MB) - Consider optimization" -ForegroundColor Red
-                } elseif ($memoryUsage > 500) {
-                  Write-Host "  Memory: MEDIUM usage ($memoryUsage MB)" -ForegroundColor Yellow
-                } else {
-                  Write-Host "  Memory: GOOD usage ($memoryUsage MB)" -ForegroundColor Green
-                }
-              }
-              
-              if ($cpuLine -match "(\d+\.\d+)%") {
-                $cpuUsage = [double]$matches[1]
-                if ($cpuUsage > 80) {
-                  Write-Host "  CPU: HIGH usage ($cpuUsage%) - Consider load distribution" -ForegroundColor Red
-                } elseif ($cpuUsage > 50) {
-                  Write-Host "  CPU: MEDIUM usage ($cpuUsage%)" -ForegroundColor Yellow
-                } else {
-                  Write-Host "  CPU: GOOD usage ($cpuUsage%)" -ForegroundColor Green
-                }
-              }
-              
-              if ($fpsLine -match "(\d+\.\d+) fps") {
-                $fps = [double]$matches[1]
-                if ($fps < 10) {
-                  Write-Host "  FPS: LOW processing speed ($fps fps) - Consider optimization" -ForegroundColor Red
-                } elseif ($fps < 30) {
-                  Write-Host "  FPS: MEDIUM processing speed ($fps fps)" -ForegroundColor Yellow
-                } else {
-                  Write-Host "  FPS: GOOD processing speed ($fps fps)" -ForegroundColor Green
-                }
-              }
+
+            # 必要なメトリクスのみ抽出
+            $metrics = @(
+              "Success:",
+              "Total Time:",
+              "Initialization Time:",
+              "Video Conversion Time:",
+              "Blood Pressure Analysis Time:",
+              "Frame Count:",
+              "Video File Size:",
+              "Peak Memory Usage:",
+              "Average CPU Usage:",
+              "Frames Per Second:",
+              "Estimated SBP:",
+              "Estimated DBP:"
+            )
+            foreach ($metric in $metrics) {
+              $line = Select-String -Path $latestLog.FullName -Pattern $metric | Select-Object -First 1
+              if ($line) { Write-Host $line.Line }
             }
-            
-            Write-Host "Performance logs saved as artifacts for detailed analysis" -ForegroundColor Green
+
+            # ボトルネック分析セクション（5行だけ表示）
+            $bottleneckStart = (Select-String -Path $latestLog.FullName -Pattern "Bottleneck Analysis").LineNumber
+            if ($bottleneckStart) {
+              $bottleneckLines = Get-Content $latestLog.FullName | Select-Object -Skip $bottleneckStart -First 5
+              Write-Host "--- Bottleneck Analysis (Top 5) ---"
+              $bottleneckLines | ForEach-Object { Write-Host $_ }
+            }
+
+            # 改善提案セクション（5行だけ表示）
+            $improveStart = (Select-String -Path $latestLog.FullName -Pattern "Improvement Suggestions").LineNumber
+            if ($improveStart) {
+              $improveLines = Get-Content $latestLog.FullName | Select-Object -Skip $improveStart -First 5
+              Write-Host "--- Improvement Suggestions (Top 5) ---"
+              $improveLines | ForEach-Object { Write-Host $_ }
+            }
           } else {
             Write-Host "No performance logs found" -ForegroundColor Red
             Write-Host "Performance measurement may have failed" -ForegroundColor Red
