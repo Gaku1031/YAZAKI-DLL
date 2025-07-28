@@ -448,7 +448,67 @@ int AnalyzeBloodPressureFromImages(
         auto result = g_estimator->estimate_bp(peaks, height, weight, sex);
         std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
         
-        if (callback) callback("", result.first, result.second, csv.c_str(), "[]");
+        // タイミング情報を取得
+        std::string rppg_timing = rppg.get_timing_summary();
+        std::string bp_timing = g_estimator->get_timing_summary();
+        std::string timing_info = rppg_timing + bp_timing;
+        
+        // Debug prints for timing info
+        printf("[DEBUG] About to get timing summaries...\n");
+        printf("[DEBUG] RPPG timing length: %zu\n", rppg_timing.length());
+        printf("[DEBUG] BP timing length: %zu\n", bp_timing.length());
+        printf("[DEBUG] Combined timing length: %zu\n", timing_info.length());
+        if (timing_info.empty()) {
+            printf("[DEBUG] WARNING: Timing info is empty!\n");
+            timing_info = "=== NO TIMING DATA AVAILABLE ===\n";
+        }
+        printf("%s", timing_info.c_str()); // Print to stdout
+        fflush(stdout);
+        printf("[DEBUG] Timing info preview: %.200s...\n", timing_info.c_str());
+        
+        // Save to file
+        std::ofstream timing_file("detailed_timing.log");
+        if (timing_file.is_open()) {
+            timing_file << "=== DETAILED TIMING ANALYSIS ===" << std::endl;
+            timing_file << timing_info << std::endl;
+            timing_file.close();
+            printf("[DEBUG] Timing file saved successfully\n");
+        } else {
+            printf("[DEBUG] Failed to open timing file for writing\n");
+        }
+        
+        // JSON escape and pass to callback
+        std::string escaped_timing = timing_info;
+        size_t pos = 0;
+        while ((pos = escaped_timing.find('\n', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\n");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped_timing.find('\t', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\t");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped_timing.find('"', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\\"");
+            pos += 2;
+        }
+        std::string timing_json = "{\"timing_info\":\"" + escaped_timing + "\"}";
+        printf("[DEBUG] JSON length: %zu\n", timing_json.length());
+        printf("[DEBUG] JSON preview: %.100s...\n", timing_json.c_str());
+        
+        // Call callback
+        printf("[DEBUG] About to call callback function...\n");
+        printf("[DEBUG] Callback function pointer: %p\n", (void*)callback);
+        if (callback) {
+            printf("[DEBUG] Calling callback function...\n");
+            callback("", result.first, result.second, csv.c_str(), timing_json.c_str());
+            printf("[DEBUG] Callback function called successfully\n");
+        } else {
+            printf("[DEBUG] Callback function is null!\n");
+        }
+        
         snprintf(outBuf, bufSize, "OK");
         return 0;
         
