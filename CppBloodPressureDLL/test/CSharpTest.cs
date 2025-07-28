@@ -703,6 +703,65 @@ namespace BloodPressureDllTest
                             Console.WriteLine($"[CALLBACK] Errors: {errorsJson}");
                         }
                         
+                        // デバッグ情報を追加
+                        Console.WriteLine($"[DEBUG] errorsJson length: {errorsJson?.Length ?? 0}");
+                        Console.WriteLine($"[DEBUG] errorsJson content: {errorsJson}");
+                        
+                        // 詳細タイミング情報を読み取り
+                        try
+                        {
+                            // まずコールバックからタイミング情報を確認
+                            if (!string.IsNullOrEmpty(errorsJson) && errorsJson.Contains("timing_info"))
+                            {
+                                Console.WriteLine("\n" + new string('=', 60));
+                                Console.WriteLine("DETAILED TIMING ANALYSIS (from callback)");
+                                Console.WriteLine(new string('=', 60));
+                                // 簡易的なJSON解析（実際のプロジェクトではNewtonsoft.Json等を使用）
+                                int startIndex = errorsJson.IndexOf("\"timing_info\":\"") + 15;
+                                int endIndex = errorsJson.LastIndexOf("\"");
+                                Console.WriteLine($"[DEBUG] startIndex: {startIndex}, endIndex: {endIndex}");
+                                if (startIndex > 14 && endIndex > startIndex)
+                                {
+                                    string timingInfo = errorsJson.Substring(startIndex, endIndex - startIndex);
+                                    timingInfo = timingInfo.Replace("\\n", "\n").Replace("\\t", "\t");
+                                    Console.WriteLine(timingInfo);
+                                }
+                                Console.WriteLine(new string('=', 60));
+                                Console.WriteLine("END OF DETAILED TIMING ANALYSIS");
+                                Console.WriteLine(new string('=', 60));
+                            }
+                            // ファイルからも読み取り（バックアップ）
+                            else if (File.Exists("detailed_timing.log"))
+                            {
+                                Console.WriteLine("\n" + new string('=', 60));
+                                Console.WriteLine("DETAILED TIMING ANALYSIS (from file)");
+                                Console.WriteLine(new string('=', 60));
+                                string[] timingLines = File.ReadAllLines("detailed_timing.log");
+                                foreach (string line in timingLines)
+                                {
+                                    Console.WriteLine(line);
+                                }
+                                Console.WriteLine(new string('=', 60));
+                                Console.WriteLine("END OF DETAILED TIMING ANALYSIS");
+                                Console.WriteLine(new string('=', 60));
+                            }
+                            else
+                            {
+                                Console.WriteLine("[INFO] 詳細タイミングログファイルが見つかりません");
+                                Console.WriteLine($"[DEBUG] Current directory: {Directory.GetCurrentDirectory()}");
+                                Console.WriteLine($"[DEBUG] Files in current directory:");
+                                foreach (string file in Directory.GetFiles("."))
+                                {
+                                    Console.WriteLine($"  {file}");
+                                }
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine($"[WARNING] タイミング情報読み取りエラー: {e.Message}");
+                            Console.WriteLine($"[DEBUG] Exception stack trace: {e.StackTrace}");
+                        }
+                        
                         // 血圧推定値を保存
                         metrics.EstimatedSBP = sbp;
                         metrics.EstimatedDBP = dbp;
