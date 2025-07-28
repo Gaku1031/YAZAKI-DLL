@@ -164,13 +164,10 @@ struct RPPGProcessor::Impl {
     }
     
     std::vector<cv::Point2f> detectFaceLandmarks(const cv::Mat& frame) {
-        start_timing("Face Detection");
-        
         std::vector<cv::Point2f> landmarks;
         
         if (!dnn_initialized) {
             std::cerr << "[RPPG] Face detector not initialized" << std::endl;
-            end_timing();
             return landmarks;
         }
         
@@ -209,7 +206,6 @@ struct RPPGProcessor::Impl {
             }
         }
         
-        end_timing();
         return landmarks;
     }
 };
@@ -289,8 +285,6 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
         // 顔検出とROI抽出
         std::vector<cv::Point2f> landmarks = pImpl->detectFaceLandmarks(frame);
         if (!landmarks.empty()) {
-            pImpl->start_timing("ROI Processing");
-            
             // ROIマスクの作成
             cv::Mat mask = cv::Mat::zeros(frame.size(), CV_8UC1);
             std::vector<cv::Point> roi_points;
@@ -300,21 +294,16 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
             if (roi_points.size() >= 3) {
                 cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
                 
-                pImpl->start_timing("Skin Color Filtering");
                 // 肌色フィルタリング（YCbCr色空間）
                 cv::Mat frame_ycbcr;
                 cv::cvtColor(frame, frame_ycbcr, cv::COLOR_BGR2YCrCb);
                 cv::Mat skin_mask;
                 cv::inRange(frame_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
-                pImpl->end_timing();
                 
-                pImpl->start_timing("ROI Mask Combination");
                 // ROIマスクと肌色マスクの組み合わせ
                 cv::Mat combined_mask;
                 cv::bitwise_and(mask, skin_mask, combined_mask);
-                pImpl->end_timing();
                 
-                pImpl->start_timing("Color Mean Calculation");
                 // ROI領域の色平均を計算
                 cv::Scalar mean = cv::mean(frame, combined_mask);
                 // 有効な平均値のみを保存
@@ -322,9 +311,7 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
                     skin_means.push_back({mean[0], mean[1], mean[2]});
                     timestamps.push_back(current_time);
                 }
-                pImpl->end_timing();
             }
-            pImpl->end_timing(); // ROI Processing
         }
     }
     pImpl->end_timing(); // Image Loading and Processing
