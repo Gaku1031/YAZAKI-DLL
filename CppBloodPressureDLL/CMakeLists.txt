@@ -27,6 +27,15 @@ endif()
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+# Protobuf（OpenCVの依存関係）
+find_package(Protobuf REQUIRED)
+if(Protobuf_FOUND)
+    include_directories(${Protobuf_INCLUDE_DIRS})
+    message(STATUS "Protobuf found: ${Protobuf_VERSION}")
+else()
+    message(WARNING "Protobuf not found - OpenCV may fail to configure")
+endif()
+
 # 個別ライブラリ使用オプション（opencv480_world.dllを不要にする）
 option(USE_INDIVIDUAL_OPENCV_LIBS "Use individual OpenCV libraries instead of world" OFF)
 if(USE_INDIVIDUAL_OPENCV_LIBS)
@@ -89,6 +98,13 @@ if(DEFINED ONNXRuntime_INCLUDE_DIRS AND DEFINED ONNXRuntime_LIBRARIES)
     message(STATUS "Using ONNX Runtime from environment variables")
     message(STATUS "ONNXRuntime_INCLUDE_DIRS: ${ONNXRuntime_INCLUDE_DIRS}")
     message(STATUS "ONNXRuntime_LIBRARIES: ${ONNXRuntime_LIBRARIES}")
+    
+    # ヘッダーファイルの存在確認
+    if(EXISTS "${ONNXRuntime_INCLUDE_DIRS}/onnxruntime_cxx_api.h")
+        message(STATUS "ONNX Runtime header file found")
+    else()
+        message(FATAL_ERROR "ONNX Runtime header file not found at: ${ONNXRuntime_INCLUDE_DIRS}/onnxruntime_cxx_api.h")
+    endif()
 else()
     # 従来のfind_packageを使用
     find_package(ONNXRuntime REQUIRED)

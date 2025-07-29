@@ -342,7 +342,7 @@ public:
                     std::cout << "[RPPG] dlib shape predictor loaded: " << path << std::endl;
                     loaded = true;
                     break;
-                } catch (const dlib::serialization_error& e) {
+                } catch (const dlib::serialization_error&) {
                     std::cerr << "[RPPG] Failed to load dlib predictor from: " << path << std::endl;
                 }
             }
@@ -389,7 +389,7 @@ public:
                 std::vector<cv::Point2f> landmarks;
                 
                 // 主要なランドマークインデックス（rPPG用途）
-                std::vector<int> roi_landmarks = {
+                std::vector<size_t> roi_landmarks = {
                     // 左頬
                     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
                     // 右頬
@@ -402,9 +402,9 @@ public:
                     48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67
                 };
                 
-                for (int idx : roi_landmarks) {
-                    if (idx < shape.num_parts()) {
-                        auto part = shape.part(idx);
+                for (size_t idx : roi_landmarks) {
+                    if (idx < static_cast<size_t>(shape.num_parts())) {
+                        auto part = shape.part(static_cast<unsigned long>(idx));
                         landmarks.push_back(cv::Point2f(part.x(), part.y()));
                     }
                 }
