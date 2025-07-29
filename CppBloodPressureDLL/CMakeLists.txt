@@ -32,13 +32,19 @@ option(USE_INDIVIDUAL_OPENCV_LIBS "Use individual OpenCV libraries instead of wo
 if(USE_INDIVIDUAL_OPENCV_LIBS)
     # vcpkgでインストールされたOpenCVライブラリを使用
     if(DEFINED ENV{VCPKG_ROOT})
-        set(OpenCV_LIBS 
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_core480.lib
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgproc480.lib
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgcodecs480.lib
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_objdetect480.lib
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_dnn480.lib
-        )
+        # vcpkgでインストールされたOpenCVライブラリのパス
+        set(VCPKG_OPENCV_LIB_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows/lib")
+        
+        # 利用可能なOpenCVライブラリを検索
+        file(GLOB OPENCV_LIB_FILES "${VCPKG_OPENCV_LIB_DIR}/opencv_*.lib")
+        
+        if(OPENCV_LIB_FILES)
+            message(STATUS "Found vcpkg OpenCV libraries: ${OPENCV_LIB_FILES}")
+            set(OpenCV_LIBS ${OPENCV_LIB_FILES})
+        else()
+            message(STATUS "vcpkg OpenCV libraries not found, using standard OpenCV libraries")
+            set(OpenCV_LIBS ${OpenCV_LIBS})
+        endif()
     else()
         # 通常のOpenCVライブラリを使用
         set(OpenCV_LIBS 
@@ -60,11 +66,29 @@ option(USE_LIGHTWEIGHT_OPENCV "Use lightweight OpenCV (core + imgproc only)" OFF
 if(USE_LIGHTWEIGHT_OPENCV)
     # 必要最小限のOpenCVコンポーネントのみ使用
     if(DEFINED ENV{VCPKG_ROOT})
-        set(OpenCV_LIBS 
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_core480.lib
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgproc480.lib
-            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgcodecs480.lib
-        )
+        # vcpkgでインストールされたOpenCVライブラリのパス
+        set(VCPKG_OPENCV_LIB_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows/lib")
+        
+        # 軽量版に必要なライブラリを検索
+        set(LIGHTWEIGHT_LIBS "")
+        foreach(lib_name core imgproc imgcodecs)
+            file(GLOB LIB_FILES "${VCPKG_OPENCV_LIB_DIR}/opencv_${lib_name}*.lib")
+            if(LIB_FILES)
+                list(APPEND LIGHTWEIGHT_LIBS ${LIB_FILES})
+            endif()
+        endforeach()
+        
+        if(LIGHTWEIGHT_LIBS)
+            message(STATUS "Found vcpkg lightweight OpenCV libraries: ${LIGHTWEIGHT_LIBS}")
+            set(OpenCV_LIBS ${LIGHTWEIGHT_LIBS})
+        else()
+            message(STATUS "vcpkg lightweight OpenCV libraries not found, using standard OpenCV libraries")
+            set(OpenCV_LIBS 
+                ${OpenCV_DIR}/lib/opencv_core480.lib
+                ${OpenCV_DIR}/lib/opencv_imgproc480.lib
+                ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
+            )
+        endif()
     else()
         set(OpenCV_LIBS 
             ${OpenCV_DIR}/lib/opencv_core480.lib

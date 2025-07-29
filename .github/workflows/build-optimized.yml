@@ -53,10 +53,22 @@ jobs:
           C:\vcpkg\bootstrap-vcpkg.bat
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
+      - name: Update vcpkg packages
+        run: |
+          echo "Updating vcpkg package information..."
+          C:\vcpkg\vcpkg update
+          C:\vcpkg\vcpkg upgrade --no-dry-run
+
       - name: Install OpenCV via vcpkg
         run: |
           echo "Installing OpenCV 4.8.0 via vcpkg..."
-          C:\vcpkg\vcpkg install opencv4[core,imgproc,imgcodecs,objdetect,dnn]:x64-windows
+
+          # まず基本的なOpenCVをインストール
+          C:\vcpkg\vcpkg install opencv4:x64-windows
+
+          # 追加機能を個別にインストール
+          C:\vcpkg\vcpkg install opencv4[contrib]:x64-windows
+          C:\vcpkg\vcpkg install opencv4[dnn]:x64-windows
 
           # OpenCVのインストールを確認
           if (Test-Path "C:\vcpkg\installed\x64-windows") {
@@ -248,11 +260,22 @@ jobs:
 
           # Individual Librariesの場合、必要なOpenCV DLLのみをコピー
           if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
-            copy "C:\vcpkg\installed\x64-windows\bin\opencv_core480.dll" package_${{ matrix.config.name }}/
-            copy "C:\vcpkg\installed\x64-windows\bin\opencv_imgproc480.dll" package_${{ matrix.config.name }}/
-            copy "C:\vcpkg\installed\x64-windows\bin\opencv_imgcodecs480.dll" package_${{ matrix.config.name }}/
-            copy "C:\vcpkg\installed\x64-windows\bin\opencv_objdetect480.dll" package_${{ matrix.config.name }}/
-            copy "C:\vcpkg\installed\x64-windows\bin\opencv_dnn480.dll" package_${{ matrix.config.name }}/
+            # vcpkgでインストールされたOpenCV DLLをコピー
+            $vcpkgBinDir = "C:\vcpkg\installed\x64-windows\bin"
+            if (Test-Path $vcpkgBinDir) {
+              $opencvDlls = @("opencv_core480.dll", "opencv_imgproc480.dll", "opencv_imgcodecs480.dll", "opencv_objdetect480.dll", "opencv_dnn480.dll")
+              foreach ($dll in $opencvDlls) {
+                $dllPath = Join-Path $vcpkgBinDir $dll
+                if (Test-Path $dllPath) {
+                  copy $dllPath "package_${{ matrix.config.name }}/"
+                  echo "Copied $dll"
+                } else {
+                  echo "Warning: $dll not found at $dllPath"
+                }
+              }
+            } else {
+              echo "Warning: vcpkg bin directory not found, skipping OpenCV DLL copy"
+            }
           }
 
           # dlibは静的リンクされるため、DLLのコピーは不要
