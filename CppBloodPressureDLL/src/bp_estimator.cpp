@@ -7,12 +7,50 @@
 #include <memory>
 #include <fstream>
 #include <onnxruntime_cxx_api.h>
+#include <chrono>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+
+// 詳細タイミング計測用の構造体
+struct BPTiming {
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::chrono::high_resolution_clock::time_point end_time;
+    std::string stage_name;
+    bool is_active;
+    
+    BPTiming() : is_active(false) {}
+    
+    void start(const std::string& name) {
+        stage_name = name;
+        start_time = std::chrono::high_resolution_clock::now();
+        is_active = true;
+    }
+    
+    void end() {
+        if (is_active) {
+            end_time = std::chrono::high_resolution_clock::now();
+            is_active = false;
+        }
+    }
+    
+    double get_duration_ms() const {
+        if (!is_active) {
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            return duration.count() / 1000.0;
+        }
+        return 0.0;
+    }
+};
 
 struct BloodPressureEstimator::Impl {
     Ort::Env env;
     Ort::SessionOptions session_options;
     Ort::Session sbp_session;
     Ort::Session dbp_session;
+    
+    // タイミング記録
+    std::vector<BPTiming> timing_log;
 
     Impl(const std::string& model_dir)
         : env(ORT_LOGGING_LEVEL_WARNING, "bp"),
@@ -59,6 +97,64 @@ struct BloodPressureEstimator::Impl {
             throw;
         }
     }
+    
+    // タイミング計測ヘルパー関数
+    void start_timing(const std::string& stage_name) {
+        BPTiming timing;
+        timing.start(stage_name);
+        timing_log.push_back(timing);
+    }
+    
+    void end_timing() {
+        if (!timing_log.empty()) {
+            timing_log.back().end();
+        }
+    }
+    
+    // 現在アクティブなタイミングを終了
+    void end_current_timing() {
+        for (auto& timing : timing_log) {
+            if (timing.is_active) {
+                timing.end();
+            }
+        }
+    }
+    
+    // タイミングログをクリア
+    void clear_timing_log() {
+        timing_log.clear();
+    }
+    
+    std::string get_timing_summary() const {
+        std::stringstream ss;
+        ss << "\n=== BP ESTIMATION TIMING ANALYSIS ===\n";
+        
+        printf("[DEBUG] BP timing_log size: %zu\n", timing_log.size());
+        
+        double total_time = 0.0;
+        for (const auto& timing : timing_log) {
+            double duration = timing.get_duration_ms();
+            total_time += duration;
+            ss << std::fixed << std::setprecision(2) 
+               << timing.stage_name << ": " << duration << " ms\n";
+            printf("[DEBUG] BP stage: %s = %.2f ms\n", timing.stage_name.c_str(), duration);
+        }
+        
+        ss << "Total BP estimation time: " << total_time << " ms\n";
+        ss << "=== BP ESTIMATION BREAKDOWN ===\n";
+        
+        // 各段階の割合を計算
+        for (const auto& timing : timing_log) {
+            double duration = timing.get_duration_ms();
+            double percentage = (total_time > 0) ? (duration / total_time) * 100.0 : 0.0;
+            ss << std::fixed << std::setprecision(1) 
+               << timing.stage_name << ": " << percentage << "%\n";
+        }
+        
+        std::string result = ss.str();
+        printf("[DEBUG] BP timing summary length: %zu\n", result.length());
+        return result;
+    }
 
     float run(void* session_ptr, const std::vector<float>& input) {
         Ort::Session* session = session_ptr ? static_cast<Ort::Session*>(session_ptr) : &sbp_session;
@@ -87,6 +183,12 @@ BloodPressureEstimator::BloodPressureEstimator(const std::string& model_dir)
 BloodPressureEstimator::~BloodPressureEstimator() = default;
 
 std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double>& peak_times, int height, int weight, int sex) {
+    // タイミングログをクリア
+    pImpl->clear_timing_log();
+    
+    pImpl->start_timing("BP Estimation Total");
+    
+    pImpl->start_timing("RRI Calculation and Outlier Removal");
     // rri計算・外れ値除去
     std::vector<double> rri;
     for (size_t i = 1; i < peak_times.size(); ++i) {
@@ -98,6 +200,9 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
     if (rri.empty()) {
         rri = {0.8, 0.8, 0.8, 0.8};
     }
+    pImpl->end_timing();
+    
+    pImpl->start_timing("RRI Statistics Calculation");
     // rri統計量
     const size_t N = rri.size();
     double rri_mean = std::accumulate(rri.begin(), rri.end(), 0.0) / N;
@@ -106,6 +211,9 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
     rri_std = std::sqrt(rri_std / N);
     double rri_min = *std::min_element(rri.begin(), rri.end());
     double rri_max = *std::max_element(rri.begin(), rri.end());
+    pImpl->end_timing();
+    
+    pImpl->start_timing("Feature Preparation");
     double height_m = height / 100.0;
     double bmi = weight / (height_m * height_m);
     double sex_feature = (sex == 0) ? 0.0 : 1.0;
@@ -117,12 +225,27 @@ std::pair<int, int> BloodPressureEstimator::estimate_bp(const std::vector<double
         static_cast<float>(bmi),
         static_cast<float>(sex_feature)
     };
+    pImpl->end_timing();
+    
+    pImpl->start_timing("SBP ONNX Inference");
     // ONNX推論
     int sbp = static_cast<int>(std::round(pImpl->run(nullptr, input)));
+    pImpl->end_timing();
+    
+    pImpl->start_timing("DBP ONNX Inference");
     int dbp = static_cast<int>(std::round(pImpl->run(&pImpl->dbp_session, input)));
+    pImpl->end_timing();
+    
+    // すべてのアクティブなタイミングを終了
+    pImpl->end_current_timing();
+    
     return {sbp, dbp};
 }
 
 std::string BloodPressureEstimator::get_model_dir() const {
     return model_directory;
+}
+
+std::string BloodPressureEstimator::get_timing_summary() const {
+    return pImpl->get_timing_summary();
 } 

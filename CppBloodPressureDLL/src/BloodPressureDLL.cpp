@@ -22,6 +22,30 @@
 #include <windows.h>
 #endif
 
+// 詳細タイミング計測用の構造体
+struct DetailedTiming {
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::chrono::high_resolution_clock::time_point end_time;
+    std::string stage_name;
+    
+    void start(const std::string& name) {
+        stage_name = name;
+        start_time = std::chrono::high_resolution_clock::now();
+    }
+    
+    void end() {
+        end_time = std::chrono::high_resolution_clock::now();
+    }
+    
+    double get_duration_ms() const {
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        return duration.count() / 1000.0;
+    }
+};
+
+// グローバルタイミング記録
+static std::vector<DetailedTiming> g_timing_log;
+
 namespace {
     // Safe initialization helper to avoid static initialization order fiasco
     template<typename T>
@@ -54,6 +78,45 @@ namespace {
     const char* const STATUS_NONE = "none";
     const char* const STATUS_PROCESSING = "processing";
     const char* const EMPTY_STRING = "";
+    
+    // タイミング計測ヘルパー関数
+    void start_timing(const std::string& stage_name) {
+        DetailedTiming timing;
+        timing.start(stage_name);
+        g_timing_log.push_back(timing);
+    }
+    
+    void end_timing() {
+        if (!g_timing_log.empty()) {
+            g_timing_log.back().end();
+        }
+    }
+    
+    std::string get_timing_summary() {
+        std::stringstream ss;
+        ss << "\n=== DETAILED TIMING ANALYSIS ===\n";
+        
+        double total_time = 0.0;
+        for (const auto& timing : g_timing_log) {
+            double duration = timing.get_duration_ms();
+            total_time += duration;
+            ss << std::fixed << std::setprecision(2) 
+               << timing.stage_name << ": " << duration << " ms\n";
+        }
+        
+        ss << "Total time: " << total_time << " ms\n";
+        ss << "=== TIMING BREAKDOWN ===\n";
+        
+        // 各段階の割合を計算
+        for (const auto& timing : g_timing_log) {
+            double duration = timing.get_duration_ms();
+            double percentage = (total_time > 0) ? (duration / total_time) * 100.0 : 0.0;
+            ss << std::fixed << std::setprecision(1) 
+               << timing.stage_name << ": " << percentage << "%\n";
+        }
+        
+        return ss.str();
+    }
 }
 
 // CSV生成用のヘルパー関数
@@ -253,6 +316,7 @@ int StartBloodPressureAnalysisRequest(
         }
         std::string model_dir = g_model_dir.empty() ? "models" : g_model_dir;
         RPPGProcessor rppg(model_dir);
+        // Process video using original method (temporarily disable direct processing)
         RPPGResult rppg_result = rppg.processVideo(moviePath);
         if (rppg_result.peak_times.empty()) {
             if (callback) callback(requestId, 0, 0, "", "[{\"code\":1006,\"message\":\"No peaks detected or video read error\",\"isRetriable\":false}]");
@@ -263,7 +327,69 @@ int StartBloodPressureAnalysisRequest(
         std::vector<double> peaks(rppg_result.peak_times.begin(), rppg_result.peak_times.end());
         auto result = g_estimator->estimate_bp(peaks, height, weight, sex);
         std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
-        if (callback) callback(requestId, result.first, result.second, csv.c_str(), "[]");
+        
+        // タイミング情報をファイルに出力
+        printf("[DEBUG] About to get timing summaries...\n");
+        std::string rppg_timing = rppg.get_timing_summary();
+        printf("[DEBUG] RPPG timing length: %zu\n", rppg_timing.length());
+        
+        std::string bp_timing = g_estimator->get_timing_summary();
+        printf("[DEBUG] BP timing length: %zu\n", bp_timing.length());
+        
+        std::string timing_info = rppg_timing + bp_timing;
+        printf("[DEBUG] Combined timing length: %zu\n", timing_info.length());
+        
+        if (timing_info.empty()) {
+            printf("[DEBUG] WARNING: Timing info is empty!\n");
+            timing_info = "=== NO TIMING DATA AVAILABLE ===\n";
+        }
+        
+        printf("%s", timing_info.c_str());
+        fflush(stdout);
+        
+        printf("[DEBUG] Timing info preview: %.200s...\n", timing_info.c_str());
+        
+        // タイミング情報をファイルに保存
+        std::ofstream timing_file("detailed_timing.log");
+        if (timing_file.is_open()) {
+            timing_file << "=== DETAILED TIMING ANALYSIS ===" << std::endl;
+            timing_file << timing_info << std::endl;
+            timing_file.close();
+            printf("[DEBUG] Timing file saved successfully\n");
+        } else {
+            printf("[DEBUG] Failed to open timing file for writing\n");
+        }
+        
+        // タイミング情報をJSON形式でエラーフィールドに含める
+        std::string escaped_timing = timing_info;
+        // 改行とタブをエスケープ
+        size_t pos = 0;
+        while ((pos = escaped_timing.find('\n', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\n");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped_timing.find('\t', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\t");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped_timing.find('"', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\\"");
+            pos += 2;
+        }
+        std::string timing_json = "{\"timing_info\":\"" + escaped_timing + "\"}";
+        printf("[DEBUG] JSON length: %zu\n", timing_json.length());
+        printf("[DEBUG] JSON preview: %.100s...\n", timing_json.c_str());
+        printf("[DEBUG] About to call callback function...\n");
+        printf("[DEBUG] Callback function pointer: %p\n", (void*)callback);
+        if (callback) {
+            printf("[DEBUG] Calling callback function...\n");
+            callback(requestId, result.first, result.second, csv.c_str(), timing_json.c_str());
+            printf("[DEBUG] Callback function called successfully\n");
+        } else {
+            printf("[DEBUG] Callback function is null!\n");
+        }
         snprintf(outBuf, bufSize, "OK");
         return 0;
     } catch (const std::exception& e) {
@@ -323,7 +449,67 @@ int AnalyzeBloodPressureFromImages(
         auto result = g_estimator->estimate_bp(peaks, height, weight, sex);
         std::string csv = generateCSV(rppg_result.rppg_signal, rppg_result.time_data, rppg_result.peak_times);
         
-        if (callback) callback("", result.first, result.second, csv.c_str(), "[]");
+        // タイミング情報を取得
+        std::string rppg_timing = rppg.get_timing_summary();
+        std::string bp_timing = g_estimator->get_timing_summary();
+        std::string timing_info = rppg_timing + bp_timing;
+        
+        // Debug prints for timing info
+        printf("[DEBUG] About to get timing summaries...\n");
+        printf("[DEBUG] RPPG timing length: %zu\n", rppg_timing.length());
+        printf("[DEBUG] BP timing length: %zu\n", bp_timing.length());
+        printf("[DEBUG] Combined timing length: %zu\n", timing_info.length());
+        if (timing_info.empty()) {
+            printf("[DEBUG] WARNING: Timing info is empty!\n");
+            timing_info = "=== NO TIMING DATA AVAILABLE ===\n";
+        }
+        printf("%s", timing_info.c_str()); // Print to stdout
+        fflush(stdout);
+        printf("[DEBUG] Timing info preview: %.200s...\n", timing_info.c_str());
+        
+        // Save to file
+        std::ofstream timing_file("detailed_timing.log");
+        if (timing_file.is_open()) {
+            timing_file << "=== DETAILED TIMING ANALYSIS ===" << std::endl;
+            timing_file << timing_info << std::endl;
+            timing_file.close();
+            printf("[DEBUG] Timing file saved successfully\n");
+        } else {
+            printf("[DEBUG] Failed to open timing file for writing\n");
+        }
+        
+        // JSON escape and pass to callback
+        std::string escaped_timing = timing_info;
+        size_t pos = 0;
+        while ((pos = escaped_timing.find('\n', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\n");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped_timing.find('\t', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\t");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped_timing.find('"', pos)) != std::string::npos) {
+            escaped_timing.replace(pos, 1, "\\\"");
+            pos += 2;
+        }
+        std::string timing_json = "{\"timing_info\":\"" + escaped_timing + "\"}";
+        printf("[DEBUG] JSON length: %zu\n", timing_json.length());
+        printf("[DEBUG] JSON preview: %.100s...\n", timing_json.c_str());
+        
+        // Call callback
+        printf("[DEBUG] About to call callback function...\n");
+        printf("[DEBUG] Callback function pointer: %p\n", (void*)callback);
+        if (callback) {
+            printf("[DEBUG] Calling callback function...\n");
+            callback("", result.first, result.second, csv.c_str(), timing_json.c_str());
+            printf("[DEBUG] Callback function called successfully\n");
+        } else {
+            printf("[DEBUG] Callback function is null!\n");
+        }
+        
         snprintf(outBuf, bufSize, "OK");
         return 0;
         

@@ -9,6 +9,7 @@ public:
     ~BloodPressureEstimator();
     std::pair<int, int> estimate_bp(const std::vector<double>& peak_times, int height, int weight, int sex);
     std::string get_model_dir() const;
+    std::string get_timing_summary() const;
     
 private:
     struct Impl;
