@@ -290,7 +290,7 @@ RPPGResult RPPGProcessor::processVideo(const std::string& videoPath) {
     ffmpeg_bin = ".\\ffmpeg.exe";
 #endif
     std::string ffmpeg_log = temp_dir + "/ffmpeg_out.log";
-    std::string ffmpeg_cmd = ffmpeg_bin + " -y -i \"" + videoPath + "\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\" > \"" + ffmpeg_log + "\" 2>&1";
+    std::string ffmpeg_cmd = ffmpeg_bin + " -y -fflags +genpts -err_detect ignore_err -i \"" + videoPath + "\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\" > \"" + ffmpeg_log + "\" 2>&1";
     int ret = system(ffmpeg_cmd.c_str());
     if (ret != 0) {
         // ffmpegのログ内容をdll_error.logに転記
