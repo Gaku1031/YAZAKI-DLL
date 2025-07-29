@@ -30,6 +30,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug directory structure
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          Get-ChildItem -Name
+          echo "CppBloodPressureDLL directory exists: $(Test-Path CppBloodPressureDLL)"
+          if (Test-Path CppBloodPressureDLL) {
+            echo "CppBloodPressureDLL contents:"
+            Get-ChildItem CppBloodPressureDLL -Name
+          }
+
       - name: Setup Visual Studio
         uses: microsoft/setup-msbuild@v1
 
