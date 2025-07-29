@@ -628,8 +628,8 @@ namespace BloodPressureDllTest
                 
                 var ffmpegProc = new System.Diagnostics.Process();
                 ffmpegProc.StartInfo.FileName = ffmpegExe;
-                // ffmpegProc.StartInfo.Arguments = $"-y -i \"{sampleVideo}\" -ss 20 -t 30 -vf \"scale=320:240\" -r 30 -q:v 2 \"{framePattern}\"";
-                ffmpegProc.StartInfo.Arguments = $"-y -fflags +genpts -err_detect ignore_err -i \"{sampleVideo}\" -ss 20 -t 30 -r 30 -q:v 2 \"{framePattern}\"";
+                // ffmpegProc.StartInfo.Arguments = $"-y -fflags +genpts -err_detect ignore_err -i \"{sampleVideo}\" -ss 20 -t 30 -r 30 -q:v 2 \"{framePattern}\"";
+                ffmpegProc.StartInfo.Arguments = $"-y -fflags +genpts -err_detect ignore_err -i \"{sampleVideo}\" -ss 20 -t 30 -vf \"scale=320:240\" -r 30 -q:v 2 \"{framePattern}\"";
                 ffmpegProc.StartInfo.UseShellExecute = false;
                 ffmpegProc.StartInfo.RedirectStandardOutput = true;
                 ffmpegProc.StartInfo.RedirectStandardError = true;
