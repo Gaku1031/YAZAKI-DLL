@@ -38,14 +38,6 @@ jobs:
         with:
           cmake-version: "3.25.0"
 
-      - name: Debug directory structure
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          Get-ChildItem
-          echo "CppBloodPressureDLL contents:"
-          Get-ChildItem CppBloodPressureDLL
-
       - name: Install OpenCV
         run: |
           echo "Installing OpenCV 4.8.0..."
@@ -64,20 +56,11 @@ jobs:
           $env:DLIB_VERSION = "19.24"
           $env:DLIB_DIR = "C:\dlib"
 
-          # dlibのソースコードをダウンロード
-          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip" -OutFile "dlib.zip"
+          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/releases/download/v19.24/dlib-19.24.0_release_64bit_msvc1929.zip" -OutFile "dlib.zip"
           Expand-Archive -Path "dlib.zip" -DestinationPath "C:\dlib" -Force
 
-          # dlibをビルド
-          cd "C:\dlib\dlib-19.24"
-          mkdir build
-          cd build
-          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release ..
-          cmake --build . --config Release --parallel 4
-
-          # 環境変数設定
-          echo "DLIB_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
-          echo "dlib_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
+          echo "DLIB_DIR=C:\dlib" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\dlib" >> $env:GITHUB_ENV
 
       - name: Install Eigen3
         run: |
@@ -97,16 +80,13 @@ jobs:
 
       - name: Create build directory
         run: |
-          mkdir build
-          cd build
+          mkdir CppBloodPressureDLL\build
+          cd CppBloodPressureDLL\build
 
       - name: Configure CMake
         run: |
-          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} ../CppBloodPressureDLL
+          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} ..
           echo "Configured with: ${{ matrix.config.cmake_options }}"
-          echo "Current directory: $(pwd)"
-          echo "Source directory: ../CppBloodPressureDLL"
-          Get-ChildItem ../CppBloodPressureDLL
 
       - name: Build
         run: |
@@ -115,7 +95,7 @@ jobs:
 
       - name: Measure DLL size
         run: |
-          $dllPath = "build\Release\BloodPressureDLL.dll"
+          $dllPath = "Release\BloodPressureDLL.dll"
           if (Test-Path $dllPath) {
             $size = (Get-Item $dllPath).Length
             $sizeMB = [math]::Round($size / 1MB, 2)
@@ -135,7 +115,7 @@ jobs:
       - name: Run performance test
         run: |
           echo "Running performance test..."
-          cd build\Release
+          cd Release
           .\test_app.exe --performance-test
           echo "Performance test completed"
 
@@ -143,7 +123,7 @@ jobs:
         run: |
           echo "Creating optimized package..."
           mkdir package_${{ matrix.config.name }}
-          copy build\Release\BloodPressureDLL.dll package_${{ matrix.config.name }}/
+          copy Release\BloodPressureDLL.dll package_${{ matrix.config.name }}/
 
           if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
             copy "C:\opencv\bin\opencv_core480.dll" package_${{ matrix.config.name }}/
@@ -153,23 +133,23 @@ jobs:
             copy "C:\opencv\bin\opencv_dnn480.dll" package_${{ matrix.config.name }}/
           }
 
-          copy "C:\dlib\dlib-19.24\build\Release\dlib19.24.0_release_64bit_msvc1929.dll" package_${{ matrix.config.name }}/
+          copy "C:\dlib\bin\dlib19.24.0_release_64bit_msvc1929.dll" package_${{ matrix.config.name }}/
           copy "C:\onnxruntime\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
 
           mkdir package_${{ matrix.config.name }}\models
-          copy CppBloodPressureDLL\models\*.onnx package_${{ matrix.config.name }}\models\
-          copy CppBloodPressureDLL\models\*.pb package_${{ matrix.config.name }}\models\
-          copy CppBloodPressureDLL\models\*.pbtxt package_${{ matrix.config.name }}\models\
-          copy CppBloodPressureDLL\models\shape_predictor_68_face_landmarks.dat package_${{ matrix.config.name }}\models\
+          copy ..\models\*.onnx package_${{ matrix.config.name }}\models\
+          copy ..\models\*.pb package_${{ matrix.config.name }}\models\
+          copy ..\models\*.pbtxt package_${{ matrix.config.name }}\models\
+          copy ..\models\shape_predictor_68_face_landmarks.dat package_${{ matrix.config.name }}\models\
 
           mkdir package_${{ matrix.config.name }}\include
-          copy CppBloodPressureDLL\include\*.h package_${{ matrix.config.name }}\include\
+          copy ..\include\*.h package_${{ matrix.config.name }}\include\
 
-          copy CppBloodPressureDLL\README.md package_${{ matrix.config.name }}/
-          copy CppBloodPressureDLL\INTEGRATION_GUIDE.md package_${{ matrix.config.name }}/
+          copy ..\README.md package_${{ matrix.config.name }}/
+          copy ..\INTEGRATION_GUIDE.md package_${{ matrix.config.name }}/
 
           # パッケージ情報ファイルを作成
-          powershell -File "CppBloodPressureDLL\create_package_info.ps1" -ConfigName "${{ matrix.config.name }}" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
+          powershell -File "..\create_package_info.ps1" -ConfigName "${{ matrix.config.name }}" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
 
           echo "Package created: package_${{ matrix.config.name }}"
 
@@ -177,7 +157,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.config.name }}-package
-          path: package_${{ matrix.config.name }}/
+          path: CppBloodPressureDLL\build\package_${{ matrix.config.name }}/
           retention-days: 30
 
       - name: Create release summary
