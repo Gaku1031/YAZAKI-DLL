@@ -51,39 +51,25 @@ jobs:
 
       - name: Install OpenCV
         run: |
-          echo "Installing OpenCV 4.8.0..."
-          $env:OPENCV_VERSION = "4.8.0"
-          $env:OPENCV_DIR = "C:\opencv"
+          echo "Installing OpenCV using vcpkg..."
 
-          Invoke-WebRequest -Uri "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe" -OutFile "opencv-installer.exe"
-          Start-Process -FilePath "opencv-installer.exe" -ArgumentList "-y" -Wait
+          # vcpkgを使用してOpenCVをインストール
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat
+          C:\vcpkg\vcpkg install opencv4:x64-windows
 
-          # OpenCVの設定ファイルの場所を確認
-          echo "OpenCV installation directory contents:"
-          Get-ChildItem "C:\opencv" -Recurse -Name "OpenCVConfig.cmake" | Select-Object -First 5
-
-          # OpenCV_DIRを正しいパスに設定
-          $opencvConfigPath = Get-ChildItem "C:\opencv" -Recurse -Name "OpenCVConfig.cmake" | Select-Object -First 1
-          if ($opencvConfigPath) {
-            $opencvDir = Split-Path -Parent "C:\opencv\$opencvConfigPath"
-            echo "Found OpenCV config at: $opencvDir"
-            echo "OPENCV_DIR=$opencvDir" >> $env:GITHUB_ENV
-            echo "OpenCV_DIR=$opencvDir" >> $env:GITHUB_ENV
-          } else {
-            echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
-            echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
-          }
+          echo "OPENCV_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
+          echo "OpenCV_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
 
       - name: Install dlib
         run: |
-          echo "Installing dlib..."
+          echo "Installing dlib using vcpkg..."
 
-          # dlibのソースコードをダウンロード
-          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip" -OutFile "dlib.zip"
-          Expand-Archive -Path "dlib.zip" -DestinationPath "C:\dlib" -Force
+          # vcpkgを使用してdlibをインストール
+          C:\vcpkg\vcpkg install dlib:x64-windows
 
-          echo "DLIB_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
-          echo "dlib_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
+          echo "DLIB_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
 
       - name: Install Eigen3
         run: |
