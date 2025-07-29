@@ -87,7 +87,17 @@ jobs:
             cd "C:\opencv-source\build"
             
             # CMakeでOpenCVを設定（必要最小限の機能のみ）
-            cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_LIST=core,imgproc,imgcodecs,objdetect,dnn -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF "C:\opencv-source\opencv-4.8.0"
+            $cmakeArgs = @(
+                "-G", "Visual Studio 17 2022",
+                "-A", "x64",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DBUILD_LIST=core,imgproc,imgcodecs,objdetect,dnn",
+                "-DBUILD_TESTS=OFF",
+                "-DBUILD_PERF_TESTS=OFF",
+                "-DBUILD_EXAMPLES=OFF",
+                "C:\opencv-source\opencv-4.8.0"
+            )
+            cmake @cmakeArgs
             
             # OpenCVをビルド
             cmake --build . --config Release --parallel 4
@@ -263,10 +273,24 @@ jobs:
           echo "OpenCV_DIR: $opencvDir"
 
           # 通常のOpenCVディレクトリを使用
-          cmake -G "Visual Studio 17 2022" -A x64 `
-                -DOpenCV_DIR="$opencvDir" `
-                ${{ matrix.config.cmake_options }} `
-                "$workspace\CppBloodPressureDLL"
+          $cmakeOptions = "${{ matrix.config.cmake_options }}"
+          $cmakeArgs = @(
+              "-G", "Visual Studio 17 2022",
+              "-A", "x64",
+              "-DOpenCV_DIR=$opencvDir"
+          )
+
+          # CMakeオプションを分割して追加
+          $cmakeOptionsArray = $cmakeOptions -split " "
+          foreach ($option in $cmakeOptionsArray) {
+              if ($option -ne "") {
+                  $cmakeArgs += $option
+              }
+          }
+
+          $cmakeArgs += "$workspace\CppBloodPressureDLL"
+
+          cmake @cmakeArgs
 
           echo "Configured with: ${{ matrix.config.cmake_options }}"
           echo "Workspace: $workspace"
