@@ -46,69 +46,94 @@ jobs:
         with:
           cmake-version: "3.25.0"
 
-      - name: Install vcpkg
-        run: |
-          echo "Installing vcpkg..."
-          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
-          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
-
-      - name: Update vcpkg packages
-        run: |
-          echo "Updating vcpkg package information..."
-          C:\vcpkg\vcpkg update
-          C:\vcpkg\vcpkg upgrade --no-dry-run
-
       - name: Install OpenCV via vcpkg
         run: |
-          echo "Installing OpenCV 4.8.0 via vcpkg..."
+          echo "Installing OpenCV 4.8.0 via pre-built binaries..."
 
-          # まず基本的なOpenCVをインストール
-          C:\vcpkg\vcpkg install opencv4:x64-windows
+          # 事前にビルドされたOpenCVバイナリをダウンロード
+          $opencvUrl = "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe"
+          $opencvInstaller = "opencv-installer.exe"
 
-          # 追加機能を個別にインストール
-          C:\vcpkg\vcpkg install opencv4[contrib]:x64-windows
-          C:\vcpkg\vcpkg install opencv4[dnn]:x64-windows
+          echo "Downloading OpenCV installer..."
+          Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvInstaller -TimeoutSec 600
+
+          echo "Installing OpenCV..."
+          # サイレントインストール
+          Start-Process -FilePath ".\$opencvInstaller" -ArgumentList "-y", "-o", "C:\opencv" -Wait -NoNewWindow
+
+          # インストール完了を待機
+          Start-Sleep -Seconds 30
 
           # OpenCVのインストールを確認
-          if (Test-Path "C:\vcpkg\installed\x64-windows") {
-            echo "OpenCV installed successfully via vcpkg"
+          if (Test-Path "C:\opencv") {
+            echo "OpenCV installed successfully"
             echo "OpenCV directory contents:"
-            Get-ChildItem "C:\vcpkg\installed\x64-windows" -Name
+            Get-ChildItem "C:\opencv" -Name
           } else {
             echo "OpenCV installation failed"
             exit 1
           }
 
-          echo "OpenCV_DIR=C:\vcpkg\installed\x64-windows\share\opencv4" >> $env:GITHUB_ENV
+          echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
 
       - name: Install dlib via vcpkg
         run: |
-          echo "Installing dlib via vcpkg..."
-          C:\vcpkg\vcpkg install dlib:x64-windows
+          echo "Installing dlib via pre-built binaries..."
 
-          if (Test-Path "C:\vcpkg\installed\x64-windows\share\dlib") {
-            echo "dlib installed successfully via vcpkg"
+          # dlibのソースコードをダウンロードしてビルド
+          $dlibUrl = "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip"
+          $dlibZip = "dlib.zip"
+
+          echo "Downloading dlib source..."
+          Invoke-WebRequest -Uri $dlibUrl -OutFile $dlibZip -TimeoutSec 300
+
+          echo "Extracting dlib..."
+          Expand-Archive -Path $dlibZip -DestinationPath "C:\dlib" -Force
+
+          # dlibのビルドディレクトリを作成
+          mkdir "C:\dlib\build"
+          cd "C:\dlib\build"
+
+          # CMakeでdlibを設定
+          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release "C:\dlib\dlib-19.24"
+
+          # dlibをビルド
+          cmake --build . --config Release --parallel 4
+
+          # インストール
+          cmake --install . --prefix "C:\dlib\install"
+
+          if (Test-Path "C:\dlib\install") {
+            echo "dlib installed successfully"
           } else {
             echo "dlib installation failed"
             exit 1
           }
 
-          echo "dlib_DIR=C:\vcpkg\installed\x64-windows\share\dlib" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\dlib\install" >> $env:GITHUB_ENV
 
       - name: Install Eigen3 via vcpkg
         run: |
-          echo "Installing Eigen3 via vcpkg..."
-          C:\vcpkg\vcpkg install eigen3:x64-windows
+          echo "Installing Eigen3 via pre-built binaries..."
 
-          if (Test-Path "C:\vcpkg\installed\x64-windows\share\eigen3") {
-            echo "Eigen3 installed successfully via vcpkg"
+          # Eigen3のソースコードをダウンロード
+          $eigenUrl = "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip"
+          $eigenZip = "eigen.zip"
+
+          echo "Downloading Eigen3 source..."
+          Invoke-WebRequest -Uri $eigenUrl -OutFile $eigenZip -TimeoutSec 300
+
+          echo "Extracting Eigen3..."
+          Expand-Archive -Path $eigenZip -DestinationPath "C:\eigen" -Force
+
+          if (Test-Path "C:\eigen\eigen-3.4.0") {
+            echo "Eigen3 installed successfully"
           } else {
             echo "Eigen3 installation failed"
             exit 1
           }
 
-          echo "EIGEN3_INCLUDE_DIR=C:\vcpkg\installed\x64-windows\include" >> $env:GITHUB_ENV
+          echo "EIGEN3_INCLUDE_DIR=C:\eigen\eigen-3.4.0" >> $env:GITHUB_ENV
 
       - name: Install ONNX Runtime
         run: |
@@ -200,13 +225,10 @@ jobs:
         run: |
           $workspace = "$env:GITHUB_WORKSPACE"
           $opencvDir = "$env:OpenCV_DIR"
-          $vcpkgRoot = "$env:VCPKG_ROOT"
           echo "OpenCV_DIR: $opencvDir"
-          echo "VCPKG_ROOT: $vcpkgRoot"
 
-          # vcpkgツールチェーンファイルを使用
+          # 通常のOpenCVディレクトリを使用
           cmake -G "Visual Studio 17 2022" -A x64 `
-                -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake" `
                 -DOpenCV_DIR="$opencvDir" `
                 ${{ matrix.config.cmake_options }} `
                 "$workspace\CppBloodPressureDLL"
@@ -260,12 +282,12 @@ jobs:
 
           # Individual Librariesの場合、必要なOpenCV DLLのみをコピー
           if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
-            # vcpkgでインストールされたOpenCV DLLをコピー
-            $vcpkgBinDir = "C:\vcpkg\installed\x64-windows\bin"
-            if (Test-Path $vcpkgBinDir) {
+            # 通常のOpenCVディレクトリからDLLをコピー
+            $opencvBinDir = "C:\opencv\bin"
+            if (Test-Path $opencvBinDir) {
               $opencvDlls = @("opencv_core480.dll", "opencv_imgproc480.dll", "opencv_imgcodecs480.dll", "opencv_objdetect480.dll", "opencv_dnn480.dll")
               foreach ($dll in $opencvDlls) {
-                $dllPath = Join-Path $vcpkgBinDir $dll
+                $dllPath = Join-Path $opencvBinDir $dll
                 if (Test-Path $dllPath) {
                   copy $dllPath "package_${{ matrix.config.name }}/"
                   echo "Copied $dll"
@@ -274,7 +296,7 @@ jobs:
                 }
               }
             } else {
-              echo "Warning: vcpkg bin directory not found, skipping OpenCV DLL copy"
+              echo "Warning: OpenCV bin directory not found, skipping OpenCV DLL copy"
             }
           }
 
