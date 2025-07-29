@@ -93,10 +93,23 @@ jobs:
           mkdir build
           cd build
 
+      - name: Debug CMake paths
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Parent directory contents:"
+          Get-ChildItem .. -Name
+          echo "CppBloodPressureDLL exists: $(Test-Path ..\CppBloodPressureDLL)"
+          if (Test-Path ..\CppBloodPressureDLL) {
+            echo "CppBloodPressureDLL contents:"
+            Get-ChildItem ..\CppBloodPressureDLL -Name
+          }
+
       - name: Configure CMake
         run: |
-          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} ../CppBloodPressureDLL
+          $workspace = "$env:GITHUB_WORKSPACE"
+          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} "$workspace\CppBloodPressureDLL"
           echo "Configured with: ${{ matrix.config.cmake_options }}"
+          echo "Workspace: $workspace"
 
       - name: Build
         run: |
