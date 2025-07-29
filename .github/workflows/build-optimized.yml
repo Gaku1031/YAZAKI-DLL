@@ -46,20 +46,55 @@ jobs:
         with:
           cmake-version: "3.25.0"
 
-      - name: Install OpenCV via vcpkg
+      - name: Install OpenCV via pre-built binaries
         run: |
           echo "Installing OpenCV 4.8.0 via pre-built binaries..."
 
-          # 事前にビルドされたOpenCVバイナリをダウンロード
+          # 方法1: OpenCVの事前ビルドバイナリをダウンロード
           $opencvUrl = "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe"
           $opencvInstaller = "opencv-installer.exe"
 
           echo "Downloading OpenCV installer..."
-          Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvInstaller -TimeoutSec 600
+          try {
+            Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvInstaller -TimeoutSec 600
+            echo "Download completed successfully"
+          } catch {
+            echo "Failed to download OpenCV installer: $($_.Exception.Message)"
+            exit 1
+          }
 
           echo "Installing OpenCV..."
-          # サイレントインストール
-          Start-Process -FilePath ".\$opencvInstaller" -ArgumentList "-y", "-o", "C:\opencv" -Wait -NoNewWindow
+          try {
+            # インストーラーを実行（より詳細なログ付き）
+            $process = Start-Process -FilePath ".\$opencvInstaller" -ArgumentList "-y", "-o", "C:\opencv" -Wait -PassThru -NoNewWindow
+            echo "Installer exit code: $($process.ExitCode)"
+            
+            if ($process.ExitCode -ne 0) {
+              echo "Installer failed with exit code: $($process.ExitCode)"
+              throw "Installer failed"
+            }
+          } catch {
+            echo "Failed to run OpenCV installer: $($_.Exception.Message)"
+            echo "Trying alternative installation method..."
+            
+            # 方法2: OpenCVのソースコードをダウンロードしてビルド
+            echo "Downloading OpenCV source code..."
+            Invoke-WebRequest -Uri "https://github.com/opencv/opencv/archive/4.8.0.zip" -OutFile "opencv-source.zip"
+            Expand-Archive -Path "opencv-source.zip" -DestinationPath "C:\opencv-source" -Force
+            
+            # OpenCVのビルドディレクトリを作成
+            mkdir "C:\opencv-source\build"
+            cd "C:\opencv-source\build"
+            
+            # CMakeでOpenCVを設定（必要最小限の機能のみ）
+            cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_LIST=core,imgproc,imgcodecs,objdetect,dnn -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF "C:\opencv-source\opencv-4.8.0"
+            
+            # OpenCVをビルド
+            cmake --build . --config Release --parallel 4
+            
+            # インストール
+            cmake --install . --prefix "C:\opencv"
+          }
 
           # インストール完了を待機
           Start-Sleep -Seconds 30
@@ -70,7 +105,7 @@ jobs:
             echo "OpenCV directory contents:"
             Get-ChildItem "C:\opencv" -Name
           } else {
-            echo "OpenCV installation failed"
+            echo "OpenCV installation failed - directory not found"
             exit 1
           }
 
