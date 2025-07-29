@@ -82,7 +82,17 @@ find_package(dlib REQUIRED)
 include_directories(${dlib_INCLUDE_DIRS})
 
 # ONNX Runtime
-find_package(ONNXRuntime REQUIRED)
+if(DEFINED ONNXRuntime_INCLUDE_DIRS AND DEFINED ONNXRuntime_LIBRARIES)
+    # 環境変数から直接設定
+    set(ONNXRuntime_INCLUDE_DIRS ${ONNXRuntime_INCLUDE_DIRS})
+    set(ONNXRuntime_LIBRARIES ${ONNXRuntime_LIBRARIES})
+    message(STATUS "Using ONNX Runtime from environment variables")
+    message(STATUS "ONNXRuntime_INCLUDE_DIRS: ${ONNXRuntime_INCLUDE_DIRS}")
+    message(STATUS "ONNXRuntime_LIBRARIES: ${ONNXRuntime_LIBRARIES}")
+else()
+    # 従来のfind_packageを使用
+    find_package(ONNXRuntime REQUIRED)
+endif()
 include_directories(${ONNXRuntime_INCLUDE_DIRS})
 
 # ソースファイル

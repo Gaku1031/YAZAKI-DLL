@@ -1,4 +1,4 @@
-name: Build Optimized BloodPressureDLL
+name: Build Optimized BloodPressureDLL (sub)
 
 on:
   push:
@@ -32,7 +32,6 @@ jobs:
             echo "CppBloodPressureDLL contents:"
             Get-ChildItem CppBloodPressureDLL -Name
           }
-
       - name: Setup Visual Studio
         uses: microsoft/setup-msbuild@v1
 
@@ -46,188 +45,73 @@ jobs:
         with:
           cmake-version: "3.25.0"
 
-      - name: Install OpenCV via pre-built binaries
+      - name: Install vcpkg
         run: |
-          echo "Installing OpenCV 4.8.0 via pre-built binaries..."
-
-          # OpenCVの事前ビルドバイナリを直接ダウンロード
-          echo "Downloading OpenCV pre-built binaries..."
-
-          # OpenCVのバイナリパッケージをダウンロード
-          $opencvUrl = "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe"
-          $opencvInstaller = "opencv-installer.exe"
-
-          try {
-            Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvInstaller -TimeoutSec 600
-            echo "Download completed successfully"
-          } catch {
-            echo "Failed to download OpenCV installer: $($_.Exception.Message)"
-            exit 1
-          }
-
-          echo "Installing OpenCV..."
-          try {
-            # インストーラーを実行
-            $process = Start-Process -FilePath ".\$opencvInstaller" -ArgumentList "-y", "-o", "C:\opencv", "-q" -Wait -PassThru -NoNewWindow
-            echo "Installer exit code: $($process.ExitCode)"
-            
-            if ($process.ExitCode -ne 0) {
-              echo "Installer failed with exit code: $($process.ExitCode)"
-              throw "Installer failed"
-            }
-          } catch {
-            echo "Failed to run OpenCV installer: $($_.Exception.Message)"
-            echo "Trying alternative method - using minimal OpenCV build..."
-            
-            # 代替手段：最小限のOpenCVビルドを実行
-            echo "Downloading minimal OpenCV source..."
-            Invoke-WebRequest -Uri "https://github.com/opencv/opencv/archive/4.8.0.zip" -OutFile "opencv-minimal.zip"
-            Expand-Archive -Path "opencv-minimal.zip" -DestinationPath "C:\opencv-minimal" -Force
-            
-            mkdir "C:\opencv-minimal\build"
-            cd "C:\opencv-minimal\build"
-            
-            # 最小限の設定でOpenCVをビルド
-            cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_LIST="core,imgproc,imgcodecs" -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF -DWITH_OPENMP=OFF -DWITH_LAPACK=OFF -DWITH_EIGEN=OFF -DWITH_IPP=OFF -DWITH_OPENCL=OFF -DWITH_FFMPEG=OFF -DWITH_GSTREAMER=OFF -DWITH_1394=OFF -DWITH_GTK=OFF -DWITH_QT=OFF -DWITH_WIN32UI=OFF -DWITH_OPENGL=OFF -DWITH_VA=OFF -DWITH_VA_INTEL=OFF -DWITH_GDAL=OFF -DWITH_GSTREAMER_0_10=OFF -DWITH_OPENEXR=OFF -DWITH_CAROTENE=OFF -DWITH_IPP=OFF -DWITH_ITT=OFF -DWITH_OPENCL_SVM=OFF -DWITH_OPENCLAMDFFT=OFF -DWITH_OPENCLAMDBLAS=OFF -DWITH_VA=OFF -DWITH_VA_INTEL=OFF -DWITH_GDAL=OFF -DWITH_GSTREAMER_0_10=OFF -DWITH_OPENEXR=OFF -DWITH_CAROTENE=OFF -DWITH_IPP=OFF -DWITH_ITT=OFF -DWITH_OPENCL_SVM=OFF -DWITH_OPENCLAMDFFT=OFF -DWITH_OPENCLAMDBLAS=OFF "C:\opencv-minimal\opencv-4.8.0"
-            
-            cmake --build . --config Release --parallel 4
-            cmake --install . --prefix "C:\opencv"
-            
-            if (Test-Path "C:\opencv") {
-              echo "OpenCV built and installed successfully"
-            } else {
-              echo "Failed to build OpenCV"
-              exit 1
-            }
-          }
-
-          # インストール完了を待機
-          Start-Sleep -Seconds 30
-
-          # OpenCVのインストールを確認（複数の可能性のあるパスをチェック）
-          $opencvPaths = @("C:\opencv", "C:\Program Files\opencv", "C:\opencv\opencv", "C:\opencv\opencv-4.8.0")
-          $opencvFound = $false
-          $opencvDir = ""
-
-          foreach ($path in $opencvPaths) {
-            if (Test-Path $path) {
-              echo "OpenCV found at: $path"
-              $opencvFound = $true
-              $opencvDir = $path
-              break
-            }
-          }
-
-          if (-not $opencvFound) {
-            echo "OpenCV installation failed - checking possible locations:"
-            Get-ChildItem "C:\" -Name | Where-Object { $_ -like "*opencv*" }
-            echo "Trying minimal OpenCV build..."
-            
-            # 最小限のOpenCVビルドを試行
-            echo "Downloading minimal OpenCV source..."
-            Invoke-WebRequest -Uri "https://github.com/opencv/opencv/archive/4.8.0.zip" -OutFile "opencv-minimal.zip"
-            Expand-Archive -Path "opencv-minimal.zip" -DestinationPath "C:\opencv-minimal" -Force
-            
-            mkdir "C:\opencv-minimal\build"
-            cd "C:\opencv-minimal\build"
-            
-            # 最小限の設定でOpenCVをビルド
-            cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_LIST="core,imgproc,imgcodecs" -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF -DWITH_OPENMP=OFF -DWITH_LAPACK=OFF -DWITH_EIGEN=OFF -DWITH_IPP=OFF -DWITH_OPENCL=OFF -DWITH_FFMPEG=OFF -DWITH_GSTREAMER=OFF -DWITH_1394=OFF -DWITH_GTK=OFF -DWITH_QT=OFF -DWITH_WIN32UI=OFF -DWITH_OPENGL=OFF -DWITH_VA=OFF -DWITH_VA_INTEL=OFF -DWITH_GDAL=OFF -DWITH_GSTREAMER_0_10=OFF -DWITH_OPENEXR=OFF -DWITH_CAROTENE=OFF -DWITH_IPP=OFF -DWITH_ITT=OFF -DWITH_OPENCL_SVM=OFF -DWITH_OPENCLAMDFFT=OFF -DWITH_OPENCLAMDBLAS=OFF -DWITH_VA=OFF -DWITH_VA_INTEL=OFF -DWITH_GDAL=OFF -DWITH_GSTREAMER_0_10=OFF -DWITH_OPENEXR=OFF -DWITH_CAROTENE=OFF -DWITH_IPP=OFF -DWITH_ITT=OFF -DWITH_OPENCL_SVM=OFF -DWITH_OPENCLAMDFFT=OFF -DWITH_OPENCLAMDBLAS=OFF "C:\opencv-minimal\opencv-4.8.0"
-            
-            cmake --build . --config Release --parallel 4
-            cmake --install . --prefix "C:\opencv"
-            
-            $opencvDir = "C:\opencv"
-          }
-
-          if (Test-Path $opencvDir) {
-            echo "OpenCV installed successfully at: $opencvDir"
+          echo "Installing vcpkg..."
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+      - name: Update vcpkg packages
+        run: |
+          echo "Updating vcpkg package information..."
+          C:\vcpkg\vcpkg update
+          C:\vcpkg\vcpkg upgrade --no-dry-run
+      - name: Install OpenCV via vcpkg
+        run: |
+          echo "Installing OpenCV 4.8.0 via vcpkg..."
+          # まず基本的なOpenCVをインストール
+          C:\vcpkg\vcpkg install opencv4:x64-windows
+          # 追加機能を個別にインストール
+          C:\vcpkg\vcpkg install opencv4[contrib]:x64-windows
+          C:\vcpkg\vcpkg install opencv4[dnn]:x64-windows
+          # OpenCVのインストールを確認
+          if (Test-Path "C:\vcpkg\installed\x64-windows") {
+            echo "OpenCV installed successfully via vcpkg"
             echo "OpenCV directory contents:"
-            Get-ChildItem $opencvDir -Name
+            Get-ChildItem "C:\vcpkg\installed\x64-windows" -Name
           } else {
-            echo "OpenCV installation failed - directory not found"
+            echo "OpenCV installation failed"
             exit 1
           }
-
-          echo "OpenCV_DIR=$opencvDir" >> $env:GITHUB_ENV
-
+          echo "OpenCV_DIR=C:\vcpkg\installed\x64-windows\share\opencv4" >> $env:GITHUB_ENV
       - name: Install dlib via vcpkg
         run: |
-          echo "Installing dlib via pre-built binaries..."
-
-          # dlibのソースコードをダウンロードしてビルド
-          $dlibUrl = "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip"
-          $dlibZip = "dlib.zip"
-
-          echo "Downloading dlib source..."
-          Invoke-WebRequest -Uri $dlibUrl -OutFile $dlibZip -TimeoutSec 300
-
-          echo "Extracting dlib..."
-          Expand-Archive -Path $dlibZip -DestinationPath "C:\dlib" -Force
-
-          # dlibのビルドディレクトリを作成
-          mkdir "C:\dlib\build"
-          cd "C:\dlib\build"
-
-          # CMakeでdlibを設定
-          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release "C:\dlib\dlib-19.24"
-
-          # dlibをビルド
-          cmake --build . --config Release --parallel 4
-
-          # インストール
-          cmake --install . --prefix "C:\dlib\install"
-
-          if (Test-Path "C:\dlib\install") {
-            echo "dlib installed successfully"
+          echo "Installing dlib via vcpkg..."
+          C:\vcpkg\vcpkg install dlib:x64-windows
+          if (Test-Path "C:\vcpkg\installed\x64-windows\share\dlib") {
+            echo "dlib installed successfully via vcpkg"
           } else {
             echo "dlib installation failed"
             exit 1
           }
-
-          echo "dlib_DIR=C:\dlib\install" >> $env:GITHUB_ENV
-
+          echo "dlib_DIR=C:\vcpkg\installed\x64-windows\share\dlib" >> $env:GITHUB_ENV
       - name: Install Eigen3 via vcpkg
         run: |
-          echo "Installing Eigen3 via pre-built binaries..."
-
-          # Eigen3のソースコードをダウンロード
-          $eigenUrl = "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip"
-          $eigenZip = "eigen.zip"
-
-          echo "Downloading Eigen3 source..."
-          Invoke-WebRequest -Uri $eigenUrl -OutFile $eigenZip -TimeoutSec 300
-
-          echo "Extracting Eigen3..."
-          Expand-Archive -Path $eigenZip -DestinationPath "C:\eigen" -Force
-
-          if (Test-Path "C:\eigen\eigen-3.4.0") {
-            echo "Eigen3 installed successfully"
+          echo "Installing Eigen3 via vcpkg..."
+          C:\vcpkg\vcpkg install eigen3:x64-windows
+          if (Test-Path "C:\vcpkg\installed\x64-windows\share\eigen3") {
+            echo "Eigen3 installed successfully via vcpkg"
           } else {
             echo "Eigen3 installation failed"
             exit 1
           }
-
-          echo "EIGEN3_INCLUDE_DIR=C:\eigen\eigen-3.4.0" >> $env:GITHUB_ENV
-
+          echo "EIGEN3_INCLUDE_DIR=C:\vcpkg\installed\x64-windows\include" >> $env:GITHUB_ENV
       - name: Install ONNX Runtime
         run: |
           echo "Installing ONNX Runtime..."
           Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.15.1/onnxruntime-win-x64-1.15.1.zip" -OutFile "onnxruntime.zip"
           Expand-Archive -Path "onnxruntime.zip" -DestinationPath "C:\onnxruntime" -Force
-
           echo "ONNXRuntime_DIR=C:\onnxruntime" >> $env:GITHUB_ENV
-
+          echo "ONNXRuntime_INCLUDE_DIRS=C:\onnxruntime\include" >> $env:GITHUB_ENV
+          echo "ONNXRuntime_LIBRARIES=C:\onnxruntime\lib\onnxruntime.lib" >> $env:GITHUB_ENV
       - name: Download dlib face detection model
         run: |
           echo "Downloading dlib face detection model..."
-
           # 複数のソースからダウンロードを試行
           $urls = @(
             "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2",
             "https://github.com/davisking/dlib-models/raw/master/shape_predictor_68_face_landmarks.dat.bz2"
           )
-
           $success = $false
           foreach ($url in $urls) {
             try {
@@ -247,12 +131,10 @@ jobs:
               echo "Failed to download from $url"
             }
           }
-
           if (-not $success) {
             echo "All download attempts failed"
             exit 1
           }
-
           # 解凍を試行
           try {
             # PowerShellのExpand-Archiveを使用（bzip2形式はサポートされていないため、別の方法を試行）
@@ -270,7 +152,6 @@ jobs:
             echo "Failed to extract bzip2 file"
             exit 1
           }
-
           # モデルファイルをCppBloodPressureDLL/modelsディレクトリにコピー
           if (Test-Path "shape_predictor_68_face_landmarks.dat") {
             copy "shape_predictor_68_face_landmarks.dat" "CppBloodPressureDLL\models\"
@@ -279,12 +160,10 @@ jobs:
             echo "Failed to extract dlib face detection model"
             exit 1
           }
-
       - name: Create build directory
         run: |
           mkdir build
           cd build
-
       - name: Debug CMake paths
         run: |
           echo "Current directory: $(pwd)"
@@ -295,41 +174,34 @@ jobs:
             echo "CppBloodPressureDLL contents:"
             Get-ChildItem ..\CppBloodPressureDLL -Name
           }
-
       - name: Configure CMake
         run: |
           $workspace = "$env:GITHUB_WORKSPACE"
           $opencvDir = "$env:OpenCV_DIR"
+          $vcpkgRoot = "$env:VCPKG_ROOT"
+          $onnxRuntimeDir = "$env:ONNXRuntime_DIR"
+          $onnxRuntimeInclude = "$env:ONNXRuntime_INCLUDE_DIRS"
+          $onnxRuntimeLib = "$env:ONNXRuntime_LIBRARIES"
           echo "OpenCV_DIR: $opencvDir"
-
-          # 通常のOpenCVディレクトリを使用
-          $cmakeOptions = "${{ matrix.config.cmake_options }}"
-          $cmakeArgs = @(
-              "-G", "Visual Studio 17 2022",
-              "-A", "x64",
-              "-DOpenCV_DIR=$opencvDir"
-          )
-
-          # CMakeオプションを分割して追加
-          $cmakeOptionsArray = $cmakeOptions -split " "
-          foreach ($option in $cmakeOptionsArray) {
-              if ($option -ne "") {
-                  $cmakeArgs += $option
-              }
-          }
-
-          $cmakeArgs += "$workspace\CppBloodPressureDLL"
-
-          cmake @cmakeArgs
-
+          echo "VCPKG_ROOT: $vcpkgRoot"
+          echo "ONNXRuntime_DIR: $onnxRuntimeDir"
+          echo "ONNXRuntime_INCLUDE_DIRS: $onnxRuntimeInclude"
+          echo "ONNXRuntime_LIBRARIES: $onnxRuntimeLib"
+          # vcpkgツールチェーンファイルを使用
+          cmake -G "Visual Studio 17 2022" -A x64 `
+                -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake" `
+                -DOpenCV_DIR="$opencvDir" `
+                -DONNXRuntime_DIR="$onnxRuntimeDir" `
+                -DONNXRuntime_INCLUDE_DIRS="$onnxRuntimeInclude" `
+                -DONNXRuntime_LIBRARIES="$onnxRuntimeLib" `
+                ${{ matrix.config.cmake_options }} `
+                "$workspace\CppBloodPressureDLL"
           echo "Configured with: ${{ matrix.config.cmake_options }}"
           echo "Workspace: $workspace"
-
       - name: Build
         run: |
           cmake --build . --config Release --parallel 4
           echo "Build completed for ${{ matrix.config.name }}"
-
       - name: Measure DLL size
         run: |
           $dllPath = "Release\BloodPressureDLL.dll"
@@ -348,7 +220,6 @@ jobs:
             echo "DLL not found"
             exit 1
           }
-
       - name: Run performance test
         run: |
           echo "Running performance test..."
@@ -362,21 +233,19 @@ jobs:
             exit 1
           }
           echo "Performance test completed"
-
       - name: Create optimized package
         run: |
           echo "Creating optimized package..."
           mkdir package_${{ matrix.config.name }}
           copy Release\BloodPressureDLL.dll package_${{ matrix.config.name }}/
-
           # Individual Librariesの場合、必要なOpenCV DLLのみをコピー
           if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
-            # 通常のOpenCVディレクトリからDLLをコピー
-            $opencvBinDir = "C:\opencv\bin"
-            if (Test-Path $opencvBinDir) {
+            # vcpkgでインストールされたOpenCV DLLをコピー
+            $vcpkgBinDir = "C:\vcpkg\installed\x64-windows\bin"
+            if (Test-Path $vcpkgBinDir) {
               $opencvDlls = @("opencv_core480.dll", "opencv_imgproc480.dll", "opencv_imgcodecs480.dll", "opencv_objdetect480.dll", "opencv_dnn480.dll")
               foreach ($dll in $opencvDlls) {
-                $dllPath = Join-Path $opencvBinDir $dll
+                $dllPath = Join-Path $vcpkgBinDir $dll
                 if (Test-Path $dllPath) {
                   copy $dllPath "package_${{ matrix.config.name }}/"
                   echo "Copied $dll"
@@ -385,30 +254,23 @@ jobs:
                 }
               }
             } else {
-              echo "Warning: OpenCV bin directory not found, skipping OpenCV DLL copy"
+              echo "Warning: vcpkg bin directory not found, skipping OpenCV DLL copy"
             }
           }
-
           # dlibは静的リンクされるため、DLLのコピーは不要
           copy "C:\onnxruntime\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
-
           mkdir package_${{ matrix.config.name }}\models
           copy ..\CppBloodPressureDLL\models\*.onnx package_${{ matrix.config.name }}\models\
           copy ..\CppBloodPressureDLL\models\*.pb package_${{ matrix.config.name }}\models\
           copy ..\CppBloodPressureDLL\models\*.pbtxt package_${{ matrix.config.name }}\models\
           copy ..\CppBloodPressureDLL\models\shape_predictor_68_face_landmarks.dat package_${{ matrix.config.name }}\models\
-
           mkdir package_${{ matrix.config.name }}\include
           copy ..\CppBloodPressureDLL\include\*.h package_${{ matrix.config.name }}\include\
-
           copy ..\CppBloodPressureDLL\README.md package_${{ matrix.config.name }}/
           copy ..\CppBloodPressureDLL\INTEGRATION_GUIDE.md package_${{ matrix.config.name }}/
-
           # パッケージ情報ファイルを作成
           powershell -File "..\CppBloodPressureDLL\create_package_info.ps1" -ConfigName "${{ matrix.config.name }}" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
-
           echo "Package created: package_${{ matrix.config.name }}"
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -426,7 +288,6 @@ jobs:
           echo "- **Size Reduction**: $([math]::Round((60 - $sizeMB) / 60 * 100, 1))%" >> $GITHUB_STEP_SUMMARY
           echo "- **Artifact**: ${{ matrix.config.name }}-package" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
       - name: Create download instructions
         run: |
           echo "## Download Instructions" >> $GITHUB_STEP_SUMMARY
