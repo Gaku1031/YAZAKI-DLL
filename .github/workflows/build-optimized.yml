@@ -42,9 +42,9 @@ jobs:
         run: |
           echo "Current directory: $(pwd)"
           echo "Directory contents:"
-          ls -la
+          Get-ChildItem
           echo "CppBloodPressureDLL contents:"
-          ls -la CppBloodPressureDLL
+          Get-ChildItem CppBloodPressureDLL
 
       - name: Install OpenCV
         run: |
@@ -106,7 +106,7 @@ jobs:
           echo "Configured with: ${{ matrix.config.cmake_options }}"
           echo "Current directory: $(pwd)"
           echo "Source directory: ../CppBloodPressureDLL"
-          ls -la ../CppBloodPressureDLL
+          Get-ChildItem ../CppBloodPressureDLL
 
       - name: Build
         run: |
