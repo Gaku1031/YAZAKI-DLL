@@ -154,7 +154,7 @@ jobs:
           echo "Package created: package_${{ matrix.config.name }}"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.config.name }}-package
           path: package_${{ matrix.config.name }}/
