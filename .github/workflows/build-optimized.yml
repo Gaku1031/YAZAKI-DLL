@@ -64,14 +64,13 @@ jobs:
       - name: Install dlib
         run: |
           echo "Installing dlib..."
-          $env:DLIB_VERSION = "19.24"
-          $env:DLIB_DIR = "C:\dlib"
 
-          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/releases/download/v19.24/dlib-19.24.0_release_64bit_msvc1929.zip" -OutFile "dlib.zip"
+          # dlibのソースコードをダウンロード
+          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip" -OutFile "dlib.zip"
           Expand-Archive -Path "dlib.zip" -DestinationPath "C:\dlib" -Force
 
-          echo "DLIB_DIR=C:\dlib" >> $env:GITHUB_ENV
-          echo "dlib_DIR=C:\dlib" >> $env:GITHUB_ENV
+          echo "DLIB_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
 
       - name: Install Eigen3
         run: |
@@ -144,7 +143,8 @@ jobs:
             copy "C:\opencv\bin\opencv_dnn480.dll" package_${{ matrix.config.name }}/
           }
 
-          copy "C:\dlib\bin\dlib19.24.0_release_64bit_msvc1929.dll" package_${{ matrix.config.name }}/
+          # dlibは静的リンクされるため、DLLのコピーは不要
+          # copy "C:\dlib\dlib-19.24\bin\dlib19.dll" package_${{ matrix.config.name }}/
           copy "C:\onnxruntime\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
 
           mkdir package_${{ matrix.config.name }}\models
