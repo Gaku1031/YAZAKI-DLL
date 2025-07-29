@@ -290,8 +290,8 @@ RPPGResult RPPGProcessor::processVideo(const std::string& videoPath) {
     ffmpeg_bin = ".\\ffmpeg.exe";
 #endif
     std::string ffmpeg_log = temp_dir + "/ffmpeg_out.log";
-    // std::string ffmpeg_cmd = ffmpeg_bin + " -y -fflags +genpts -err_detect ignore_err -i \"" + videoPath + "\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\" > \"" + ffmpeg_log + "\" 2>&1";
-    std::string ffmpeg_cmd = ffmpeg_bin + " -y -fflags +genpts -err_detect ignore_err -i \"" + videoPath + "\" -vf \"scale=320:240\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\" > \"" + ffmpeg_log + "\" 2>&1";
+    std::string ffmpeg_cmd = ffmpeg_bin + " -y -fflags +genpts -err_detect ignore_err -i \"" + videoPath + "\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\" > \"" + ffmpeg_log + "\" 2>&1";
+    // std::string ffmpeg_cmd = ffmpeg_bin + " -y -fflags +genpts -err_detect ignore_err -i \"" + videoPath + "\" -vf \"scale=320:240\" -q:v 2 \"" + temp_dir + "/frame_%05d.jpg\" > \"" + ffmpeg_log + "\" 2>&1";
     int ret = system(ffmpeg_cmd.c_str());
     if (ret != 0) {
         // ffmpegのログ内容をdll_error.logに転記
@@ -373,28 +373,54 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
             }
             
             if (!landmarks.empty()) {
-                // ROIマスクの作成
-                cv::Mat mask = cv::Mat::zeros(frame.size(), CV_8UC1);
+                // 顔領域の境界を計算
+                float min_x = std::numeric_limits<float>::max();
+                float min_y = std::numeric_limits<float>::max();
+                float max_x = std::numeric_limits<float>::lowest();
+                float max_y = std::numeric_limits<float>::lowest();
+                
+                for (const auto& pt : landmarks) {
+                    min_x = std::min(min_x, pt.x);
+                    min_y = std::min(min_y, pt.y);
+                    max_x = std::max(max_x, pt.x);
+                    max_y = std::max(max_y, pt.y);
+                }
+                
+                // 顔領域を少し拡張（余裕を持たせる）
+                float margin = 20.0f;
+                int face_x1 = std::max(0, static_cast<int>(min_x - margin));
+                int face_y1 = std::max(0, static_cast<int>(min_y - margin));
+                int face_x2 = std::min(frame.cols - 1, static_cast<int>(max_x + margin));
+                int face_y2 = std::min(frame.rows - 1, static_cast<int>(max_y + margin));
+                
+                // 顔領域を切り取り
+                cv::Mat face_roi = frame(cv::Rect(face_x1, face_y1, face_x2 - face_x1, face_y2 - face_y1));
+                
+                // ROIマスクの作成（顔領域サイズに合わせる）
+                cv::Mat mask = cv::Mat::zeros(face_roi.size(), CV_8UC1);
                 std::vector<cv::Point> roi_points;
                 for (const auto& pt : landmarks) {
-                    roi_points.push_back(cv::Point(static_cast<int>(pt.x), static_cast<int>(pt.y)));
+                    // 座標を顔領域内の相対座標に変換
+                    int rel_x = static_cast<int>(pt.x - face_x1);
+                    int rel_y = static_cast<int>(pt.y - face_y1);
+                    roi_points.push_back(cv::Point(rel_x, rel_y));
                 }
                 if (roi_points.size() >= 3) {
                     try {
                         cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
                         
                         // 肌色フィルタリング（YCbCr色空間）
-                        cv::Mat frame_ycbcr;
-                        cv::cvtColor(frame, frame_ycbcr, cv::COLOR_BGR2YCrCb);
+                        cv::Mat face_ycbcr;
+                        cv::cvtColor(face_roi, face_ycbcr, cv::COLOR_BGR2YCrCb);
                         cv::Mat skin_mask;
-                        cv::inRange(frame_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
+                        cv::inRange(face_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
                         
                         // ROIマスクと肌色マスクの組み合わせ
                         cv::Mat combined_mask;
                         cv::bitwise_and(mask, skin_mask, combined_mask);
                         
                         // ROI領域の色平均を計算
-                        cv::Scalar mean = cv::mean(frame, combined_mask);
+                        cv::Scalar mean = cv::mean(face_roi, combined_mask);
                         // 有効な平均値のみを保存
                         if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
                             skin_means.push_back({mean[0], mean[1], mean[2]});
@@ -428,142 +454,6 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
     pImpl->end_timing(); // Image Loading and Processing
     
     std::cout << "[RPPG] Total processed frames: " << frame_count << ", Valid skin means: " << skin_means.size() << std::endl;
-    
-    pImpl->start_timing("Signal Processing");
-    std::vector<double> rppg_signal, time_data, peak_times;
-    if (skin_means.size() > 30) {
-        pImpl->start_timing("Eigen Matrix Operations");
-        int L = 30;
-        int frames = static_cast<int>(skin_means.size());
-        Eigen::MatrixXd C(3, frames);
-        for (int i = 0; i < frames; ++i) {
-            C(0, i) = skin_means[i][0];
-            C(1, i) = skin_means[i][1];
-            C(2, i) = skin_means[i][2];
-        }
-        pImpl->end_timing();
-        
-        pImpl->start_timing("RPPG Algorithm");
-        Eigen::VectorXd H = Eigen::VectorXd::Zero(frames);
-        for (int f = 0; f < frames - L + 1; ++f) {
-            Eigen::MatrixXd block = C.block(0, f, 3, L);
-            Eigen::Vector3d mu_C = block.rowwise().mean();
-            for (int i = 0; i < 3; ++i) {
-                if (mu_C(i) == 0) mu_C(i) = 1e-8;
-            }
-            Eigen::MatrixXd C_normed = block.array().colwise() / mu_C.array();
-            Eigen::MatrixXd M(2, 3);
-            M << 0, 1, -1,
-                -2, 1, 1;
-            Eigen::MatrixXd S = M * C_normed;
-            double alpha = std::sqrt(S.row(0).array().square().mean()) /
-                          (std::sqrt(S.row(1).array().square().mean()) + 1e-8);
-            Eigen::VectorXd P = S.row(0).transpose() + alpha * S.row(1).transpose();
-            double P_mean = P.mean();
-            double P_std = std::max(std::sqrt((P.array() - P_mean).square().mean()), 1e-8);
-            Eigen::VectorXd P_normalized = (P.array() - P_mean) / P_std;
-            H.segment(f, L) += P_normalized;
-        }
-        pImpl->end_timing();
-        
-        pImpl->start_timing("Signal Normalization");
-        double mean = H.mean();
-        double stddev = std::sqrt((H.array() - mean).square().sum() / H.size());
-        Eigen::VectorXd pulse_z = (H.array() - mean) / (stddev + 1e-8);
-        rppg_signal.assign(pulse_z.data(), pulse_z.data() + pulse_z.size());
-        time_data = timestamps;
-        pImpl->end_timing();
-        
-        pImpl->start_timing("Peak Detection");
-        std::vector<size_t> peaks = find_peaks(rppg_signal, 10, 0.0);
-        for (size_t idx : peaks) {
-            if (idx < time_data.size()) {
-                peak_times.push_back(time_data[idx]);
-            }
-        }
-        pImpl->end_timing();
-    }
-    pImpl->end_timing(); // Signal Processing
-    
-    // すべてのアクティブなタイミングを終了
-    pImpl->end_current_timing();
-    
-    RPPGResult result;
-    result.rppg_signal = rppg_signal;
-    result.time_data = time_data;
-    result.peak_times = peak_times;
-    return result;
-} 
-
-RPPGResult RPPGProcessor::processVideoDirect(const std::string& videoPath) {
-    // タイミングログをクリア
-    pImpl->clear_timing_log();
-    
-    pImpl->start_timing("RPPG Total Processing");
-    
-    std::vector<std::vector<double>> skin_means;
-    std::vector<double> timestamps;
-    int frame_count = 0;
-    
-    pImpl->start_timing("Video Loading and Processing");
-    
-    // OpenCVで動画を直接読み込み
-    cv::VideoCapture cap(videoPath);
-    if (!cap.isOpened()) {
-        std::cerr << "[RPPG] Error: Could not open video file: " << videoPath << std::endl;
-        return RPPGResult();
-    }
-    
-    double fps = cap.get(cv::CAP_PROP_FPS);
-    int total_frames = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_COUNT));
-    
-    std::cout << "[RPPG] Video info - FPS: " << fps << ", Total frames: " << total_frames << std::endl;
-    
-    cv::Mat frame;
-    while (cap.read(frame)) {
-        double current_time = frame_count / fps;
-        frame_count++;
-        
-        // 顔検出とROI抽出
-        std::vector<cv::Point2f> landmarks = pImpl->detectFaceLandmarks(frame);
-        if (!landmarks.empty()) {
-            // ROIマスクの作成
-            cv::Mat mask = cv::Mat::zeros(frame.size(), CV_8UC1);
-            std::vector<cv::Point> roi_points;
-            for (const auto& pt : landmarks) {
-                roi_points.push_back(cv::Point(static_cast<int>(pt.x), static_cast<int>(pt.y)));
-            }
-            if (roi_points.size() >= 3) {
-                cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
-                
-                // 肌色フィルタリング（YCbCr色空間）
-                cv::Mat frame_ycbcr;
-                cv::cvtColor(frame, frame_ycbcr, cv::COLOR_BGR2YCrCb);
-                cv::Mat skin_mask;
-                cv::inRange(frame_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
-                
-                // ROIマスクと肌色マスクの組み合わせ
-                cv::Mat combined_mask;
-                cv::bitwise_and(mask, skin_mask, combined_mask);
-                
-                // ROI領域の色平均を計算
-                cv::Scalar mean = cv::mean(frame, combined_mask);
-                // 有効な平均値のみを保存
-                if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
-                    skin_means.push_back({mean[0], mean[1], mean[2]});
-                    timestamps.push_back(current_time);
-                }
-            }
-        }
-        
-        // 進捗表示（100フレームごと）
-        if (frame_count % 100 == 0) {
-            std::cout << "[RPPG] Processed " << frame_count << " frames..." << std::endl;
-        }
-    }
-    
-    cap.release();
-    pImpl->end_timing(); // Video Loading and Processing
     
     pImpl->start_timing("Signal Processing");
     std::vector<double> rppg_signal, time_data, peak_times;
