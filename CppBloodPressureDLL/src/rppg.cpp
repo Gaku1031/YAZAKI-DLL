@@ -363,7 +363,14 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
             frame_count++;
             
             // 顔検出とROI抽出
-            std::vector<cv::Point2f> landmarks = pImpl->detectFaceLandmarks(frame);
+            std::vector<cv::Point2f> landmarks;
+            try {
+                landmarks = pImpl->detectFaceLandmarks(frame);
+            } catch (const cv::Exception& e) {
+                std::cerr << "[RPPG] Face detection error: " << e.what() << std::endl;
+                continue;
+            }
+            
             if (!landmarks.empty()) {
                 // ROIマスクの作成
                 cv::Mat mask = cv::Mat::zeros(frame.size(), CV_8UC1);
@@ -372,24 +379,29 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
                     roi_points.push_back(cv::Point(static_cast<int>(pt.x), static_cast<int>(pt.y)));
                 }
                 if (roi_points.size() >= 3) {
-                    cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
-                    
-                    // 肌色フィルタリング（YCbCr色空間）
-                    cv::Mat frame_ycbcr;
-                    cv::cvtColor(frame, frame_ycbcr, cv::COLOR_BGR2YCrCb);
-                    cv::Mat skin_mask;
-                    cv::inRange(frame_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
-                    
-                    // ROIマスクと肌色マスクの組み合わせ
-                    cv::Mat combined_mask;
-                    cv::bitwise_and(mask, skin_mask, combined_mask);
-                    
-                    // ROI領域の色平均を計算
-                    cv::Scalar mean = cv::mean(frame, combined_mask);
-                    // 有効な平均値のみを保存
-                    if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
-                        skin_means.push_back({mean[0], mean[1], mean[2]});
-                        timestamps.push_back(current_time);
+                    try {
+                        cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
+                        
+                        // 肌色フィルタリング（YCbCr色空間）
+                        cv::Mat frame_ycbcr;
+                        cv::cvtColor(frame, frame_ycbcr, cv::COLOR_BGR2YCrCb);
+                        cv::Mat skin_mask;
+                        cv::inRange(frame_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
+                        
+                        // ROIマスクと肌色マスクの組み合わせ
+                        cv::Mat combined_mask;
+                        cv::bitwise_and(mask, skin_mask, combined_mask);
+                        
+                        // ROI領域の色平均を計算
+                        cv::Scalar mean = cv::mean(frame, combined_mask);
+                        // 有効な平均値のみを保存
+                        if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
+                            skin_means.push_back({mean[0], mean[1], mean[2]});
+                            timestamps.push_back(current_time);
+                        }
+                    } catch (const cv::Exception& e) {
+                        std::cerr << "[RPPG] Image processing error: " << e.what() << std::endl;
+                        continue;
                     }
                 }
             }
@@ -400,11 +412,17 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
             std::cout << "[RPPG] Processed " << batch_end << "/" << total_frames << " frames..." << std::endl;
         }
         
-        // メモリクリーンアップ（定期的に）
-        if (batch_end % (BATCH_SIZE * 3) == 0) {
-            // 空のMatでメモリフラグメンテーションを防ぐ
-            cv::Mat().copyTo(cv::Mat());
-        }
+        // メモリクリーンアップは一時的に無効化（OpenCVエラー回避のため）
+        // if (batch_end % (BATCH_SIZE * 3) == 0) {
+        //     // 安全なメモリクリーンアップ
+        //     try {
+        //         // 明示的にメモリを解放（より安全な方法）
+        //         cv::Mat temp;
+        //         temp = cv::Mat();
+        //     } catch (const cv::Exception& e) {
+        //         std::cerr << "[RPPG] Memory cleanup warning: " << e.what() << std::endl;
+        //     }
+        // }
     }
     pImpl->end_timing(); // Image Loading and Processing
     
