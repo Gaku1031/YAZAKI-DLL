@@ -1,0 +1,185 @@
+name: Build Optimized BloodPressureDLL
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-optimized:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        config:
+          - name: "Individual Libraries + dlib"
+            cmake_options: "-DUSE_INDIVIDUAL_OPENCV_LIBS=ON -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON"
+            expected_size: "33MB"
+            description: "Individual OpenCV libraries (47% size reduction)"
+          - name: "Lightweight OpenCV + dlib"
+            cmake_options: "-DUSE_LIGHTWEIGHT_OPENCV=ON -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON"
+            expected_size: "13MB"
+            description: "Lightweight OpenCV (78% size reduction)"
+          - name: "Static Linking + dlib"
+            cmake_options: "-DUSE_STATIC_OPENCV=ON -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON"
+            expected_size: "25MB"
+            description: "Static linking (58% size reduction)"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Visual Studio
+        uses: microsoft/setup-msbuild@v1
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.13
+        with:
+          cmake-version: "3.25.0"
+
+      - name: Install OpenCV
+        run: |
+          echo "Installing OpenCV 4.8.0..."
+          $env:OPENCV_VERSION = "4.8.0"
+          $env:OPENCV_DIR = "C:\opencv"
+
+          Invoke-WebRequest -Uri "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe" -OutFile "opencv-installer.exe"
+          Start-Process -FilePath "opencv-installer.exe" -ArgumentList "-y" -Wait
+
+          echo "OPENCV_DIR=C:\opencv" >> $env:GITHUB_ENV
+          echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
+
+      - name: Install dlib
+        run: |
+          echo "Installing dlib..."
+          $env:DLIB_VERSION = "19.24"
+          $env:DLIB_DIR = "C:\dlib"
+
+          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/releases/download/v19.24/dlib-19.24.0_release_64bit_msvc1929.zip" -OutFile "dlib.zip"
+          Expand-Archive -Path "dlib.zip" -DestinationPath "C:\dlib" -Force
+
+          echo "DLIB_DIR=C:\dlib" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\dlib" >> $env:GITHUB_ENV
+
+      - name: Install Eigen3
+        run: |
+          echo "Installing Eigen3..."
+          Invoke-WebRequest -Uri "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip" -OutFile "eigen.zip"
+          Expand-Archive -Path "eigen.zip" -DestinationPath "C:\eigen" -Force
+
+          echo "EIGEN3_INCLUDE_DIR=C:\eigen\eigen-3.4.0" >> $env:GITHUB_ENV
+
+      - name: Install ONNX Runtime
+        run: |
+          echo "Installing ONNX Runtime..."
+          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.15.1/onnxruntime-win-x64-1.15.1.zip" -OutFile "onnxruntime.zip"
+          Expand-Archive -Path "onnxruntime.zip" -DestinationPath "C:\onnxruntime" -Force
+
+          echo "ONNXRuntime_DIR=C:\onnxruntime" >> $env:GITHUB_ENV
+
+      - name: Create build directory
+        run: |
+          mkdir build
+          cd build
+
+      - name: Configure CMake
+        run: |
+          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} ..
+          echo "Configured with: ${{ matrix.config.cmake_options }}"
+
+      - name: Build
+        run: |
+          cmake --build . --config Release --parallel 4
+          echo "Build completed for ${{ matrix.config.name }}"
+
+      - name: Measure DLL size
+        run: |
+          $dllPath = "build\Release\BloodPressureDLL.dll"
+          if (Test-Path $dllPath) {
+            $size = (Get-Item $dllPath).Length
+            $sizeMB = [math]::Round($size / 1MB, 2)
+            echo "DLL size: $sizeMB MB"
+            echo "Expected size: ${{ matrix.config.expected_size }}"
+            
+            if ($sizeMB -lt 60) {
+              echo "Size optimization successful: $sizeMB MB (vs 60MB world)"
+            } else {
+              echo "Size optimization failed: $sizeMB MB"
+            }
+          } else {
+            echo "DLL not found"
+            exit 1
+          }
+
+      - name: Run performance test
+        run: |
+          echo "Running performance test..."
+          cd build\Release
+          .\test_app.exe --performance-test
+          echo "Performance test completed"
+
+      - name: Create optimized package
+        run: |
+          echo "Creating optimized package..."
+          mkdir package_${{ matrix.config.name }}
+          copy build\Release\BloodPressureDLL.dll package_${{ matrix.config.name }}/
+
+          if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
+            copy "C:\opencv\bin\opencv_core480.dll" package_${{ matrix.config.name }}/
+            copy "C:\opencv\bin\opencv_imgproc480.dll" package_${{ matrix.config.name }}/
+            copy "C:\opencv\bin\opencv_imgcodecs480.dll" package_${{ matrix.config.name }}/
+            copy "C:\opencv\bin\opencv_objdetect480.dll" package_${{ matrix.config.name }}/
+            copy "C:\opencv\bin\opencv_dnn480.dll" package_${{ matrix.config.name }}/
+          }
+
+          copy "C:\dlib\bin\dlib19.24.0_release_64bit_msvc1929.dll" package_${{ matrix.config.name }}/
+          copy "C:\onnxruntime\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
+
+          mkdir package_${{ matrix.config.name }}\models
+          copy models\*.onnx package_${{ matrix.config.name }}\models\
+          copy models\*.pb package_${{ matrix.config.name }}\models\
+          copy models\*.pbtxt package_${{ matrix.config.name }}\models\
+          copy models\shape_predictor_68_face_landmarks.dat package_${{ matrix.config.name }}\models\
+
+          mkdir package_${{ matrix.config.name }}\include
+          copy include\*.h package_${{ matrix.config.name }}\include\
+
+          copy README.md package_${{ matrix.config.name }}/
+          copy INTEGRATION_GUIDE.md package_${{ matrix.config.name }}/
+
+          # パッケージ情報ファイルを作成
+          powershell -File "create_package_info.ps1" -ConfigName "${{ matrix.config.name }}" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
+
+          echo "Package created: package_${{ matrix.config.name }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.config.name }}-package
+          path: package_${{ matrix.config.name }}/
+          retention-days: 30
+
+      - name: Create release summary
+        run: |
+          echo "## Optimization Results for ${{ matrix.config.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Configuration**: ${{ matrix.config.cmake_options }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Description**: ${{ matrix.config.description }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Expected Size**: ${{ matrix.config.expected_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Actual Size**: $sizeMB MB" >> $GITHUB_STEP_SUMMARY
+          echo "- **Size Reduction**: $([math]::Round((60 - $sizeMB) / 60 * 100, 1))%" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact**: ${{ matrix.config.name }}-package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create download instructions
+        run: |
+          echo "## Download Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "After the build completes, you can download optimized packages from the Actions tab:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to Actions tab in this repository" >> $GITHUB_STEP_SUMMARY
+          echo "2. Click on the latest workflow run" >> $GITHUB_STEP_SUMMARY
+          echo "3. Scroll down to Artifacts section" >> $GITHUB_STEP_SUMMARY
+          echo "4. Download the package that best fits your needs:" >> $GITHUB_STEP_SUMMARY
+          echo "   - **Individual Libraries + dlib**: 47% size reduction, full features" >> $GITHUB_STEP_SUMMARY
+          echo "   - **Lightweight OpenCV + dlib**: 78% size reduction, basic features" >> $GITHUB_STEP_SUMMARY
+          echo "   - **Static Linking + dlib**: 58% size reduction, no dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY

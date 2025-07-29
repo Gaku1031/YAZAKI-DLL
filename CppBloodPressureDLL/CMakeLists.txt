@@ -1,167 +1,173 @@
 cmake_minimum_required(VERSION 3.15)
-project(CppBloodPressureDLL LANGUAGES CXX)
+project(BloodPressureDLL)
 
+# C++標準を設定
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Platform-specific settings
-if(WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3 /EHsc")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
-    add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+# コンパイラ設定
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 endif()
 
-# Find packages
+# GitHub Actions用の最適化設定
+option(USE_GITHUB_ACTIONS_OPTIMIZED "Use optimized settings for GitHub Actions" OFF)
+if(USE_GITHUB_ACTIONS_OPTIMIZED)
+    # GitHub Actions用の最適化設定
+    set(CMAKE_BUILD_TYPE Release)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2 /GL")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG")
+    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /LTCG")
+    message(STATUS "GitHub Actions optimization enabled")
+endif()
+
+# OpenCV
 find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
 
-include(FetchContent)
-FetchContent_Declare(
-  zlib
-  GIT_REPOSITORY https://github.com/madler/zlib.git
-  GIT_TAG v1.3
-)
-FetchContent_MakeAvailable(zlib)
-find_package(ZLIB REQUIRED)
-
-include(FetchContent)
-FetchContent_Declare(
-  eigen
-  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG 3.4.0
-)
-FetchContent_MakeAvailable(eigen)
-find_package(Eigen3 REQUIRED NO_MODULE)
-
-# Find ONNX Runtime (必須)
-if(DEFINED ONNXRUNTIME_INCLUDE_DIR AND DEFINED ONNXRUNTIME_LIB_DIR)
-    set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_INCLUDE_DIR}")
-    set(ONNXRUNTIME_LIB "${ONNXRUNTIME_LIB_DIR}/onnxruntime.lib")
-elseif(DEFINED ONNXRUNTIME_ROOT)
-    set(ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_ROOT}/include")
-    set(ONNXRUNTIME_LIB "${ONNXRUNTIME_ROOT}/lib/onnxruntime.lib")
+# 個別ライブラリ使用オプション（opencv480_world.dllを不要にする）
+option(USE_INDIVIDUAL_OPENCV_LIBS "Use individual OpenCV libraries instead of world" OFF)
+if(USE_INDIVIDUAL_OPENCV_LIBS)
+    # 必要最小限のOpenCVライブラリのみ使用
+    set(OpenCV_LIBS 
+        ${OpenCV_DIR}/lib/opencv_core480.lib
+        ${OpenCV_DIR}/lib/opencv_imgproc480.lib
+        ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
+        ${OpenCV_DIR}/lib/opencv_objdetect480.lib
+        ${OpenCV_DIR}/lib/opencv_dnn480.lib
+    )
+    message(STATUS "Using individual OpenCV libraries - opencv480_world.dll not required")
+    message(STATUS "Estimated size: ~33MB (vs 60MB world)")
 else()
-    message(FATAL_ERROR "ONNX Runtime paths not defined. Set ONNXRUNTIME_ROOT or ONNXRUNTIME_INCLUDE_DIR/ONNXRUNTIME_LIB_DIR.")
+    message(STATUS "Using OpenCV world library - opencv480_world.dll required")
 endif()
 
-if(NOT EXISTS "${ONNXRUNTIME_INCLUDE_DIR}/onnxruntime_cxx_api.h")
-    message(FATAL_ERROR "ONNX Runtime header not found: ${ONNXRUNTIME_INCLUDE_DIR}/onnxruntime_cxx_api.h")
-endif()
-if(NOT EXISTS "${ONNXRUNTIME_LIB}")
-    message(FATAL_ERROR "ONNX Runtime library not found: ${ONNXRUNTIME_LIB}")
-endif()
-
-# Find MediaPipe (required)
-if(DEFINED MEDIAPIPE_ROOT)
-    # ユーザーが指定したパスを使用
-    set(MEDIAPIPE_BASE_DIR "${MEDIAPIPE_ROOT}")
+# 軽量版OpenCVオプション（opencv480_world.dllを不要にする）
+option(USE_LIGHTWEIGHT_OPENCV "Use lightweight OpenCV (core + imgproc only)" OFF)
+if(USE_LIGHTWEIGHT_OPENCV)
+    # 必要最小限のOpenCVコンポーネントのみ使用
+    set(OpenCV_LIBS 
+        ${OpenCV_DIR}/lib/opencv_core480.lib
+        ${OpenCV_DIR}/lib/opencv_imgproc480.lib
+        ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
+    )
+    message(STATUS "Using lightweight OpenCV - opencv480_world.dll not required")
+    message(STATUS "Estimated size: ~13MB (vs 60MB world)")
 else()
-    # デフォルトパス - MediaPipeを直接使用
-    set(MEDIAPIPE_BASE_DIR "${CMAKE_SOURCE_DIR}/../libmediapipe/output")
+    message(STATUS "Using full OpenCV - opencv480_world.dll required")
 endif()
 
-# MediaPipeの出力ディレクトリを確認
-if(EXISTS "${MEDIAPIPE_BASE_DIR}/include")
-    message(STATUS "Found MediaPipe output directory: ${MEDIAPIPE_BASE_DIR}")
-    set(MEDIAPIPE_INCLUDE_DIR "${MEDIAPIPE_BASE_DIR}/include")
-    
-    # Check for MediaPipe library
-    if(EXISTS "${MEDIAPIPE_BASE_DIR}/lib/mediapipe.lib")
-        set(MEDIAPIPE_LIB "${MEDIAPIPE_BASE_DIR}/lib/mediapipe.lib")
-        message(STATUS "Found MediaPipe library: ${MEDIAPIPE_LIB}")
-    elseif(EXISTS "${MEDIAPIPE_BASE_DIR}/lib/mediapipe_framework.lib")
-        set(MEDIAPIPE_LIB "${MEDIAPIPE_BASE_DIR}/lib/mediapipe_framework.lib")
-        message(STATUS "Found MediaPipe framework library: ${MEDIAPIPE_LIB}")
-    else()
-        message(WARNING "MediaPipe library not found, but headers are available")
-        set(MEDIAPIPE_LIB "")
+# 静的リンクオプション（opencv480_world.dllを不要にする）
+option(USE_STATIC_OPENCV "Use static OpenCV linking" OFF)
+if(USE_STATIC_OPENCV)
+    # 静的リンクライブラリを使用
+    set(OpenCV_LIBS ${OpenCV_LIBS})
+    # 静的リンクフラグを追加
+    if(MSVC)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
     endif()
-    
-    set(MEDIAPIPE_FOUND TRUE)
-    add_definitions(-DMEDIAPIPE_AVAILABLE)
-    message(STATUS "MediaPipe support enabled")
+    message(STATUS "Using static OpenCV linking - opencv480_world.dll not required")
 else()
-    message(WARNING "MediaPipe output directory not found at ${MEDIAPIPE_BASE_DIR}")
-    message(STATUS "Building without MediaPipe support...")
-    set(MEDIAPIPE_FOUND FALSE)
-    add_definitions(-DMEDIAPIPE_DISABLED)
+    message(STATUS "Using dynamic OpenCV linking - opencv480_world.dll required")
 endif()
 
-if(NOT MEDIAPIPE_FOUND)
-    message(WARNING "MediaPipe not found. Building without MediaPipe support.")
-    message(WARNING "Face detection and PPG extraction will not be available.")
-    add_definitions(-DMEDIAPIPE_DISABLED)
-endif()
+# Eigen3
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
 
-# Include directories
-include_directories(
-    include
+# dlib
+find_package(dlib REQUIRED)
+include_directories(${dlib_INCLUDE_DIRS})
+
+# ONNX Runtime
+find_package(ONNXRuntime REQUIRED)
+include_directories(${ONNXRuntime_INCLUDE_DIRS})
+
+# ソースファイル
+set(SOURCES
+    src/BloodPressureDLL.cpp
+    src/rppg.cpp
+    src/bp_estimator.cpp
+    src/peak_detect.cpp
+)
+
+# ヘッダーファイル
+set(HEADERS
+    include/BloodPressureDLL.h
+    src/rppg.h
+    src/bp_estimator.h
+    src/peak_detect.h
+)
+
+# ライブラリ作成
+add_library(BloodPressureDLL SHARED ${SOURCES} ${HEADERS})
+
+# インクルードディレクトリ設定
+target_include_directories(BloodPressureDLL PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
-    ${ONNXRUNTIME_INCLUDE_DIR}
+    ${dlib_INCLUDE_DIRS}
+    ${ONNXRuntime_INCLUDE_DIRS}
 )
 
-add_definitions(-DONNXRUNTIME_AVAILABLE)
-
-# MediaPipe is required
-if(MEDIAPIPE_FOUND)
-    include_directories(${MEDIAPIPE_INCLUDE_DIR})
-    message(STATUS "Found MediaPipe include: ${MEDIAPIPE_INCLUDE_DIR}")
-    add_definitions(-DMEDIAPIPE_AVAILABLE)
-else()
-    message(STATUS "MediaPipe not available, building without MediaPipe support")
-    add_definitions(-DMEDIAPIPE_DISABLED)
-endif()
-
-# Source files
-file(GLOB SRC_FILES src/*.cpp)
-
-# Create shared library
-add_library(BloodPressureDLL SHARED ${SRC_FILES})
-
-# Link libraries
-# 必ずONNX Runtimeをリンク
-set(ALL_LIBS
+# ライブラリリンク
+target_link_libraries(BloodPressureDLL
     ${OpenCV_LIBS}
-    Eigen3::Eigen
-    ${ONNXRUNTIME_LIB}
+    ${dlib_LIBRARIES}
+    ${ONNXRuntime_LIBRARIES}
 )
 
-if(MEDIAPIPE_FOUND AND MEDIAPIPE_LIB)
-    list(APPEND ALL_LIBS ${MEDIAPIPE_LIB})
+# 静的リンクの場合の追加設定
+if(USE_STATIC_OPENCV)
+    # 静的リンク時の追加ライブラリ
+    if(WIN32)
+        target_link_libraries(BloodPressureDLL
+            ws2_32
+            wininet
+            crypt32
+            psapi
+            ole32
+            oleaut32
+            uuid
+            gdi32
+            advapi32
+            user32
+            kernel32
+        )
+    endif()
 endif()
 
-if(WIN32)
-    list(APPEND ALL_LIBS ws2_32)
-endif()
+# コンパイル定義
+target_compile_definitions(BloodPressureDLL PRIVATE
+    BLOOD_PRESSURE_DLL_EXPORTS
+    _CRT_SECURE_NO_WARNINGS
+)
 
-target_link_libraries(BloodPressureDLL ${ALL_LIBS})
-
-# MediaPipe is required
-if(MEDIAPIPE_FOUND AND MEDIAPIPE_LIB)
-    target_link_libraries(BloodPressureDLL ${MEDIAPIPE_LIB})
-    message(STATUS "Linked MediaPipe: ${MEDIAPIPE_LIB}")
-elseif(MEDIAPIPE_FOUND)
-    message(STATUS "MediaPipe headers available but library not linked")
-else()
-    message(STATUS "MediaPipe not linked (not available)")
-endif()
-
-# Additional MediaPipe dependencies
-if(WIN32)
-    target_link_libraries(BloodPressureDLL ws2_32)
-endif()
-
-# Windows-specific settings
-if(WIN32)
-    set_target_properties(BloodPressureDLL PROPERTIES
-        PREFIX ""
-        SUFFIX ".dll"
-    )
-endif()
-
-# Set output directory
+# 出力ディレクトリ
 set_target_properties(BloodPressureDLL PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-) 
+)
+
+# テストアプリケーション
+add_executable(test_app test/test_app.cpp)
+target_link_libraries(test_app BloodPressureDLL)
+
+# インストール設定
+install(TARGETS BloodPressureDLL
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+install(FILES ${HEADERS}
+    DESTINATION include
+)
+
+# dlibモデルファイルのコピー
+file(COPY ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat
+     DESTINATION ${CMAKE_BINARY_DIR}/bin) 
