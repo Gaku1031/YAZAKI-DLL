@@ -56,11 +56,20 @@ jobs:
           $env:DLIB_VERSION = "19.24"
           $env:DLIB_DIR = "C:\dlib"
 
-          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/releases/download/v19.24/dlib-19.24.0_release_64bit_msvc1929.zip" -OutFile "dlib.zip"
+          # dlibのソースコードをダウンロード
+          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip" -OutFile "dlib.zip"
           Expand-Archive -Path "dlib.zip" -DestinationPath "C:\dlib" -Force
 
-          echo "DLIB_DIR=C:\dlib" >> $env:GITHUB_ENV
-          echo "dlib_DIR=C:\dlib" >> $env:GITHUB_ENV
+          # dlibをビルド
+          cd "C:\dlib\dlib-19.24"
+          mkdir build
+          cd build
+          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release ..
+          cmake --build . --config Release --parallel 4
+
+          # 環境変数設定
+          echo "DLIB_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
 
       - name: Install Eigen3
         run: |
@@ -133,7 +142,7 @@ jobs:
             copy "C:\opencv\bin\opencv_dnn480.dll" package_${{ matrix.config.name }}/
           }
 
-          copy "C:\dlib\bin\dlib19.24.0_release_64bit_msvc1929.dll" package_${{ matrix.config.name }}/
+          copy "C:\dlib\dlib-19.24\build\Release\dlib19.24.0_release_64bit_msvc1929.dll" package_${{ matrix.config.name }}/
           copy "C:\onnxruntime\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
 
           mkdir package_${{ matrix.config.name }}\models
