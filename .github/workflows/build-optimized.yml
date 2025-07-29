@@ -38,6 +38,14 @@ jobs:
         with:
           cmake-version: "3.25.0"
 
+      - name: Debug directory structure
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "CppBloodPressureDLL contents:"
+          ls -la CppBloodPressureDLL
+
       - name: Install OpenCV
         run: |
           echo "Installing OpenCV 4.8.0..."
@@ -96,6 +104,9 @@ jobs:
         run: |
           cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} ../CppBloodPressureDLL
           echo "Configured with: ${{ matrix.config.cmake_options }}"
+          echo "Current directory: $(pwd)"
+          echo "Source directory: ../CppBloodPressureDLL"
+          ls -la ../CppBloodPressureDLL
 
       - name: Build
         run: |
