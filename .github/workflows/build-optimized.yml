@@ -51,25 +51,41 @@ jobs:
 
       - name: Install OpenCV
         run: |
-          echo "Installing OpenCV using vcpkg..."
+          echo "Installing OpenCV 4.8.0..."
 
-          # vcpkgを使用してOpenCVをインストール
-          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
-          C:\vcpkg\vcpkg install opencv4:x64-windows
+          # OpenCVのビルド済みバイナリをダウンロード
+          Invoke-WebRequest -Uri "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe" -OutFile "opencv-installer.exe"
 
-          echo "OPENCV_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
-          echo "OpenCV_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
+          # インストーラーを実行（サイレントインストール）
+          echo "Running OpenCV installer..."
+          Start-Process -FilePath ".\opencv-installer.exe" -ArgumentList "-y", "-o", "C:\opencv" -Wait -NoNewWindow
+
+          # インストール完了を待機
+          Start-Sleep -Seconds 15
+
+          # OpenCVのインストールを確認
+          if (Test-Path "C:\opencv") {
+            echo "OpenCV installed successfully"
+            echo "OpenCV directory contents:"
+            Get-ChildItem "C:\opencv" -Name
+          } else {
+            echo "OpenCV installation failed"
+            exit 1
+          }
+
+          echo "OPENCV_DIR=C:\opencv" >> $env:GITHUB_ENV
+          echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
 
       - name: Install dlib
         run: |
-          echo "Installing dlib using vcpkg..."
+          echo "Installing dlib..."
 
-          # vcpkgを使用してdlibをインストール
-          C:\vcpkg\vcpkg install dlib:x64-windows
+          # dlibのソースコードをダウンロード
+          Invoke-WebRequest -Uri "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip" -OutFile "dlib.zip"
+          Expand-Archive -Path "dlib.zip" -DestinationPath "C:\dlib" -Force
 
-          echo "DLIB_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
-          echo "dlib_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
+          echo "DLIB_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\dlib\dlib-19.24" >> $env:GITHUB_ENV
 
       - name: Install Eigen3
         run: |
