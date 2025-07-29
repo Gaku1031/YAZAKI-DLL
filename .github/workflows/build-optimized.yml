@@ -58,8 +58,21 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe" -OutFile "opencv-installer.exe"
           Start-Process -FilePath "opencv-installer.exe" -ArgumentList "-y" -Wait
 
-          echo "OPENCV_DIR=C:\opencv" >> $env:GITHUB_ENV
-          echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
+          # OpenCVの設定ファイルの場所を確認
+          echo "OpenCV installation directory contents:"
+          Get-ChildItem "C:\opencv" -Recurse -Name "OpenCVConfig.cmake" | Select-Object -First 5
+
+          # OpenCV_DIRを正しいパスに設定
+          $opencvConfigPath = Get-ChildItem "C:\opencv" -Recurse -Name "OpenCVConfig.cmake" | Select-Object -First 1
+          if ($opencvConfigPath) {
+            $opencvDir = Split-Path -Parent "C:\opencv\$opencvConfigPath"
+            echo "Found OpenCV config at: $opencvDir"
+            echo "OPENCV_DIR=$opencvDir" >> $env:GITHUB_ENV
+            echo "OpenCV_DIR=$opencvDir" >> $env:GITHUB_ENV
+          } else {
+            echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
+            echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
+          }
 
       - name: Install dlib
         run: |
@@ -107,7 +120,9 @@ jobs:
       - name: Configure CMake
         run: |
           $workspace = "$env:GITHUB_WORKSPACE"
-          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} "$workspace\CppBloodPressureDLL"
+          $opencvDir = "$env:OpenCV_DIR"
+          echo "OpenCV_DIR: $opencvDir"
+          cmake -G "Visual Studio 17 2022" -A x64 -DOpenCV_DIR="$opencvDir" ${{ matrix.config.cmake_options }} "$workspace\CppBloodPressureDLL"
           echo "Configured with: ${{ matrix.config.cmake_options }}"
           echo "Workspace: $workspace"
 
