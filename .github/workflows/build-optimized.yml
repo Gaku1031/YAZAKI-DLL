@@ -66,7 +66,8 @@ jobs:
           echo "Installing OpenCV..."
           try {
             # インストーラーを実行（より詳細なログ付き）
-            $process = Start-Process -FilePath ".\$opencvInstaller" -ArgumentList "-y", "-o", "C:\opencv" -Wait -PassThru -NoNewWindow
+            # -y: 自動確認、-o: 出力ディレクトリ、-q: サイレントモード
+            $process = Start-Process -FilePath ".\$opencvInstaller" -ArgumentList "-y", "-o", "C:\opencv", "-q" -Wait -PassThru -NoNewWindow
             echo "Installer exit code: $($process.ExitCode)"
             
             if ($process.ExitCode -ne 0) {
@@ -109,17 +110,66 @@ jobs:
           # インストール完了を待機
           Start-Sleep -Seconds 30
 
-          # OpenCVのインストールを確認
-          if (Test-Path "C:\opencv") {
-            echo "OpenCV installed successfully"
+          # OpenCVのインストールを確認（複数の可能性のあるパスをチェック）
+          $opencvPaths = @("C:\opencv", "C:\Program Files\opencv", "C:\opencv\opencv")
+          $opencvFound = $false
+          $opencvDir = ""
+
+          foreach ($path in $opencvPaths) {
+            if (Test-Path $path) {
+              echo "OpenCV found at: $path"
+              $opencvFound = $true
+              $opencvDir = $path
+              break
+            }
+          }
+
+          if (-not $opencvFound) {
+            echo "OpenCV installation failed - checking possible locations:"
+            Get-ChildItem "C:\" -Name | Where-Object { $_ -like "*opencv*" }
+            echo "Trying alternative installation method..."
+            
+            # 方法2: OpenCVのソースコードをダウンロードしてビルド
+            echo "Downloading OpenCV source code..."
+            Invoke-WebRequest -Uri "https://github.com/opencv/opencv/archive/4.8.0.zip" -OutFile "opencv-source.zip"
+            Expand-Archive -Path "opencv-source.zip" -DestinationPath "C:\opencv-source" -Force
+            
+            # OpenCVのビルドディレクトリを作成
+            mkdir "C:\opencv-source\build"
+            cd "C:\opencv-source\build"
+            
+            # CMakeでOpenCVを設定（必要最小限の機能のみ）
+            $cmakeArgs = @(
+                "-G", "Visual Studio 17 2022",
+                "-A", "x64",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DBUILD_LIST=core,imgproc,imgcodecs,objdetect,dnn",
+                "-DBUILD_TESTS=OFF",
+                "-DBUILD_PERF_TESTS=OFF",
+                "-DBUILD_EXAMPLES=OFF",
+                "C:\opencv-source\opencv-4.8.0"
+            )
+            cmake @cmakeArgs
+            
+            # OpenCVをビルド
+            cmake --build . --config Release --parallel 4
+            
+            # インストール
+            cmake --install . --prefix "C:\opencv"
+            
+            $opencvDir = "C:\opencv"
+          }
+
+          if (Test-Path $opencvDir) {
+            echo "OpenCV installed successfully at: $opencvDir"
             echo "OpenCV directory contents:"
-            Get-ChildItem "C:\opencv" -Name
+            Get-ChildItem $opencvDir -Name
           } else {
             echo "OpenCV installation failed - directory not found"
             exit 1
           }
 
-          echo "OpenCV_DIR=C:\opencv" >> $env:GITHUB_ENV
+          echo "OpenCV_DIR=$opencvDir" >> $env:GITHUB_ENV
 
       - name: Install dlib via vcpkg
         run: |
