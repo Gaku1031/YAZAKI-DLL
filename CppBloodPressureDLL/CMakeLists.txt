@@ -30,14 +30,25 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # 個別ライブラリ使用オプション（opencv480_world.dllを不要にする）
 option(USE_INDIVIDUAL_OPENCV_LIBS "Use individual OpenCV libraries instead of world" OFF)
 if(USE_INDIVIDUAL_OPENCV_LIBS)
-    # 必要最小限のOpenCVライブラリのみ使用
-    set(OpenCV_LIBS 
-        ${OpenCV_DIR}/lib/opencv_core480.lib
-        ${OpenCV_DIR}/lib/opencv_imgproc480.lib
-        ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
-        ${OpenCV_DIR}/lib/opencv_objdetect480.lib
-        ${OpenCV_DIR}/lib/opencv_dnn480.lib
-    )
+    # vcpkgでインストールされたOpenCVライブラリを使用
+    if(DEFINED ENV{VCPKG_ROOT})
+        set(OpenCV_LIBS 
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_core480.lib
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgproc480.lib
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgcodecs480.lib
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_objdetect480.lib
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_dnn480.lib
+        )
+    else()
+        # 通常のOpenCVライブラリを使用
+        set(OpenCV_LIBS 
+            ${OpenCV_DIR}/lib/opencv_core480.lib
+            ${OpenCV_DIR}/lib/opencv_imgproc480.lib
+            ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
+            ${OpenCV_DIR}/lib/opencv_objdetect480.lib
+            ${OpenCV_DIR}/lib/opencv_dnn480.lib
+        )
+    endif()
     message(STATUS "Using individual OpenCV libraries - opencv480_world.dll not required")
     message(STATUS "Estimated size: ~33MB (vs 60MB world)")
 else()
@@ -48,11 +59,19 @@ endif()
 option(USE_LIGHTWEIGHT_OPENCV "Use lightweight OpenCV (core + imgproc only)" OFF)
 if(USE_LIGHTWEIGHT_OPENCV)
     # 必要最小限のOpenCVコンポーネントのみ使用
-    set(OpenCV_LIBS 
-        ${OpenCV_DIR}/lib/opencv_core480.lib
-        ${OpenCV_DIR}/lib/opencv_imgproc480.lib
-        ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
-    )
+    if(DEFINED ENV{VCPKG_ROOT})
+        set(OpenCV_LIBS 
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_core480.lib
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgproc480.lib
+            $ENV{VCPKG_ROOT}/installed/x64-windows/lib/opencv_imgcodecs480.lib
+        )
+    else()
+        set(OpenCV_LIBS 
+            ${OpenCV_DIR}/lib/opencv_core480.lib
+            ${OpenCV_DIR}/lib/opencv_imgproc480.lib
+            ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
+        )
+    endif()
     message(STATUS "Using lightweight OpenCV - opencv480_world.dll not required")
     message(STATUS "Estimated size: ~13MB (vs 60MB world)")
 else()
