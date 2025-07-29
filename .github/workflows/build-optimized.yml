@@ -91,12 +91,12 @@ jobs:
 
       - name: Create build directory
         run: |
-          mkdir CppBloodPressureDLL\build
-          cd CppBloodPressureDLL\build
+          mkdir build
+          cd build
 
       - name: Configure CMake
         run: |
-          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} ..
+          cmake -G "Visual Studio 17 2022" -A x64 ${{ matrix.config.cmake_options }} ../CppBloodPressureDLL
           echo "Configured with: ${{ matrix.config.cmake_options }}"
 
       - name: Build
@@ -148,19 +148,19 @@ jobs:
           copy "C:\onnxruntime\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
 
           mkdir package_${{ matrix.config.name }}\models
-          copy ..\models\*.onnx package_${{ matrix.config.name }}\models\
-          copy ..\models\*.pb package_${{ matrix.config.name }}\models\
-          copy ..\models\*.pbtxt package_${{ matrix.config.name }}\models\
-          copy ..\models\shape_predictor_68_face_landmarks.dat package_${{ matrix.config.name }}\models\
+          copy ..\CppBloodPressureDLL\models\*.onnx package_${{ matrix.config.name }}\models\
+          copy ..\CppBloodPressureDLL\models\*.pb package_${{ matrix.config.name }}\models\
+          copy ..\CppBloodPressureDLL\models\*.pbtxt package_${{ matrix.config.name }}\models\
+          copy ..\CppBloodPressureDLL\models\shape_predictor_68_face_landmarks.dat package_${{ matrix.config.name }}\models\
 
           mkdir package_${{ matrix.config.name }}\include
-          copy ..\include\*.h package_${{ matrix.config.name }}\include\
+          copy ..\CppBloodPressureDLL\include\*.h package_${{ matrix.config.name }}\include\
 
-          copy ..\README.md package_${{ matrix.config.name }}/
-          copy ..\INTEGRATION_GUIDE.md package_${{ matrix.config.name }}/
+          copy ..\CppBloodPressureDLL\README.md package_${{ matrix.config.name }}/
+          copy ..\CppBloodPressureDLL\INTEGRATION_GUIDE.md package_${{ matrix.config.name }}/
 
           # パッケージ情報ファイルを作成
-          powershell -File "..\create_package_info.ps1" -ConfigName "${{ matrix.config.name }}" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
+          powershell -File "..\CppBloodPressureDLL\create_package_info.ps1" -ConfigName "${{ matrix.config.name }}" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
 
           echo "Package created: package_${{ matrix.config.name }}"
 
@@ -168,7 +168,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.config.name }}-package
-          path: CppBloodPressureDLL\build\package_${{ matrix.config.name }}/
+          path: build\package_${{ matrix.config.name }}/
           retention-days: 30
 
       - name: Create release summary
