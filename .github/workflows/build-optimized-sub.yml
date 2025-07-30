@@ -352,20 +352,33 @@ jobs:
           # Individual Librariesの場合、必要なOpenCV DLLのみをコピー
           if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
             # vcpkgでインストールされたOpenCV DLLをコピー
-            $vcpkgBinDir = "C:\vcpkg\installed\x64-windows\bin"
-            if (Test-Path $vcpkgBinDir) {
-              $opencvDlls = @("opencv_core480.dll", "opencv_imgproc480.dll", "opencv_imgcodecs480.dll", "opencv_objdetect480.dll", "opencv_dnn480.dll")
-              foreach ($dll in $opencvDlls) {
-                $dllPath = Join-Path $vcpkgBinDir $dll
+            $opencvDirs = @(
+              "C:\vcpkg\installed\x64-windows\bin",
+              "C:\vcpkg\installed\x64-windows\debug\bin",
+              "C:\vcpkg\installed\x64-windows\lib",
+              "C:\vcpkg\installed\x64-windows\debug\lib"
+            )
+            $opencvDlls = @("opencv_core480.dll", "opencv_imgproc480.dll", "opencv_imgcodecs480.dll", "opencv_objdetect480.dll", "opencv_dnn480.dll")
+            $foundAll = $true
+            foreach ($dll in $opencvDlls) {
+              $found = $false
+              foreach ($dir in $opencvDirs) {
+                $dllPath = Join-Path $dir $dll
                 if (Test-Path $dllPath) {
                   copy $dllPath "$pkgName/"
-                  echo "Copied $dll"
-                } else {
-                  echo "Warning: $dll not found at $dllPath"
+                  echo "Copied $dll from $dir"
+                  $found = $true
+                  break
                 }
               }
-            } else {
-              echo "Warning: vcpkg bin directory not found, skipping OpenCV DLL copy"
+              if (-not $found) {
+                echo "ERROR: $dll not found in any known OpenCV directory"
+                $foundAll = $false
+              }
+            }
+            if (-not $foundAll) {
+              echo "One or more required OpenCV DLLs are missing. Failing the build."
+              exit 1
             }
           }
           # dlibは静的リンクされるため、DLLのコピーは不要
@@ -382,6 +395,8 @@ jobs:
           # パッケージ情報ファイルを作成
           powershell -File "CppBloodPressureDLL\create_package_info.ps1" -ConfigName "$pkgName" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
           echo "Package created: $pkgName"
+          echo "==== Package contents ===="
+          Get-ChildItem -Recurse "$pkgName" | Select-Object FullName,Length
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
