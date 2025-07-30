@@ -240,10 +240,37 @@ jobs:
         run: |
           cmake --build . --config Release --parallel 4
           echo "Build completed for ${{ matrix.config.name }}"
+
+          # ビルド後のディレクトリ構造を確認
+          echo "Build directory structure:"
+          Get-ChildItem -Recurse -Name | Sort-Object
+
+          # DLLとテストアプリの場所を確認
+          echo "Looking for BloodPressureDLL.dll:"
+          Get-ChildItem -Recurse -Name | Where-Object { $_ -like "*BloodPressureDLL*" }
+
+          echo "Looking for test_app.exe:"
+          Get-ChildItem -Recurse -Name | Where-Object { $_ -like "*test_app*" }
       - name: Measure DLL size
         run: |
-          $dllPath = "Release\BloodPressureDLL.dll"
-          if (Test-Path $dllPath) {
+          # 複数の可能性のあるパスをチェック
+          $possiblePaths = @(
+            "Release\BloodPressureDLL.dll",
+            "bin\Release\BloodPressureDLL.dll",
+            "bin\BloodPressureDLL.dll",
+            "Release\bin\BloodPressureDLL.dll"
+          )
+
+          $dllPath = $null
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $dllPath = $path
+              echo "Found DLL at: $dllPath"
+              break
+            }
+          }
+
+          if ($dllPath) {
             $size = (Get-Item $dllPath).Length
             $sizeMB = [math]::Round($size / 1MB, 2)
             echo "DLL size: $sizeMB MB"
@@ -255,19 +282,39 @@ jobs:
               echo "Size optimization failed: $sizeMB MB"
             }
           } else {
-            echo "DLL not found"
+            echo "DLL not found in any expected location"
+            echo "Checking build directory structure:"
+            Get-ChildItem -Recurse -Name | Where-Object { $_ -like "*BloodPressureDLL*" }
             exit 1
           }
       - name: Run performance test
         run: |
           echo "Running performance test..."
-          cd Release
-          # 実際のビデオファイルがない場合はスキップ
-          if (Test-Path "test_app.exe") {
+
+          # テストアプリケーションの場所を特定
+          $possibleTestPaths = @(
+            "Release\test_app.exe",
+            "bin\Release\test_app.exe",
+            "bin\test_app.exe",
+            "Release\bin\test_app.exe"
+          )
+
+          $testAppPath = $null
+          foreach ($path in $possibleTestPaths) {
+            if (Test-Path $path) {
+              $testAppPath = $path
+              echo "Found test app at: $testAppPath"
+              break
+            }
+          }
+
+          if ($testAppPath) {
             echo "Test application built successfully"
             echo "Performance test would run with actual video file"
           } else {
-            echo "Test application not found"
+            echo "Test application not found in any expected location"
+            echo "Checking for test_app.exe:"
+            Get-ChildItem -Recurse -Name | Where-Object { $_ -like "*test_app*" }
             exit 1
           }
           echo "Performance test completed"
@@ -275,7 +322,31 @@ jobs:
         run: |
           echo "Creating optimized package..."
           mkdir package_${{ matrix.config.name }}
-          copy Release\BloodPressureDLL.dll package_${{ matrix.config.name }}/
+
+          # DLLの場所を特定
+          $possiblePaths = @(
+            "Release\BloodPressureDLL.dll",
+            "bin\Release\BloodPressureDLL.dll",
+            "bin\BloodPressureDLL.dll",
+            "Release\bin\BloodPressureDLL.dll"
+          )
+
+          $dllPath = $null
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $dllPath = $path
+              echo "Found DLL at: $dllPath"
+              break
+            }
+          }
+
+          if ($dllPath) {
+            copy $dllPath "package_${{ matrix.config.name }}/"
+            echo "Copied DLL from: $dllPath"
+          } else {
+            echo "DLL not found for packaging"
+            exit 1
+          }
           # Individual Librariesの場合、必要なOpenCV DLLのみをコピー
           if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
             # vcpkgでインストールされたOpenCV DLLをコピー

@@ -181,8 +181,13 @@ target_compile_definitions(BloodPressureDLL PRIVATE
 # 出力ディレクトリ
 set_target_properties(BloodPressureDLL PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+)
+
+# テストアプリケーションの出力ディレクトリも設定
+set_target_properties(test_app PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
 # テストアプリケーション
