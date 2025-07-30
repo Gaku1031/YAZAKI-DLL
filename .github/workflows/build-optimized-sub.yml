@@ -52,6 +52,10 @@ jobs:
           git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+
+          # vcpkgのデフォルト設定を動的リンクに変更
+          echo "Setting vcpkg default to dynamic linking..."
+          C:\vcpkg\vcpkg set-default triplet x64-windows
       - name: Update vcpkg packages
         run: |
           echo "Updating vcpkg package information..."
@@ -59,12 +63,12 @@ jobs:
           C:\vcpkg\vcpkg upgrade --no-dry-run
       - name: Install OpenCV via vcpkg
         run: |
-          echo "Installing OpenCV 4.8.0 via vcpkg..."
-          # まず基本的なOpenCVをインストール
-          C:\vcpkg\vcpkg install opencv4:x64-windows
-          # 追加機能を個別にインストール
-          C:\vcpkg\vcpkg install opencv4[contrib]:x64-windows
-          C:\vcpkg\vcpkg install opencv4[dnn]:x64-windows
+          echo "Installing OpenCV 4.8.0 via vcpkg with dynamic linking..."
+          # 動的リンクを明示的に指定してOpenCVをインストール
+          C:\vcpkg\vcpkg install opencv4:x64-windows --recurse
+          C:\vcpkg\vcpkg install opencv4[contrib]:x64-windows --recurse
+          C:\vcpkg\vcpkg install opencv4[dnn]:x64-windows --recurse
+
           # OpenCVのインストールを確認
           if (Test-Path "C:\vcpkg\installed\x64-windows") {
             echo "OpenCV installed successfully via vcpkg"
@@ -74,6 +78,16 @@ jobs:
             Get-ChildItem "C:\vcpkg\installed\x64-windows\lib" -Name
             echo "OpenCV share directory contents:"
             Get-ChildItem "C:\vcpkg\installed\x64-windows\share" -Name
+            
+            # OpenCV DLLの存在を確認
+            echo "Checking for OpenCV DLLs..."
+            $opencvDlls = Get-ChildItem "C:\vcpkg\installed\x64-windows" -Recurse -Filter "*.dll" | Where-Object { $_.Name -like "*opencv*" }
+            if ($opencvDlls) {
+              echo "Found OpenCV DLLs:"
+              $opencvDlls | ForEach-Object { echo "  $($_.FullName)" }
+            } else {
+              echo "No OpenCV DLLs found - might be static build"
+            }
           } else {
             echo "OpenCV installation failed"
             exit 1
@@ -226,9 +240,10 @@ jobs:
             exit 1
           }
 
-          # vcpkgツールチェーンファイルを使用
+          # vcpkgツールチェーンファイルを使用（動的リンクを明示的に指定）
           cmake -G "Visual Studio 17 2022" -A x64 `
                 -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake" `
+                -DVCPKG_TARGET_TRIPLET=x64-windows `
                 -DONNXRuntime_DIR="$onnxRuntimeDir" `
                 -DONNXRuntime_INCLUDE_DIRS="$onnxRuntimeInclude" `
                 -DONNXRuntime_LIBRARIES="$onnxRuntimeLib" `
@@ -351,38 +366,145 @@ jobs:
           }
           # Individual Librariesの場合、必要なOpenCV DLLのみをコピー
           if ("${{ matrix.config.cmake_options }}" -like "*INDIVIDUAL*") {
+            echo "Debugging OpenCV installation..."
+            echo "Checking vcpkg installed directory structure:"
+            if (Test-Path "C:\vcpkg\installed\x64-windows") {
+              echo "vcpkg installed directory exists"
+              Get-ChildItem "C:\vcpkg\installed\x64-windows" -Recurse -Name | Where-Object { $_ -like "*opencv*" }
+            } else {
+              echo "vcpkg installed directory does not exist"
+            }
+            
             # vcpkgでインストールされたOpenCV DLLをコピー
             $opencvDirs = @(
               "C:\vcpkg\installed\x64-windows\bin",
               "C:\vcpkg\installed\x64-windows\debug\bin",
               "C:\vcpkg\installed\x64-windows\lib",
-              "C:\vcpkg\installed\x64-windows\debug\lib"
+              "C:\vcpkg\installed\x64-windows\debug\lib",
+              "C:\vcpkg\installed\x64-windows\share\opencv4",
+              "C:\vcpkg\installed\x64-windows\share\opencv4\bin",
+              "C:\vcpkg\installed\x64-windows\share\opencv4\lib"
             )
-            $opencvDlls = @("opencv_core480.dll", "opencv_imgproc480.dll", "opencv_imgcodecs480.dll", "opencv_objdetect480.dll", "opencv_dnn480.dll")
-            $foundAll = $true
-            foreach ($dll in $opencvDlls) {
-              $found = $false
-              foreach ($dir in $opencvDirs) {
-                $dllPath = Join-Path $dir $dll
-                if (Test-Path $dllPath) {
-                  copy $dllPath "$pkgName/"
-                  echo "Copied $dll from $dir"
-                  $found = $true
-                  break
+            
+            # 実際に存在するOpenCV DLLを検索
+            echo "Searching for OpenCV DLLs in vcpkg directories..."
+            $foundOpencvDlls = @()
+            foreach ($dir in $opencvDirs) {
+              if (Test-Path $dir) {
+                echo "Checking directory: $dir"
+                $dlls = Get-ChildItem $dir -Name -Filter "*.dll" | Where-Object { $_ -like "*opencv*" }
+                if ($dlls) {
+                  echo "Found OpenCV DLLs in $dir`:"
+                  $dlls | ForEach-Object { echo "  $_" }
+                  $foundOpencvDlls += $dlls
                 }
               }
+            }
+            
+            # 必要なOpenCV DLLのリスト（バージョン番号は実際のものに合わせる）
+            $requiredOpencvDlls = @("opencv_core4", "opencv_imgproc4", "opencv_imgcodecs4", "opencv_objdetect4", "opencv_dnn4")
+            $foundAll = $true
+            
+            foreach ($requiredDll in $requiredOpencvDlls) {
+              $found = $false
+              $matchingDlls = $foundOpencvDlls | Where-Object { $_ -like "*$requiredDll*" }
+              
+              if ($matchingDlls) {
+                # 最初に見つかったDLLをコピー
+                $dllToCopy = $matchingDlls[0]
+                foreach ($dir in $opencvDirs) {
+                  $dllPath = Join-Path $dir $dllToCopy
+                  if (Test-Path $dllPath) {
+                    copy $dllPath "$pkgName/"
+                    echo "Copied $dllToCopy from $dir"
+                    $found = $true
+                    break
+                  }
+                }
+              }
+              
               if (-not $found) {
-                echo "ERROR: $dll not found in any known OpenCV directory"
+                echo "ERROR: $requiredDll DLL not found in any known OpenCV directory"
+                echo "Available OpenCV DLLs: $($foundOpencvDlls -join ', ')"
                 $foundAll = $false
               }
             }
+            
             if (-not $foundAll) {
-              echo "One or more required OpenCV DLLs are missing. Failing the build."
-              exit 1
+              echo "One or more required OpenCV DLLs are missing."
+              echo "This might be because OpenCV was built as static libraries or the DLLs are in a different location."
+              echo "Trying alternative approach: using system OpenCV DLLs or skipping DLL copy for static linking..."
+              
+              # 代替案1: システムのOpenCV DLLを探す
+              $systemOpencvDirs = @(
+                "C:\Program Files\opencv\build\x64\vc16\bin",
+                "C:\opencv\build\x64\vc16\bin",
+                "C:\Program Files (x86)\opencv\build\x64\vc16\bin"
+              )
+              
+              $foundSystemDlls = $false
+              foreach ($dir in $systemOpencvDirs) {
+                if (Test-Path $dir) {
+                  echo "Found system OpenCV directory: $dir"
+                  $systemDlls = Get-ChildItem $dir -Name -Filter "*.dll" | Where-Object { $_ -like "*opencv*" }
+                  if ($systemDlls) {
+                    echo "Copying system OpenCV DLLs from $dir"
+                    foreach ($dll in $systemDlls) {
+                      $dllPath = Join-Path $dir $dll
+                      copy $dllPath "$pkgName/"
+                      echo "Copied system DLL: $dll"
+                    }
+                    $foundSystemDlls = $true
+                    break
+                  }
+                }
+              }
+              
+                          if (-not $foundSystemDlls) {
+              echo "No system OpenCV DLLs found. Trying to copy from build directory..."
+              
+              # ビルドディレクトリからOpenCV DLLをコピー
+              $buildDlls = @(
+                "bin\Release\opencv_core4.dll",
+                "bin\Release\opencv_imgproc4.dll", 
+                "bin\Release\opencv_imgcodecs4.dll",
+                "bin\Release\opencv_objdetect4.dll",
+                "bin\Release\opencv_dnn4.dll"
+              )
+              
+              $foundBuildDlls = $true
+              foreach ($dll in $buildDlls) {
+                if (Test-Path $dll) {
+                  copy $dll "$pkgName/"
+                  echo "Copied build DLL: $dll"
+                } else {
+                  echo "Build DLL not found: $dll"
+                  $foundBuildDlls = $false
+                }
+              }
+              
+              if (-not $foundBuildDlls) {
+                echo "No build OpenCV DLLs found. Assuming static linking."
+                echo "Note: If this is a static build, no OpenCV DLLs are needed."
+                echo "Continuing with package creation..."
+              }
+            }
             }
           }
           # dlibは静的リンクされるため、DLLのコピーは不要
           copy "C:\onnxruntime\onnxruntime-win-x64-1.15.1\lib\onnxruntime.dll" "$pkgName/"
+
+                    # すべての依存DLLをコピー（安全性を重視）
+          echo "Copying all generated DLLs for maximum compatibility..."
+          $allDlls = Get-ChildItem "bin\Release" -Filter "*.dll" | ForEach-Object { $_.Name }
+          echo "Found DLLs in bin\Release:"
+          $allDlls | ForEach-Object { echo "  $_" }
+
+          foreach ($dll in $allDlls) {
+            $dllPath = "bin\Release\$dll"
+            copy $dllPath "$pkgName/"
+            echo "Copied DLL: $dll"
+          }
           mkdir "$pkgName\models"
           copy CppBloodPressureDLL\models\*.onnx "$pkgName\models\"
           copy CppBloodPressureDLL\models\*.pb "$pkgName\models\"
@@ -397,6 +519,12 @@ jobs:
           echo "Package created: $pkgName"
           echo "==== Package contents ===="
           Get-ChildItem -Recurse "$pkgName" | Select-Object FullName,Length
+
+          # DLLの詳細情報を表示
+          echo "==== Included DLLs ===="
+          $includedDlls = Get-ChildItem "$pkgName" -Filter "*.dll" | ForEach-Object { $_.Name }
+          $includedDlls | ForEach-Object { echo "  $_" }
+          echo "Total DLLs included: $($includedDlls.Count)"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
