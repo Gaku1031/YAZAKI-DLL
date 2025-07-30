@@ -387,7 +387,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PKG_NAME }}-package
-          path: build\${{ env.PKG_NAME }}/
+          path: ${{ env.PKG_NAME }}/
           retention-days: 30
 
       - name: Create release summary
