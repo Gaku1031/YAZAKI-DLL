@@ -69,6 +69,10 @@ jobs:
             echo "OpenCV installed successfully via vcpkg"
             echo "OpenCV directory contents:"
             Get-ChildItem "C:\vcpkg\installed\x64-windows" -Name
+            echo "OpenCV lib directory contents:"
+            Get-ChildItem "C:\vcpkg\installed\x64-windows\lib" -Name
+            echo "OpenCV share directory contents:"
+            Get-ChildItem "C:\vcpkg\installed\x64-windows\share" -Name
           } else {
             echo "OpenCV installation failed"
             exit 1
@@ -224,7 +228,6 @@ jobs:
           # vcpkgツールチェーンファイルを使用
           cmake -G "Visual Studio 17 2022" -A x64 `
                 -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake" `
-                -DOpenCV_DIR="$opencvDir" `
                 -DONNXRuntime_DIR="$onnxRuntimeDir" `
                 -DONNXRuntime_INCLUDE_DIRS="$onnxRuntimeInclude" `
                 -DONNXRuntime_LIBRARIES="$onnxRuntimeLib" `

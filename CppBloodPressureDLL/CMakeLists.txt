@@ -27,6 +27,22 @@ endif()
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+# vcpkgでインストールされたOpenCVの情報を表示
+message(STATUS "OpenCV found: ${OpenCV_VERSION}")
+message(STATUS "OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
+message(STATUS "OpenCV_LIBS: ${OpenCV_LIBS}")
+message(STATUS "OpenCV_DIR: ${OpenCV_DIR}")
+
+# vcpkgでインストールされたOpenCVライブラリのパスを確認
+if(OpenCV_LIBS)
+    message(STATUS "OpenCV libraries found:")
+    foreach(lib ${OpenCV_LIBS})
+        message(STATUS "  ${lib}")
+    endforeach()
+else()
+    message(WARNING "OpenCV_LIBS is empty")
+endif()
+
 # Protobuf（OpenCVの依存関係）
 find_package(Protobuf REQUIRED)
 if(Protobuf_FOUND)
@@ -39,16 +55,10 @@ endif()
 # 個別ライブラリ使用オプション（opencv480_world.dllを不要にする）
 option(USE_INDIVIDUAL_OPENCV_LIBS "Use individual OpenCV libraries instead of world" OFF)
 if(USE_INDIVIDUAL_OPENCV_LIBS)
-    # 通常のOpenCVライブラリを使用
-    set(OpenCV_LIBS 
-        ${OpenCV_DIR}/lib/opencv_core480.lib
-        ${OpenCV_DIR}/lib/opencv_imgproc480.lib
-        ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
-        ${OpenCV_DIR}/lib/opencv_objdetect480.lib
-        ${OpenCV_DIR}/lib/opencv_dnn480.lib
-    )
-    message(STATUS "Using individual OpenCV libraries - opencv480_world.dll not required")
+    # vcpkgでインストールされたOpenCVライブラリを使用（既にOpenCV_LIBSに設定済み）
+    message(STATUS "Using individual OpenCV libraries from vcpkg - opencv480_world.dll not required")
     message(STATUS "Estimated size: ~33MB (vs 60MB world)")
+    message(STATUS "OpenCV_LIBS: ${OpenCV_LIBS}")
 else()
     message(STATUS "Using OpenCV world library - opencv480_world.dll required")
 endif()
@@ -56,14 +66,10 @@ endif()
 # 軽量版OpenCVオプション（opencv480_world.dllを不要にする）
 option(USE_LIGHTWEIGHT_OPENCV "Use lightweight OpenCV (core + imgproc only)" OFF)
 if(USE_LIGHTWEIGHT_OPENCV)
-    # 必要最小限のOpenCVコンポーネントのみ使用
-    set(OpenCV_LIBS 
-        ${OpenCV_DIR}/lib/opencv_core480.lib
-        ${OpenCV_DIR}/lib/opencv_imgproc480.lib
-        ${OpenCV_DIR}/lib/opencv_imgcodecs480.lib
-    )
-    message(STATUS "Using lightweight OpenCV - opencv480_world.dll not required")
+    # vcpkgでインストールされたOpenCVライブラリを使用（必要最小限）
+    message(STATUS "Using lightweight OpenCV from vcpkg - opencv480_world.dll not required")
     message(STATUS "Estimated size: ~13MB (vs 60MB world)")
+    message(STATUS "OpenCV_LIBS: ${OpenCV_LIBS}")
 else()
     message(STATUS "Using full OpenCV - opencv480_world.dll required")
 endif()
