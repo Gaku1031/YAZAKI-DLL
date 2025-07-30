@@ -21,6 +21,8 @@ if(USE_GITHUB_ACTIONS_OPTIMIZED)
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG")
     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /LTCG")
     message(STATUS "GitHub Actions optimization enabled")
+    # 個別ライブラリ使用を有効化
+    set(USE_INDIVIDUAL_OPENCV_LIBS ON)
 endif()
 
 # OpenCV
@@ -52,40 +54,25 @@ else()
     message(WARNING "Protobuf not found - OpenCV may fail to configure")
 endif()
 
-# 個別ライブラリ使用オプション（opencv480_world.dllを不要にする）
+# 個別ライブラリ使用オプション
 option(USE_INDIVIDUAL_OPENCV_LIBS "Use individual OpenCV libraries instead of world" OFF)
+
+# OpenCV設定の整理
 if(USE_INDIVIDUAL_OPENCV_LIBS)
-    # vcpkgでインストールされたOpenCVライブラリを使用（既にOpenCV_LIBSに設定済み）
-    message(STATUS "Using individual OpenCV libraries from vcpkg - opencv480_world.dll not required")
+    message(STATUS "Using individual OpenCV libraries from vcpkg")
     message(STATUS "Estimated size: ~33MB (vs 60MB world)")
-    message(STATUS "OpenCV_LIBS: ${OpenCV_LIBS}")
 else()
     message(STATUS "Using OpenCV world library - opencv480_world.dll required")
 endif()
 
-# 軽量版OpenCVオプション（opencv480_world.dllを不要にする）
-option(USE_LIGHTWEIGHT_OPENCV "Use lightweight OpenCV (core + imgproc only)" OFF)
-if(USE_LIGHTWEIGHT_OPENCV)
-    # vcpkgでインストールされたOpenCVライブラリを使用（必要最小限）
-    message(STATUS "Using lightweight OpenCV from vcpkg - opencv480_world.dll not required")
-    message(STATUS "Estimated size: ~13MB (vs 60MB world)")
-    message(STATUS "OpenCV_LIBS: ${OpenCV_LIBS}")
-else()
-    message(STATUS "Using full OpenCV - opencv480_world.dll required")
-endif()
-
-# 静的リンクオプション（opencv480_world.dllを不要にする）
-option(USE_STATIC_OPENCV "Use static OpenCV linking" OFF)
+# 静的リンクオプション
 if(USE_STATIC_OPENCV)
-    # 静的リンクライブラリを使用
-    set(OpenCV_LIBS ${OpenCV_LIBS})
-    # 静的リンクフラグを追加
     if(MSVC)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
     endif()
-    message(STATUS "Using static OpenCV linking - opencv480_world.dll not required")
+    message(STATUS "Using static OpenCV linking")
 else()
-    message(STATUS "Using dynamic OpenCV linking - opencv480_world.dll required")
+    message(STATUS "Using dynamic OpenCV linking")
 endif()
 
 # Eigen3
@@ -94,7 +81,6 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 
 # dlib
 find_package(dlib REQUIRED)
-include_directories(${dlib_INCLUDE_DIRS})
 
 # ONNX Runtime
 if(DEFINED ONNXRuntime_INCLUDE_DIRS AND DEFINED ONNXRuntime_LIBRARIES)
@@ -141,14 +127,13 @@ target_include_directories(BloodPressureDLL PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
-    ${dlib_INCLUDE_DIRS}
     ${ONNXRuntime_INCLUDE_DIRS}
 )
 
 # ライブラリリンク
 target_link_libraries(BloodPressureDLL
     ${OpenCV_LIBS}
-    ${dlib_LIBRARIES}
+    dlib::dlib
     ${ONNXRuntime_LIBRARIES}
 )
 
@@ -185,11 +170,6 @@ set_target_properties(BloodPressureDLL PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
-# テストアプリケーションの出力ディレクトリも設定
-set_target_properties(test_app PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
 # テストアプリケーション
 add_executable(test_app test/test_app.cpp)
 target_link_libraries(test_app BloodPressureDLL)
@@ -197,6 +177,11 @@ target_link_libraries(test_app BloodPressureDLL)
 # テストアプリケーションのインクルードディレクトリ設定
 target_include_directories(test_app PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# テストアプリケーションの出力ディレクトリ設定
+set_target_properties(test_app PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
 # インストール設定
