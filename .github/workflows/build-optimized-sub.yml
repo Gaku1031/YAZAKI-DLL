@@ -371,16 +371,16 @@ jobs:
           # dlibは静的リンクされるため、DLLのコピーは不要
           copy "C:\onnxruntime\onnxruntime-win-x64-1.15.1\lib\onnxruntime.dll" "$pkgName/"
           mkdir "$pkgName\models"
-          copy ..\CppBloodPressureDLL\models\*.onnx "$pkgName\models\"
-          copy ..\CppBloodPressureDLL\models\*.pb "$pkgName\models\"
-          copy ..\CppBloodPressureDLL\models\*.pbtxt "$pkgName\models\"
-          copy ..\CppBloodPressureDLL\models\shape_predictor_68_face_landmarks.dat "$pkgName\models\"
+          copy CppBloodPressureDLL\models\*.onnx "$pkgName\models\"
+          copy CppBloodPressureDLL\models\*.pb "$pkgName\models\"
+          copy CppBloodPressureDLL\models\*.pbtxt "$pkgName\models\"
+          copy CppBloodPressureDLL\models\shape_predictor_68_face_landmarks.dat "$pkgName\models\"
           mkdir "$pkgName\include"
-          copy ..\CppBloodPressureDLL\include\*.h "$pkgName\include\"
-          copy ..\CppBloodPressureDLL\README.md "$pkgName/"
-          copy ..\CppBloodPressureDLL\INTEGRATION_GUIDE.md "$pkgName/"
+          copy CppBloodPressureDLL\include\*.h "$pkgName\include\"
+          copy CppBloodPressureDLL\README.md "$pkgName/"
+          copy CppBloodPressureDLL\INTEGRATION_GUIDE.md "$pkgName/"
           # パッケージ情報ファイルを作成
-          powershell -File "..\CppBloodPressureDLL\create_package_info.ps1" -ConfigName "$pkgName" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
+          powershell -File "CppBloodPressureDLL\create_package_info.ps1" -ConfigName "$pkgName" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
           echo "Package created: $pkgName"
 
       - name: Upload artifacts
