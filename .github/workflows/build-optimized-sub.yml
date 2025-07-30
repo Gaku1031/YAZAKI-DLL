@@ -321,7 +321,9 @@ jobs:
       - name: Create optimized package
         run: |
           echo "Creating optimized package..."
-          mkdir package_${{ matrix.config.name }}
+          $pkgName = "${{ matrix.config.name }}".Replace(' ', '_').Replace('+', 'plus').Replace('=', '').Replace('"', '').Replace("'", '')
+          echo "PKG_NAME=$pkgName" >> $env:GITHUB_ENV
+          mkdir "$pkgName"
 
           # DLLの場所を特定
           $possiblePaths = @(
@@ -341,7 +343,7 @@ jobs:
           }
 
           if ($dllPath) {
-            copy $dllPath "package_${{ matrix.config.name }}/"
+            copy $dllPath "$pkgName/"
             echo "Copied DLL from: $dllPath"
           } else {
             echo "DLL not found for packaging"
@@ -356,7 +358,7 @@ jobs:
               foreach ($dll in $opencvDlls) {
                 $dllPath = Join-Path $vcpkgBinDir $dll
                 if (Test-Path $dllPath) {
-                  copy $dllPath "package_${{ matrix.config.name }}/"
+                  copy $dllPath "$pkgName/"
                   echo "Copied $dll"
                 } else {
                   echo "Warning: $dll not found at $dllPath"
@@ -367,24 +369,25 @@ jobs:
             }
           }
           # dlibは静的リンクされるため、DLLのコピーは不要
-          copy "C:\onnxruntime\onnxruntime-win-x64-1.15.1\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
-          mkdir package_${{ matrix.config.name }}\models
-          copy ..\CppBloodPressureDLL\models\*.onnx package_${{ matrix.config.name }}\models\
-          copy ..\CppBloodPressureDLL\models\*.pb package_${{ matrix.config.name }}\models\
-          copy ..\CppBloodPressureDLL\models\*.pbtxt package_${{ matrix.config.name }}\models\
-          copy ..\CppBloodPressureDLL\models\shape_predictor_68_face_landmarks.dat package_${{ matrix.config.name }}\models\
-          mkdir package_${{ matrix.config.name }}\include
-          copy ..\CppBloodPressureDLL\include\*.h package_${{ matrix.config.name }}\include\
-          copy ..\CppBloodPressureDLL\README.md package_${{ matrix.config.name }}/
-          copy ..\CppBloodPressureDLL\INTEGRATION_GUIDE.md package_${{ matrix.config.name }}/
+          copy "C:\onnxruntime\onnxruntime-win-x64-1.15.1\lib\onnxruntime.dll" "$pkgName/"
+          mkdir "$pkgName\models"
+          copy ..\CppBloodPressureDLL\models\*.onnx "$pkgName\models\"
+          copy ..\CppBloodPressureDLL\models\*.pb "$pkgName\models\"
+          copy ..\CppBloodPressureDLL\models\*.pbtxt "$pkgName\models\"
+          copy ..\CppBloodPressureDLL\models\shape_predictor_68_face_landmarks.dat "$pkgName\models\"
+          mkdir "$pkgName\include"
+          copy ..\CppBloodPressureDLL\include\*.h "$pkgName\include\"
+          copy ..\CppBloodPressureDLL\README.md "$pkgName/"
+          copy ..\CppBloodPressureDLL\INTEGRATION_GUIDE.md "$pkgName/"
           # パッケージ情報ファイルを作成
-          powershell -File "..\CppBloodPressureDLL\create_package_info.ps1" -ConfigName "${{ matrix.config.name }}" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
-          echo "Package created: package_${{ matrix.config.name }}"
+          powershell -File "..\CppBloodPressureDLL\create_package_info.ps1" -ConfigName "$pkgName" -Description "${{ matrix.config.description }}" -SizeMB "$sizeMB" -GitHubRunId "${{ github.run_id }}"
+          echo "Package created: $pkgName"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.config.name }}-package
-          path: build\package_${{ matrix.config.name }}/
+          name: ${{ env.PKG_NAME }}-package
+          path: build\${{ env.PKG_NAME }}/
           retention-days: 30
 
       - name: Create release summary
