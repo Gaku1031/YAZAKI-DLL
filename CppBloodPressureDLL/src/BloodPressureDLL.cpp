@@ -17,6 +17,7 @@
 #include <onnxruntime_cxx_api.h>
 #include <numeric> // For std::accumulate
 #include <algorithm> // For std::min_element, std::max_element
+#include <cstring> // For strncpy
 
 #ifdef _WIN32
 #include <windows.h>
@@ -521,6 +522,47 @@ int AnalyzeBloodPressureFromImages(
         if (callback) callback("", 0, 0, "", "[{\"code\":1006,\"message\":\"Unknown exception\",\"isRetriable\":false}]");
         snprintf(outBuf, bufSize, "Unknown exception");
         return 1006;
+    }
+}
+
+// GenerateRequestId関数の実装
+extern "C" __declspec(dllexport)
+int GenerateRequestId(char* outBuf, int bufSize) {
+    try {
+        // 現在のタイムスタンプを取得
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+        
+        // タイムスタンプを文字列に変換
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S");
+        ss << "_" << std::setfill('0') << std::setw(3) << ms.count();
+        
+        std::string requestId = "REQ_" + ss.str();
+        
+        // バッファサイズをチェック
+        if (static_cast<int>(requestId.length()) >= bufSize) {
+            return -1; // バッファが小さすぎる
+        }
+        
+        // 結果をコピー
+        strncpy(outBuf, requestId.c_str(), bufSize - 1);
+        outBuf[bufSize - 1] = '\0'; // 確実にnull終端
+        return 0; // 成功
+        
+    } catch (const std::exception& e) {
+        if (bufSize > 0) {
+            strncpy(outBuf, "ERROR", bufSize - 1);
+            outBuf[bufSize - 1] = '\0';
+        }
+        return -1;
+    } catch (...) {
+        if (bufSize > 0) {
+            strncpy(outBuf, "ERROR", bufSize - 1);
+            outBuf[bufSize - 1] = '\0';
+        }
+        return -1;
     }
 }
 

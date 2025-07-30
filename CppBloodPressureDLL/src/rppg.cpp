@@ -1,7 +1,10 @@
 #include "rppg.h"
 #include "peak_detect.h"
 #include <iostream>
-#include <opencv2/opencv.hpp>
+// 必要最小限のOpenCVヘッダーのみ使用（軽量化）
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/objdetect.hpp>
 #include <opencv2/dnn.hpp>
 #include <Eigen/Dense>
@@ -11,9 +14,17 @@
 #include <vector>
 #include <filesystem>
 #include <chrono>
+#include <sstream>
+#include <iomanip>
 
 // OpenCV DNN for face detection
 #include <opencv2/dnn.hpp>
+
+// dlibを使用した高精度顔検出・ランドマーク検出
+#include <dlib/image_processing/frontal_face_detector.h>
+#include <dlib/image_processing/render_face_detections.h>
+#include <dlib/image_processing.h>
+#include <dlib/opencv.h>
 
 // 顔のROIのランドマーク番号（MediaPipeの顔メッシュ）
 const std::vector<int> FACE_ROI_LANDMARKS = {
@@ -21,37 +32,31 @@ const std::vector<int> FACE_ROI_LANDMARKS = {
     349, 348, 347, 280, 425, 426, 391, 393, 164, 167, 165, 206, 205, 50, 118
 };
 
-// 詳細タイミング計測用の構造体
-struct RPPGTiming {
-    std::chrono::high_resolution_clock::time_point start_time;
-    std::chrono::high_resolution_clock::time_point end_time;
-    std::string stage_name;
-    bool is_active;
-    
-    RPPGTiming() : is_active(false) {}
-    
-    void start(const std::string& name) {
-        stage_name = name;
-        start_time = std::chrono::high_resolution_clock::now();
-        is_active = true;
-    }
-    
-    void end() {
-        if (is_active) {
-            end_time = std::chrono::high_resolution_clock::now();
-            is_active = false;
-        }
-    }
-    
-    double get_duration_ms() const {
-        if (!is_active) {
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-            return duration.count() / 1000.0;
-        }
-        return 0.0;
-    }
-};
+// RPPGTiming構造体のメンバー関数実装
+RPPGTiming::RPPGTiming() : is_active(false) {}
 
+void RPPGTiming::start(const std::string& name) {
+    stage_name = name;
+    start_time = std::chrono::high_resolution_clock::now();
+    is_active = true;
+}
+
+void RPPGTiming::end() {
+    if (is_active) {
+        end_time = std::chrono::high_resolution_clock::now();
+        is_active = false;
+    }
+}
+
+double RPPGTiming::get_duration_ms() const {
+    if (!is_active) {
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        return duration.count() / 1000.0;
+    }
+    return 0.0;
+}
+
+// Impl構造体の完全な定義
 struct RPPGProcessor::Impl {
     // OpenCV DNN Face Detection
     cv::dnn::Net face_detector;
@@ -66,208 +71,593 @@ struct RPPGProcessor::Impl {
     int consecutive_no_face = 0;
     static const int MAX_NO_FACE_FRAMES = 10;
     
-    Impl(const std::string& model_directory = "") : model_dir(model_directory) {
-        // Initialize OpenCV DNN face detector
-        try {
-            std::string pb_path = "opencv_face_detector_uint8.pb";
-            std::string pbtxt_path = "opencv_face_detector.pbtxt";
-            
-            // Try multiple paths for OpenCV DNN files
-            std::vector<std::string> pb_paths = {
-                pb_path,  // Current directory
-                model_dir + "/" + pb_path,  // Model directory
-                "models/" + pb_path,  // Models subdirectory
-                "../models/" + pb_path  // Parent models directory
-            };
-            
-            std::vector<std::string> pbtxt_paths = {
-                pbtxt_path,  // Current directory
-                model_dir + "/" + pbtxt_path,  // Model directory
-                "models/" + pbtxt_path,  // Models subdirectory
-                "../models/" + pbtxt_path  // Parent models directory
-            };
-            
-            bool pb_found = false;
-            bool pbtxt_found = false;
-            std::string final_pb_path, final_pbtxt_path;
-            
-            // Find pb file
-            for (const auto& path : pb_paths) {
-                std::ifstream f(path, std::ios::binary);
-                if (f.good()) {
-                    final_pb_path = path;
-                    pb_found = true;
-                    std::cout << "[RPPG] Found OpenCV DNN pb file: " << path << std::endl;
-                    break;
-                }
-            }
-            
-            // Find pbtxt file
-            for (const auto& path : pbtxt_paths) {
-                std::ifstream f(path, std::ios::binary);
-                if (f.good()) {
-                    final_pbtxt_path = path;
-                    pbtxt_found = true;
-                    std::cout << "[RPPG] Found OpenCV DNN pbtxt file: " << path << std::endl;
-                    break;
-                }
-            }
-            
-            if (!pb_found || !pbtxt_found) {
-                std::cerr << "[RPPG] OpenCV DNN files not found. Tried paths:" << std::endl;
-                for (const auto& path : pb_paths) {
-                    std::cerr << "  PB: " << path << std::endl;
-                }
-                for (const auto& path : pbtxt_paths) {
-                    std::cerr << "  PBTXT: " << path << std::endl;
-                }
-                dnn_initialized = false;
-                return;
-            }
-            
-            face_detector = cv::dnn::readNetFromTensorflow(final_pb_path, final_pbtxt_path);
-            dnn_initialized = true;
-            std::cout << "[RPPG] OpenCV DNN face detector initialized successfully" << std::endl;
-        } catch (const cv::Exception& e) {
-            std::cerr << "Failed to load OpenCV DNN face detector: " << e.what() << std::endl;
-            dnn_initialized = false;
-        }
-    }
+    // メモリ再利用用の変数（最適化追加）
+    cv::Mat reusable_blob;
+    cv::Mat reusable_face_roi;
+    cv::Mat reusable_mask;
+    cv::Mat reusable_ycbcr;
+    cv::Mat reusable_skin_mask;
+    cv::Mat reusable_combined_mask;
+    
+    // バッチ処理用の変数
+    std::vector<cv::Mat> frame_batch;
+    static const int BATCH_SIZE_FACE_DETECTION = 4;
+    
+    Impl(const std::string& model_directory = "");
     
     // タイミング計測ヘルパー関数
-    void start_timing(const std::string& stage_name) {
-        RPPGTiming timing;
-        timing.start(stage_name);
-        timing_log.push_back(timing);
-    }
+    void start_timing(const std::string& stage_name);
+    void end_timing();
+    void end_current_timing();
+    void clear_timing_log();
+    std::string get_timing_summary() const;
     
-    void end_timing() {
-        if (!timing_log.empty()) {
-            timing_log.back().end();
-        }
-    }
+    // 顔検出関数
+    std::vector<cv::Point2f> detectFaceLandmarks(const cv::Mat& frame);
     
-    // 現在アクティブなタイミングを終了
-    void end_current_timing() {
-        for (auto& timing : timing_log) {
-            if (timing.is_active) {
-                timing.end();
+    // 最適化されたROI処理関数
+    cv::Scalar processROI(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks);
+    cv::Scalar processROI_optimized(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks);
+    
+    // 効率的なヘルパー関数
+    cv::Rect calculateROIRect(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks);
+    void createROIMask(const std::vector<cv::Point2f>& landmarks, const cv::Rect& roi_rect, cv::Mat& mask);
+};
+
+// Impl構造体のメンバー関数実装
+RPPGProcessor::Impl::Impl(const std::string& model_directory) : model_dir(model_directory) {
+    // Initialize OpenCV DNN face detector with optimization
+    try {
+        std::string pb_path = "opencv_face_detector_uint8.pb";
+        std::string pbtxt_path = "opencv_face_detector.pbtxt";
+        
+        // Try multiple paths for OpenCV DNN files
+        std::vector<std::string> pb_paths = {
+            pb_path,  // Current directory
+            model_dir + "/" + pb_path,  // Model directory
+            "models/" + pb_path,  // Models subdirectory
+            "../models/" + pb_path  // Parent models directory
+        };
+        
+        std::vector<std::string> pbtxt_paths = {
+            pbtxt_path,  // Current directory
+            model_dir + "/" + pbtxt_path,  // Model directory
+            "models/" + pbtxt_path,  // Models subdirectory
+            "../models/" + pbtxt_path  // Parent models directory
+        };
+        
+        bool pb_found = false;
+        bool pbtxt_found = false;
+        std::string final_pb_path, final_pbtxt_path;
+        
+        // Find pb file
+        for (const auto& path : pb_paths) {
+            std::ifstream f(path, std::ios::binary);
+            if (f.good()) {
+                final_pb_path = path;
+                pb_found = true;
+                std::cout << "[RPPG] Found OpenCV DNN pb file: " << path << std::endl;
+                break;
             }
         }
+        
+        // Find pbtxt file
+        for (const auto& path : pbtxt_paths) {
+            std::ifstream f(path, std::ios::binary);
+            if (f.good()) {
+                final_pbtxt_path = path;
+                pbtxt_found = true;
+                std::cout << "[RPPG] Found OpenCV DNN pbtxt file: " << path << std::endl;
+                break;
+            }
+        }
+        
+        if (!pb_found || !pbtxt_found) {
+            std::cerr << "[RPPG] OpenCV DNN files not found. Tried paths:" << std::endl;
+            for (const auto& path : pb_paths) {
+                std::cerr << "  PB: " << path << std::endl;
+            }
+            for (const auto& path : pbtxt_paths) {
+                std::cerr << "  PBTXT: " << path << std::endl;
+            }
+            dnn_initialized = false;
+            return;
+        }
+        
+        face_detector = cv::dnn::readNetFromTensorflow(final_pb_path, final_pbtxt_path);
+        
+        // OpenCV最適化設定
+        face_detector.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+        face_detector.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+        
+        dnn_initialized = true;
+        std::cout << "[RPPG] OpenCV DNN face detector initialized successfully with optimizations" << std::endl;
+    } catch (const cv::Exception& e) {
+        std::cerr << "Failed to load OpenCV DNN face detector: " << e.what() << std::endl;
+        dnn_initialized = false;
+    }
+}
+
+void RPPGProcessor::Impl::start_timing(const std::string& stage_name) {
+    RPPGTiming timing;
+    timing.start(stage_name);
+    timing_log.push_back(timing);
+}
+
+void RPPGProcessor::Impl::end_timing() {
+    if (!timing_log.empty()) {
+        timing_log.back().end();
+    }
+}
+
+void RPPGProcessor::Impl::end_current_timing() {
+    for (auto& timing : timing_log) {
+        if (timing.is_active) {
+            timing.end();
+        }
+    }
+}
+
+void RPPGProcessor::Impl::clear_timing_log() {
+    timing_log.clear();
+}
+
+std::string RPPGProcessor::Impl::get_timing_summary() const {
+    std::stringstream ss;
+    ss << "\n=== RPPG TIMING ANALYSIS ===\n";
+    
+    printf("[DEBUG] RPPG timing_log size: %zu\n", timing_log.size());
+    
+    double total_time = 0.0;
+    for (const auto& timing : timing_log) {
+        double duration = timing.get_duration_ms();
+        total_time += duration;
+        ss << std::fixed << std::setprecision(2) 
+           << timing.stage_name << ": " << duration << " ms\n";
+        printf("[DEBUG] RPPG stage: %s = %.2f ms\n", timing.stage_name.c_str(), duration);
     }
     
-    // タイミングログをクリア
-    void clear_timing_log() {
-        timing_log.clear();
+    ss << "Total RPPG time: " << total_time << " ms\n";
+    ss << "=== RPPG BREAKDOWN ===\n";
+    
+    // 各段階の割合を計算
+    for (const auto& timing : timing_log) {
+        double duration = timing.get_duration_ms();
+        double percentage = (total_time > 0) ? (duration / total_time) * 100.0 : 0.0;
+        ss << std::fixed << std::setprecision(1) 
+           << timing.stage_name << ": " << percentage << "%\n";
     }
     
-    std::string get_timing_summary() const {
-        std::stringstream ss;
-        ss << "\n=== RPPG TIMING ANALYSIS ===\n";
+    std::string result = ss.str();
+    printf("[DEBUG] RPPG timing summary length: %zu\n", result.length());
+    return result;
+}
+
+// 軽量で高速な顔検出実装（OpenCV Haar Cascade）
+class LightweightFaceDetector {
+private:
+    cv::CascadeClassifier face_cascade_;
+    cv::CascadeClassifier eye_cascade_;
+    std::vector<cv::Point2f> last_landmarks_;
+    int consecutive_no_face_ = 0;
+    static const int MAX_NO_FACE_FRAMES = 15;
+    
+public:
+    bool Initialize(const std::string& model_dir = "") {
+        std::vector<std::string> cascade_paths = {
+            "haarcascade_frontalface_alt2.xml",
+            model_dir + "/haarcascade_frontalface_alt2.xml",
+            "models/haarcascade_frontalface_alt2.xml"
+        };
         
-        printf("[DEBUG] RPPG timing_log size: %zu\n", timing_log.size());
-        
-        double total_time = 0.0;
-        for (const auto& timing : timing_log) {
-            double duration = timing.get_duration_ms();
-            total_time += duration;
-            ss << std::fixed << std::setprecision(2) 
-               << timing.stage_name << ": " << duration << " ms\n";
-            printf("[DEBUG] RPPG stage: %s = %.2f ms\n", timing.stage_name.c_str(), duration);
+        bool loaded = false;
+        for (const auto& path : cascade_paths) {
+            if (face_cascade_.load(path)) {
+                std::cout << "[RPPG] Haar cascade loaded: " << path << std::endl;
+                loaded = true;
+                break;
+            }
         }
         
-        ss << "Total RPPG time: " << total_time << " ms\n";
-        ss << "=== RPPG BREAKDOWN ===\n";
-        
-        // 各段階の割合を計算
-        for (const auto& timing : timing_log) {
-            double duration = timing.get_duration_ms();
-            double percentage = (total_time > 0) ? (duration / total_time) * 100.0 : 0.0;
-            ss << std::fixed << std::setprecision(1) 
-               << timing.stage_name << ": " << percentage << "%\n";
+        if (!loaded) {
+            std::cerr << "[RPPG] Failed to load Haar cascade" << std::endl;
+            return false;
         }
         
-        std::string result = ss.str();
-        printf("[DEBUG] RPPG timing summary length: %zu\n", result.length());
-        return result;
+        return true;
     }
     
-    std::vector<cv::Point2f> detectFaceLandmarks(const cv::Mat& frame) {
-        std::vector<cv::Point2f> landmarks;
-        
-        if (!dnn_initialized) {
-            std::cerr << "[RPPG] Face detector not initialized" << std::endl;
-            return landmarks;
+    std::vector<cv::Point2f> DetectLandmarks(const cv::Mat& frame) {
+        // 前回の結果を再利用（安定性向上）
+        if (consecutive_no_face_ < MAX_NO_FACE_FRAMES && !last_landmarks_.empty()) {
+            consecutive_no_face_++;
+            return last_landmarks_;
         }
         
-        // フレームサイズが小さすぎる場合はスキップ
-        if (frame.cols < 100 || frame.rows < 100) {
-            return landmarks;
-        }
+        cv::Mat gray;
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+        cv::equalizeHist(gray, gray);  // コントラスト改善
         
-        // 前回の顔位置を再利用（連続で顔が見つからない場合）
-        if (consecutive_no_face < MAX_NO_FACE_FRAMES && !last_landmarks.empty()) {
-            landmarks = last_landmarks;
-            consecutive_no_face++;
-            return landmarks;
-        }
+        std::vector<cv::Rect> faces;
+        face_cascade_.detectMultiScale(gray, faces, 1.1, 3, 0, cv::Size(50, 50));
         
-        // Prepare input blob with optimized size
-        cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(300, 300), cv::Scalar(104.0, 177.0, 123.0), false, false);
-        face_detector.setInput(blob);
-        
-        // Forward pass
-        cv::Mat detections = face_detector.forward();
-        
-        // Process detections
-        cv::Mat detectionMat(detections.size[2], detections.size[3], CV_32F, detections.ptr<float>());
-        
-        float max_confidence = 0.0;
-        std::vector<cv::Point2f> best_landmarks;
-        
-        for (int i = 0; i < detectionMat.rows; i++) {
-            float confidence = detectionMat.at<float>(i, 2);
+        if (!faces.empty()) {
+            // 最大の顔を選択
+            cv::Rect best_face = faces[0];
+            for (const auto& face : faces) {
+                if (face.area() > best_face.area()) {
+                    best_face = face;
+                }
+            }
             
-            if (confidence > 0.5 && confidence > max_confidence) { // Confidence threshold
-                int x1 = static_cast<int>(detectionMat.at<float>(i, 3) * frame.cols);
-                int y1 = static_cast<int>(detectionMat.at<float>(i, 4) * frame.rows);
-                int x2 = static_cast<int>(detectionMat.at<float>(i, 5) * frame.cols);
-                int y2 = static_cast<int>(detectionMat.at<float>(i, 6) * frame.rows);
-                
-                // 顔のサイズが適切かチェック
-                int face_width = x2 - x1;
-                int face_height = y2 - y1;
-                if (face_width < 50 || face_height < 50) continue; // 小さすぎる顔はスキップ
-                
-                // Create face ROI landmarks (rectangular)
-                best_landmarks.clear();
-                best_landmarks.push_back(cv::Point2f(x1, y1));
-                best_landmarks.push_back(cv::Point2f(x2, y1));
-                best_landmarks.push_back(cv::Point2f(x2, y2));
-                best_landmarks.push_back(cv::Point2f(x1, y2));
-                
-                // Add more points for better ROI coverage
-                best_landmarks.push_back(cv::Point2f((x1 + x2) / 2, y1));
-                best_landmarks.push_back(cv::Point2f((x1 + x2) / 2, y2));
-                best_landmarks.push_back(cv::Point2f(x1, (y1 + y2) / 2));
-                best_landmarks.push_back(cv::Point2f(x2, (y1 + y2) / 2));
-                
-                max_confidence = confidence;
-            }
-        }
-        
-        // 顔が見つかった場合
-        if (!best_landmarks.empty()) {
-            last_landmarks = best_landmarks;
-            consecutive_no_face = 0;
-            landmarks = best_landmarks;
+            // 8点のランドマークを生成
+            std::vector<cv::Point2f> landmarks;
+            landmarks.push_back(cv::Point2f(best_face.x, best_face.y));
+            landmarks.push_back(cv::Point2f(best_face.x + best_face.width, best_face.y));
+            landmarks.push_back(cv::Point2f(best_face.x + best_face.width, best_face.y + best_face.height));
+            landmarks.push_back(cv::Point2f(best_face.x, best_face.y + best_face.height));
+            
+            // 中心点と中間点を追加
+            landmarks.push_back(cv::Point2f(best_face.x + best_face.width/2, best_face.y));
+            landmarks.push_back(cv::Point2f(best_face.x + best_face.width/2, best_face.y + best_face.height));
+            landmarks.push_back(cv::Point2f(best_face.x, best_face.y + best_face.height/2));
+            landmarks.push_back(cv::Point2f(best_face.x + best_face.width, best_face.y + best_face.height/2));
+            
+            last_landmarks_ = landmarks;
+            consecutive_no_face_ = 0;
+            return landmarks;
         } else {
-            consecutive_no_face++;
+            consecutive_no_face_++;
+            return last_landmarks_;
         }
-        
-        return landmarks;
     }
 };
+
+// dlibを使用した高精度顔検出・ランドマーク検出
+class DlibFaceDetector {
+private:
+    dlib::frontal_face_detector detector_;
+    dlib::shape_predictor predictor_;
+    std::vector<cv::Point2f> last_landmarks_;
+    int consecutive_no_face_ = 0;
+    static const int MAX_NO_FACE_FRAMES = 10;
+    
+public:
+    bool Initialize(const std::string& model_dir = "") {
+        try {
+            // dlib顔検出器初期化
+            detector_ = dlib::get_frontal_face_detector();
+            
+            // ランドマーク予測器の読み込み
+            std::vector<std::string> predictor_paths = {
+                "shape_predictor_68_face_landmarks.dat",
+                model_dir + "/shape_predictor_68_face_landmarks.dat",
+                "models/shape_predictor_68_face_landmarks.dat"
+            };
+            
+            bool loaded = false;
+            for (const auto& path : predictor_paths) {
+                try {
+                    dlib::deserialize(path) >> predictor_;
+                    std::cout << "[RPPG] dlib shape predictor loaded: " << path << std::endl;
+                    loaded = true;
+                    break;
+                } catch (const dlib::serialization_error&) {
+                    std::cerr << "[RPPG] Failed to load dlib predictor from: " << path << std::endl;
+                }
+            }
+            
+            if (!loaded) {
+                std::cerr << "[RPPG] Failed to load dlib shape predictor" << std::endl;
+                return false;
+            }
+            
+            return true;
+        } catch (const std::exception& e) {
+            std::cerr << "[RPPG] dlib initialization error: " << e.what() << std::endl;
+            return false;
+        }
+    }
+    
+    std::vector<cv::Point2f> DetectLandmarks(const cv::Mat& frame) {
+        // 前回の結果を再利用（安定性向上）
+        if (consecutive_no_face_ < MAX_NO_FACE_FRAMES && !last_landmarks_.empty()) {
+            consecutive_no_face_++;
+            return last_landmarks_;
+        }
+        
+        try {
+            // OpenCV Matをdlib形式に変換
+            dlib::cv_image<dlib::bgr_pixel> dlib_img(frame);
+            
+            // 顔検出
+            std::vector<dlib::rectangle> faces = detector_(dlib_img);
+            
+            if (!faces.empty()) {
+                // 最大の顔を選択
+                dlib::rectangle best_face = faces[0];
+                for (const auto& face : faces) {
+                    if (face.area() > best_face.area()) {
+                        best_face = face;
+                    }
+                }
+                
+                // 68個のランドマークを取得
+                dlib::full_object_detection shape = predictor_(dlib_img, best_face);
+                
+                // rPPG用途に最適なランドマークを選択（頬、額、鼻周辺）
+                std::vector<cv::Point2f> landmarks;
+                
+                // 主要なランドマークインデックス（rPPG用途）
+                std::vector<size_t> roi_landmarks = {
+                    // 左頬
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                    // 右頬
+                    17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    // 額
+                    36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                    // 鼻
+                    27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    // 口周辺
+                    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67
+                };
+                
+                for (size_t idx : roi_landmarks) {
+                    if (idx < static_cast<size_t>(shape.num_parts())) {
+                        auto part = shape.part(static_cast<unsigned long>(idx));
+                        landmarks.push_back(cv::Point2f(part.x(), part.y()));
+                    }
+                }
+                
+                // 重複除去とソート
+                std::sort(landmarks.begin(), landmarks.end(), 
+                    [](const cv::Point2f& a, const cv::Point2f& b) {
+                        return a.x < b.x || (a.x == b.x && a.y < b.y);
+                    });
+                landmarks.erase(std::unique(landmarks.begin(), landmarks.end()), landmarks.end());
+                
+                last_landmarks_ = landmarks;
+                consecutive_no_face_ = 0;
+                return landmarks;
+            } else {
+                consecutive_no_face_++;
+                return last_landmarks_;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[RPPG] dlib detection error: " << e.what() << std::endl;
+            consecutive_no_face_++;
+            return last_landmarks_;
+        }
+    }
+    
+    // rPPG用途に特化したランドマーク取得
+    std::vector<cv::Point2f> GetRPPGLandmarks(const cv::Mat& frame) {
+        auto all_landmarks = DetectLandmarks(frame);
+        
+        if (all_landmarks.empty()) {
+            return {};
+        }
+        
+        // rPPG用途に最適な領域を選択
+        std::vector<cv::Point2f> rppg_landmarks;
+        
+        // 頬領域（血流検出に最適）
+        for (size_t i = 0; i < all_landmarks.size(); ++i) {
+            const auto& pt = all_landmarks[i];
+            // 頬領域のランドマークを選択（簡易フィルタ）
+            if (pt.y > frame.rows * 0.3 && pt.y < frame.rows * 0.7) {
+                rppg_landmarks.push_back(pt);
+            }
+        }
+        
+        return rppg_landmarks;
+    }
+};
+
+// 既存の実装をdlib版に置き換え
+std::vector<cv::Point2f> RPPGProcessor::Impl::detectFaceLandmarks(const cv::Mat& frame) {
+    static DlibFaceDetector detector;
+    static bool initialized = false;
+    
+    if (!initialized) {
+        initialized = detector.Initialize(model_dir);
+        if (!initialized) {
+            std::cerr << "[RPPG] dlib face detector initialization failed" << std::endl;
+            return {};
+        }
+    }
+    
+    return detector.GetRPPGLandmarks(frame);
+}
+
+// dlib使用時のOpenCV画像処理最適化
+class OptimizedImageProcessor {
+private:
+    // メモリ再利用用の変数
+    cv::Mat reusable_gray;
+    cv::Mat reusable_roi;
+    cv::Mat reusable_ycbcr;
+    cv::Mat reusable_skin_mask;
+    cv::Mat reusable_combined_mask;
+    
+    // 前回のROI領域をキャッシュ
+    cv::Rect last_roi_rect;
+    bool roi_cache_valid = false;
+    
+public:
+    // 最適化されたROI処理
+    cv::Scalar ProcessROI_Optimized(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks) {
+        if (landmarks.empty()) {
+            return cv::Scalar(0, 0, 0);
+        }
+        
+        // 1. ROI矩形計算（キャッシュ活用）
+        cv::Rect roi_rect = CalculateROIRect(frame, landmarks);
+        
+        // 2. ROIキャッシュチェック（前回と同じ領域なら再利用）
+        if (roi_cache_valid && roi_rect == last_roi_rect) {
+            // キャッシュされたROIを使用
+            return ProcessCachedROI(frame, roi_rect);
+        }
+        
+        // 3. 新しいROI処理
+        last_roi_rect = roi_rect;
+        roi_cache_valid = true;
+        
+        // 4. グレースケール変換（メモリ再利用）
+        if (reusable_gray.empty() || reusable_gray.size() != roi_rect.size()) {
+            reusable_gray = cv::Mat(roi_rect.size(), CV_8UC1);
+        }
+        cv::cvtColor(frame(roi_rect), reusable_gray, cv::COLOR_BGR2GRAY);
+        
+        // 5. ROI抽出（ビュー使用でコピー回避）
+        cv::Mat roi_view = frame(roi_rect);
+        
+        // 6. 色空間変換（メモリ再利用）
+        if (reusable_ycbcr.empty() || reusable_ycbcr.size() != roi_view.size()) {
+            reusable_ycbcr = cv::Mat(roi_view.size(), CV_8UC3);
+        }
+        cv::cvtColor(roi_view, reusable_ycbcr, cv::COLOR_BGR2YCrCb);
+        
+        // 7. 肌色フィルタリング（メモリ再利用）
+        if (reusable_skin_mask.empty() || reusable_skin_mask.size() != roi_view.size()) {
+            reusable_skin_mask = cv::Mat(roi_view.size(), CV_8UC1);
+        }
+        cv::inRange(reusable_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), reusable_skin_mask);
+        
+        // 8. マスク組み合わせ（メモリ再利用）
+        if (reusable_combined_mask.empty() || reusable_combined_mask.size() != roi_view.size()) {
+            reusable_combined_mask = cv::Mat(roi_view.size(), CV_8UC1);
+        }
+        
+        // 9. 効率的なマスク作成
+        CreateOptimizedMask(landmarks, roi_rect, reusable_combined_mask);
+        cv::bitwise_and(reusable_combined_mask, reusable_skin_mask, reusable_combined_mask);
+        
+        // 10. 平均計算
+        return cv::mean(roi_view, reusable_combined_mask);
+    }
+    
+private:
+    cv::Rect CalculateROIRect(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks) {
+        float min_x = std::numeric_limits<float>::max();
+        float min_y = std::numeric_limits<float>::max();
+        float max_x = std::numeric_limits<float>::lowest();
+        float max_y = std::numeric_limits<float>::lowest();
+        
+        for (const auto& pt : landmarks) {
+            min_x = std::min(min_x, pt.x);
+            min_y = std::min(min_y, pt.y);
+            max_x = std::max(max_x, pt.x);
+            max_y = std::max(max_y, pt.y);
+        }
+        
+        float margin = 15.0f;  // マージンを小さくして処理領域削減
+        int x1 = std::max(0, static_cast<int>(min_x - margin));
+        int y1 = std::max(0, static_cast<int>(min_y - margin));
+        int x2 = std::min(frame.cols - 1, static_cast<int>(max_x + margin));
+        int y2 = std::min(frame.rows - 1, static_cast<int>(max_y + margin));
+        
+        return cv::Rect(x1, y1, x2 - x1, y2 - y1);
+    }
+    
+    void CreateOptimizedMask(const std::vector<cv::Point2f>& landmarks, 
+                           const cv::Rect& roi_rect, cv::Mat& mask) {
+        std::vector<cv::Point> roi_points;
+        roi_points.reserve(landmarks.size());  // メモリ事前割り当て
+        
+        for (const auto& pt : landmarks) {
+            int rel_x = static_cast<int>(pt.x - roi_rect.x);
+            int rel_y = static_cast<int>(pt.y - roi_rect.y);
+            roi_points.push_back(cv::Point(rel_x, rel_y));
+        }
+        
+        if (roi_points.size() >= 3) {
+            cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
+        }
+    }
+    
+    cv::Scalar ProcessCachedROI(const cv::Mat& frame, const cv::Rect& roi_rect) {
+        // キャッシュされたROIの処理（高速化）
+        cv::Mat roi_view = frame(roi_rect);
+        
+        // 簡易処理（キャッシュ時は軽量版）
+        cv::Mat gray_roi;
+        cv::cvtColor(roi_view, gray_roi, cv::COLOR_BGR2GRAY);
+        
+        // 緑チャンネル強調（血流検出）
+        cv::Mat green_channel;
+        std::vector<cv::Mat> channels;
+        cv::split(roi_view, channels);
+        green_channel = channels[1];
+        
+        // 簡易平均計算
+        cv::Scalar mean_green = cv::mean(green_channel);
+        return cv::Scalar(mean_green[0], mean_green[0], mean_green[0]);
+    }
+};
+
+// dlib使用時の最適化されたROI処理
+cv::Scalar RPPGProcessor::Impl::processROI_optimized(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks) {
+    static OptimizedImageProcessor processor;
+    return processor.ProcessROI_Optimized(frame, landmarks);
+}
+
+// 既存のROI処理関数（後方互換性のため）
+cv::Scalar RPPGProcessor::Impl::processROI(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks) {
+    return processROI_optimized(frame, landmarks);
+}
+
+// ROI矩形計算ヘルパー関数
+cv::Rect RPPGProcessor::Impl::calculateROIRect(const cv::Mat& frame, const std::vector<cv::Point2f>& landmarks) {
+    if (landmarks.empty()) {
+        return cv::Rect(0, 0, frame.cols, frame.rows);
+    }
+    
+    float min_x = std::numeric_limits<float>::max();
+    float min_y = std::numeric_limits<float>::max();
+    float max_x = std::numeric_limits<float>::lowest();
+    float max_y = std::numeric_limits<float>::lowest();
+    
+    for (const auto& pt : landmarks) {
+        min_x = std::min(min_x, pt.x);
+        min_y = std::min(min_y, pt.y);
+        max_x = std::max(max_x, pt.x);
+        max_y = std::max(max_y, pt.y);
+    }
+    
+    float margin = 20.0f;
+    int x1 = std::max(0, static_cast<int>(min_x - margin));
+    int y1 = std::max(0, static_cast<int>(min_y - margin));
+    int x2 = std::min(frame.cols - 1, static_cast<int>(max_x + margin));
+    int y2 = std::min(frame.rows - 1, static_cast<int>(max_y + margin));
+    
+    return cv::Rect(x1, y1, x2 - x1, y2 - y1);
+}
+
+// ROIマスク作成ヘルパー関数
+void RPPGProcessor::Impl::createROIMask(const std::vector<cv::Point2f>& landmarks, 
+                                       const cv::Rect& roi_rect, cv::Mat& mask) {
+    if (landmarks.empty()) {
+        mask.setTo(255);
+        return;
+    }
+    
+    std::vector<cv::Point> roi_points;
+    roi_points.reserve(landmarks.size());
+    
+    for (const auto& pt : landmarks) {
+        int rel_x = static_cast<int>(pt.x - roi_rect.x);
+        int rel_y = static_cast<int>(pt.y - roi_rect.y);
+        roi_points.push_back(cv::Point(rel_x, rel_y));
+    }
+    
+    if (roi_points.size() >= 3) {
+        cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
+    } else {
+        mask.setTo(255);
+    }
+}
 
 RPPGProcessor::RPPGProcessor(const std::string& model_dir) : pImpl(std::make_unique<Impl>(model_dir)) {
     // OpenCV DNN Face Detectionは既にImplコンストラクタで初期化済み
@@ -363,7 +753,7 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
             double current_time = frame_count / fps;
             frame_count++;
             
-            // 顔検出とROI抽出
+            // 顔検出とROI抽出（最適化版）
             std::vector<cv::Point2f> landmarks;
             try {
                 landmarks = pImpl->detectFaceLandmarks(frame);
@@ -373,63 +763,13 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
             }
             
             if (!landmarks.empty()) {
-                // 顔領域の境界を計算
-                float min_x = std::numeric_limits<float>::max();
-                float min_y = std::numeric_limits<float>::max();
-                float max_x = std::numeric_limits<float>::lowest();
-                float max_y = std::numeric_limits<float>::lowest();
+                // 最適化されたROI処理
+                cv::Scalar mean = pImpl->processROI(frame, landmarks);
                 
-                for (const auto& pt : landmarks) {
-                    min_x = std::min(min_x, pt.x);
-                    min_y = std::min(min_y, pt.y);
-                    max_x = std::max(max_x, pt.x);
-                    max_y = std::max(max_y, pt.y);
-                }
-                
-                // 顔領域を少し拡張（余裕を持たせる）
-                float margin = 20.0f;
-                int face_x1 = std::max(0, static_cast<int>(min_x - margin));
-                int face_y1 = std::max(0, static_cast<int>(min_y - margin));
-                int face_x2 = std::min(frame.cols - 1, static_cast<int>(max_x + margin));
-                int face_y2 = std::min(frame.rows - 1, static_cast<int>(max_y + margin));
-                
-                // 顔領域を切り取り
-                cv::Mat face_roi = frame(cv::Rect(face_x1, face_y1, face_x2 - face_x1, face_y2 - face_y1));
-                
-                // ROIマスクの作成（顔領域サイズに合わせる）
-                cv::Mat mask = cv::Mat::zeros(face_roi.size(), CV_8UC1);
-                std::vector<cv::Point> roi_points;
-                for (const auto& pt : landmarks) {
-                    // 座標を顔領域内の相対座標に変換
-                    int rel_x = static_cast<int>(pt.x - face_x1);
-                    int rel_y = static_cast<int>(pt.y - face_y1);
-                    roi_points.push_back(cv::Point(rel_x, rel_y));
-                }
-                if (roi_points.size() >= 3) {
-                    try {
-                        cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{roi_points}, cv::Scalar(255));
-                        
-                        // 肌色フィルタリング（YCbCr色空間）
-                        cv::Mat face_ycbcr;
-                        cv::cvtColor(face_roi, face_ycbcr, cv::COLOR_BGR2YCrCb);
-                        cv::Mat skin_mask;
-                        cv::inRange(face_ycbcr, cv::Scalar(0, 100, 130), cv::Scalar(255, 140, 175), skin_mask);
-                        
-                        // ROIマスクと肌色マスクの組み合わせ
-                        cv::Mat combined_mask;
-                        cv::bitwise_and(mask, skin_mask, combined_mask);
-                        
-                        // ROI領域の色平均を計算
-                        cv::Scalar mean = cv::mean(face_roi, combined_mask);
-                        // 有効な平均値のみを保存
-                        if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
-                            skin_means.push_back({mean[0], mean[1], mean[2]});
-                            timestamps.push_back(current_time);
-                        }
-                    } catch (const cv::Exception& e) {
-                        std::cerr << "[RPPG] Image processing error: " << e.what() << std::endl;
-                        continue;
-                    }
+                // 有効な平均値のみを保存
+                if (mean[0] > 0 && mean[1] > 0 && mean[2] > 0) {
+                    skin_means.push_back({mean[0], mean[1], mean[2]});
+                    timestamps.push_back(current_time);
                 }
             }
         }
@@ -438,18 +778,6 @@ RPPGResult RPPGProcessor::processImagesFromPaths(const std::vector<std::string>&
         if (batch_end % (BATCH_SIZE * 2) == 0 || batch_end == total_frames) {
             std::cout << "[RPPG] Processed " << batch_end << "/" << total_frames << " frames..." << std::endl;
         }
-        
-        // メモリクリーンアップは一時的に無効化（OpenCVエラー回避のため）
-        // if (batch_end % (BATCH_SIZE * 3) == 0) {
-        //     // 安全なメモリクリーンアップ
-        //     try {
-        //         // 明示的にメモリを解放（より安全な方法）
-        //         cv::Mat temp;
-        //         temp = cv::Mat();
-        //     } catch (const cv::Exception& e) {
-        //         std::cerr << "[RPPG] Memory cleanup warning: " << e.what() << std::endl;
-        //     }
-        // }
     }
     pImpl->end_timing(); // Image Loading and Processing
     

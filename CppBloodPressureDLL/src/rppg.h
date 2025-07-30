@@ -3,6 +3,20 @@
 #include <string>
 #include <memory>
 #include <opencv2/opencv.hpp>
+#include <chrono>
+
+// 詳細タイミング計測用の構造体
+struct RPPGTiming {
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::chrono::high_resolution_clock::time_point end_time;
+    std::string stage_name;
+    bool is_active;
+    
+    RPPGTiming();
+    void start(const std::string& name);
+    void end();
+    double get_duration_ms() const;
+};
 
 struct RPPGResult {
     std::vector<double> rppg_signal;
