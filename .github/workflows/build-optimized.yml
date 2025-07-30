@@ -46,239 +46,72 @@ jobs:
         with:
           cmake-version: "3.25.0"
 
-      - name: Install OpenCV via pre-built binaries
+      - name: Install OpenCV via vcpkg
         run: |
-          echo "Installing OpenCV 4.8.0 via pre-built binaries..."
+          echo "Installing OpenCV via vcpkg..."
 
-          # OpenCVの事前ビルドバイナリを直接ダウンロード
-          echo "Downloading OpenCV pre-built binaries..."
-
-          # OpenCVのバイナリパッケージをダウンロード
-          $opencvUrl = "https://github.com/opencv/opencv/releases/download/4.8.0/opencv-4.8.0-windows.exe"
-          $opencvInstaller = "opencv-installer.exe"
-
-          try {
-            Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvInstaller -TimeoutSec 600
-            echo "Download completed successfully"
-          } catch {
-            echo "Failed to download OpenCV installer: $($_.Exception.Message)"
-            exit 1
+          # vcpkgをセットアップ（既存のディレクトリがある場合は削除）
+          if (Test-Path "C:\vcpkg") {
+            echo "Removing existing vcpkg directory..."
+            Remove-Item -Recurse -Force "C:\vcpkg"
           }
 
-          echo "Installing OpenCV..."
-          try {
-            # インストーラーを実行
-            $process = Start-Process -FilePath ".\$opencvInstaller" -ArgumentList "-y", "-o", "C:\opencv", "-q" -Wait -PassThru -NoNewWindow
-            echo "Installer exit code: $($process.ExitCode)"
-            
-            if ($process.ExitCode -ne 0) {
-              echo "Installer failed with exit code: $($process.ExitCode)"
-              throw "Installer failed"
-            }
-          } catch {
-            echo "Failed to run OpenCV installer: $($_.Exception.Message)"
-            echo "Trying alternative method - using minimal OpenCV build..."
-            
-            # 代替手段：最小限のOpenCVビルドを実行
-            echo "Downloading minimal OpenCV source..."
-            Invoke-WebRequest -Uri "https://github.com/opencv/opencv/archive/4.8.0.zip" -OutFile "opencv-minimal.zip"
-            Expand-Archive -Path "opencv-minimal.zip" -DestinationPath "C:\opencv-minimal" -Force
-            
-            mkdir "C:\opencv-minimal\build"
-            cd "C:\opencv-minimal\build"
-            
-            # CMakeの設定を改善してCheckTypeSizeエラーを回避
-            $cmakeArgs = @(
-                "-G", "Visual Studio 17 2022",
-                "-A", "x64",
-                "-DCMAKE_BUILD_TYPE=Release",
-                "-DBUILD_LIST=core,imgproc,imgcodecs",
-                "-DBUILD_TESTS=OFF",
-                "-DBUILD_PERF_TESTS=OFF",
-                "-DBUILD_EXAMPLES=OFF",
-                "-DWITH_OPENMP=OFF",
-                "-DWITH_LAPACK=OFF",
-                "-DWITH_EIGEN=OFF",
-                "-DWITH_IPP=OFF",
-                "-DWITH_OPENCL=OFF",
-                "-DWITH_FFMPEG=OFF",
-                "-DWITH_GSTREAMER=OFF",
-                "-DWITH_1394=OFF",
-                "-DWITH_GTK=OFF",
-                "-DWITH_QT=OFF",
-                "-DWITH_WIN32UI=OFF",
-                "-DWITH_OPENGL=OFF",
-                "-DWITH_VA=OFF",
-                "-DWITH_VA_INTEL=OFF",
-                "-DWITH_GDAL=OFF",
-                "-DWITH_GSTREAMER_0_10=OFF",
-                "-DWITH_OPENEXR=OFF",
-                "-DWITH_CAROTENE=OFF",
-                "-DWITH_ITT=OFF",
-                "-DWITH_OPENCL_SVM=OFF",
-                                                  "-DWITH_OPENCLAMDFFT=OFF",
-                 "-DWITH_OPENCLAMDBLAS=OFF",
-                 "-DWITH_JPEG=ON",
-                 "-DWITH_PNG=ON",
-                 "-DWITH_TIFF=OFF",
-                 "-DWITH_LIBTIFF=OFF",
-                 "-DWITH_WEBP=OFF",
-                 "-DWITH_JASPER=OFF",
-                                  "-DWITH_OPENJPEG=OFF",
-                 "-DCMAKE_CXX_FLAGS=/bigobj",
-                 "-DCMAKE_C_FLAGS=/bigobj",
-                 "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-                 "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
-                 "-DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON",
-                "C:\opencv-minimal\opencv-4.8.0"
-            )
-            
-            # CMakeを実行
-            cmake @cmakeArgs
-            
-            if ($LASTEXITCODE -eq 0) {
-                echo "CMake configuration successful"
-                
-                # ビルドを実行
-                cmake --build . --config Release --parallel 4
-                
-                if ($LASTEXITCODE -eq 0) {
-                    echo "OpenCV build successful"
-                    
-                    # インストール
-                    cmake --install . --prefix "C:\opencv"
-                    
-                    if (Test-Path "C:\opencv") {
-                        echo "OpenCV built and installed successfully"
-                    } else {
-                        echo "Failed to install OpenCV"
-                        exit 1
-                    }
-                } else {
-                    echo "OpenCV build failed"
-                    exit 1
-                }
-            } else {
-                echo "CMake configuration failed"
-                exit 1
-            }
-          }
+          echo "Cloning vcpkg..."
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat
 
-          # インストール完了を待機
-          Start-Sleep -Seconds 30
+          # 必要な依存関係を先にインストール
+          echo "Installing dependencies..."
+          C:\vcpkg\vcpkg install protobuf:x64-windows
+          C:\vcpkg\vcpkg install eigen3:x64-windows
 
-          # OpenCVのインストールを確認（複数の可能性のあるパスをチェック）
-          $opencvPaths = @("C:\opencv", "C:\Program Files\opencv", "C:\opencv\opencv", "C:\opencv\opencv-4.8.0")
-          $opencvFound = $false
-          $opencvDir = ""
+          # OpenCVをインストール（最小限の機能のみ）
+          echo "Installing OpenCV with minimal features..."
+          C:\vcpkg\vcpkg install opencv4[core,imgproc,imgcodecs]:x64-windows
 
-          foreach ($path in $opencvPaths) {
-            if (Test-Path $path) {
-              echo "OpenCV found at: $path"
-              $opencvFound = $true
-              $opencvDir = $path
-              break
-            }
-          }
-
-          if (-not $opencvFound) {
-            echo "OpenCV installation failed - checking possible locations:"
-            Get-ChildItem "C:\" -Name | Where-Object { $_ -like "*opencv*" }
-            echo "Trying alternative OpenCV installation method..."
-            
-            # 代替方法：vcpkgを使用してOpenCVをインストール
-            echo "Installing OpenCV via vcpkg..."
-            
-            # vcpkgをセットアップ
-            git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-            C:\vcpkg\bootstrap-vcpkg.bat
-            
-            # Protobufを先にインストール（OpenCVの依存関係）
-            C:\vcpkg\vcpkg install protobuf:x64-windows
-            
-            # OpenCVをインストール（Protobuf依存関係を明示的に有効化）
-            C:\vcpkg\vcpkg install opencv4[protobuf]:x64-windows
-            
-            if (Test-Path "C:\vcpkg\installed\x64-windows") {
-                $opencvDir = "C:\vcpkg\installed\x64-windows"
-                echo "OpenCV installed via vcpkg at: $opencvDir"
-                echo "vcpkg installed packages:"
-                Get-ChildItem "C:\vcpkg\installed\x64-windows" -Name
-            } else {
-                echo "vcpkg installation failed"
-                exit 1
-            }
-          }
-
-          if (Test-Path $opencvDir) {
-            echo "OpenCV installed successfully at: $opencvDir"
-            echo "OpenCV directory contents:"
-            Get-ChildItem $opencvDir -Name
+          if (Test-Path "C:\vcpkg\installed\x64-windows") {
+              $opencvDir = "C:\vcpkg\installed\x64-windows"
+              echo "OpenCV installed via vcpkg at: $opencvDir"
+              echo "vcpkg installed packages:"
+              Get-ChildItem "C:\vcpkg\installed\x64-windows" -Name
           } else {
-            echo "OpenCV installation failed - directory not found"
-            exit 1
+              echo "vcpkg installation failed"
+              exit 1
           }
 
           echo "OpenCV_DIR=$opencvDir" >> $env:GITHUB_ENV
 
       - name: Install dlib via vcpkg
         run: |
-          echo "Installing dlib via pre-built binaries..."
+          echo "Installing dlib via vcpkg..."
 
-          # dlibのソースコードをダウンロードしてビルド
-          $dlibUrl = "https://github.com/davisking/dlib/archive/refs/tags/v19.24.zip"
-          $dlibZip = "dlib.zip"
+          # dlibをvcpkgでインストール
+          C:\vcpkg\vcpkg install dlib:x64-windows
 
-          echo "Downloading dlib source..."
-          Invoke-WebRequest -Uri $dlibUrl -OutFile $dlibZip -TimeoutSec 300
-
-          echo "Extracting dlib..."
-          Expand-Archive -Path $dlibZip -DestinationPath "C:\dlib" -Force
-
-          # dlibのビルドディレクトリを作成
-          mkdir "C:\dlib\build"
-          cd "C:\dlib\build"
-
-          # CMakeでdlibを設定
-          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release "C:\dlib\dlib-19.24"
-
-          # dlibをビルド
-          cmake --build . --config Release --parallel 4
-
-          # インストール
-          cmake --install . --prefix "C:\dlib\install"
-
-          if (Test-Path "C:\dlib\install") {
-            echo "dlib installed successfully"
+          if (Test-Path "C:\vcpkg\installed\x64-windows") {
+            echo "dlib installed successfully via vcpkg"
           } else {
             echo "dlib installation failed"
             exit 1
           }
 
-          echo "dlib_DIR=C:\dlib\install" >> $env:GITHUB_ENV
+          echo "dlib_DIR=C:\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
 
       - name: Install Eigen3 via vcpkg
         run: |
-          echo "Installing Eigen3 via pre-built binaries..."
+          echo "Installing Eigen3 via vcpkg..."
 
-          # Eigen3のソースコードをダウンロード
-          $eigenUrl = "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip"
-          $eigenZip = "eigen.zip"
+          # Eigen3をvcpkgでインストール
+          C:\vcpkg\vcpkg install eigen3:x64-windows
 
-          echo "Downloading Eigen3 source..."
-          Invoke-WebRequest -Uri $eigenUrl -OutFile $eigenZip -TimeoutSec 300
-
-          echo "Extracting Eigen3..."
-          Expand-Archive -Path $eigenZip -DestinationPath "C:\eigen" -Force
-
-          if (Test-Path "C:\eigen\eigen-3.4.0") {
-            echo "Eigen3 installed successfully"
+          if (Test-Path "C:\vcpkg\installed\x64-windows") {
+            echo "Eigen3 installed successfully via vcpkg"
           } else {
             echo "Eigen3 installation failed"
             exit 1
           }
 
-          echo "EIGEN3_INCLUDE_DIR=C:\eigen\eigen-3.4.0" >> $env:GITHUB_ENV
+          echo "EIGEN3_INCLUDE_DIR=C:\vcpkg\installed\x64-windows\include" >> $env:GITHUB_ENV
 
       - name: Install ONNX Runtime
         run: |
@@ -369,43 +202,21 @@ jobs:
       - name: Configure CMake
         run: |
           $workspace = "$env:GITHUB_WORKSPACE"
-          $opencvDir = "$env:OpenCV_DIR"
-          echo "OpenCV_DIR: $opencvDir"
-
-          # OpenCVのパスを確認
-          if (-not (Test-Path $opencvDir)) {
-            echo "OpenCV_DIR not found, trying alternative paths..."
-            $alternativePaths = @("C:\opencv", "C:\vcpkg\installed\x64-windows", "C:\Program Files\opencv")
-            foreach ($path in $alternativePaths) {
-              if (Test-Path $path) {
-                $opencvDir = $path
-                echo "Found OpenCV at: $opencvDir"
-                break
-              }
-            }
-          }
 
           # CMakeオプションを設定
           $cmakeOptions = "${{ matrix.config.cmake_options }}"
           $cmakeArgs = @(
               "-G", "Visual Studio 17 2022",
               "-A", "x64",
+              "-DCMAKE_BUILD_TYPE=Release",
               "-DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
           )
 
-          # OpenCVのパスを設定
-          if (Test-Path $opencvDir) {
-            $cmakeArgs += "-DOpenCV_DIR=$opencvDir"
-            echo "Using OpenCV_DIR: $opencvDir"
-          } else {
-            echo "Warning: OpenCV_DIR not found, will try to find OpenCV automatically"
-          }
-
-          # Protobufのパスを設定（vcpkgでインストールされた場合）
-          $protobufDir = "C:\vcpkg\installed\x64-windows"
-          if (Test-Path $protobufDir) {
-            $cmakeArgs += "-DCMAKE_PREFIX_PATH=$protobufDir"
-            echo "Using CMAKE_PREFIX_PATH: $protobufDir"
+          # vcpkgでインストールされたライブラリのパスを設定
+          $vcpkgDir = "C:\vcpkg\installed\x64-windows"
+          if (Test-Path $vcpkgDir) {
+            $cmakeArgs += "-DCMAKE_PREFIX_PATH=$vcpkgDir"
+            echo "Using CMAKE_PREFIX_PATH: $vcpkgDir"
           }
 
           # CMakeオプションを分割して追加
@@ -423,9 +234,9 @@ jobs:
 
           if ($LASTEXITCODE -ne 0) {
             echo "CMake configuration failed"
-            echo "Trying with different OpenCV settings..."
+            echo "Trying with simplified settings..."
             
-            # 代替設定を試行
+            # 簡略化された設定を試行
             $cmakeArgs = @(
                 "-G", "Visual Studio 17 2022",
                 "-A", "x64",
@@ -435,14 +246,8 @@ jobs:
                 "-DUSE_GITHUB_ACTIONS_OPTIMIZED=ON"
             )
             
-            if (Test-Path $opencvDir) {
-              $cmakeArgs += "-DOpenCV_DIR=$opencvDir"
-            }
-
-            # Protobufのパスを設定（vcpkgでインストールされた場合）
-            $protobufDir = "C:\vcpkg\installed\x64-windows"
-            if (Test-Path $protobufDir) {
-              $cmakeArgs += "-DCMAKE_PREFIX_PATH=$protobufDir"
+            if (Test-Path $vcpkgDir) {
+              $cmakeArgs += "-DCMAKE_PREFIX_PATH=$vcpkgDir"
             }
             
             $cmakeArgs += "$workspace\CppBloodPressureDLL"

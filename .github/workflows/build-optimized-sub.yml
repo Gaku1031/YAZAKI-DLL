@@ -103,12 +103,12 @@ jobs:
           Expand-Archive -Path "onnxruntime.zip" -DestinationPath "C:\onnxruntime" -Force
 
           # ONNX Runtimeのインストールを確認
-          if (Test-Path "C:\onnxruntime\include\onnxruntime_cxx_api.h") {
+          if (Test-Path "C:\onnxruntime\onnxruntime-win-x64-1.15.1\include\onnxruntime_cxx_api.h") {
             echo "ONNX Runtime installed successfully"
             echo "ONNX Runtime include directory contents:"
-            Get-ChildItem "C:\onnxruntime\include" -Name
+            Get-ChildItem "C:\onnxruntime\onnxruntime-win-x64-1.15.1\include" -Name
             echo "ONNX Runtime lib directory contents:"
-            Get-ChildItem "C:\onnxruntime\lib" -Name
+            Get-ChildItem "C:\onnxruntime\onnxruntime-win-x64-1.15.1\lib" -Name
           } else {
             echo "ONNX Runtime installation failed - header file not found"
             echo "ONNX Runtime directory structure:"
@@ -120,9 +120,9 @@ jobs:
             exit 1
           }
 
-          echo "ONNXRuntime_DIR=C:\onnxruntime" >> $env:GITHUB_ENV
-          echo "ONNXRuntime_INCLUDE_DIRS=C:\onnxruntime\include" >> $env:GITHUB_ENV
-          echo "ONNXRuntime_LIBRARIES=C:\onnxruntime\lib\onnxruntime.lib" >> $env:GITHUB_ENV
+          echo "ONNXRuntime_DIR=C:\onnxruntime\onnxruntime-win-x64-1.15.1" >> $env:GITHUB_ENV
+          echo "ONNXRuntime_INCLUDE_DIRS=C:\onnxruntime\onnxruntime-win-x64-1.15.1\include" >> $env:GITHUB_ENV
+          echo "ONNXRuntime_LIBRARIES=C:\onnxruntime\onnxruntime-win-x64-1.15.1\lib\onnxruntime.lib" >> $env:GITHUB_ENV
       - name: Download dlib face detection model
         run: |
           echo "Downloading dlib face detection model..."
@@ -292,7 +292,7 @@ jobs:
             }
           }
           # dlibは静的リンクされるため、DLLのコピーは不要
-          copy "C:\onnxruntime\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
+          copy "C:\onnxruntime\onnxruntime-win-x64-1.15.1\lib\onnxruntime.dll" package_${{ matrix.config.name }}/
           mkdir package_${{ matrix.config.name }}\models
           copy ..\CppBloodPressureDLL\models\*.onnx package_${{ matrix.config.name }}\models\
           copy ..\CppBloodPressureDLL\models\*.pb package_${{ matrix.config.name }}\models\
