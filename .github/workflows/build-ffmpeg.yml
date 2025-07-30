@@ -1,0 +1,96 @@
+name: Build FFmpeg with H.264 Support
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-ffmpeg.yml"
+
+jobs:
+  build-ffmpeg:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            yasm \
+            nasm \
+            cmake \
+            git \
+            wget \
+            mingw-w64 \
+            gcc-mingw-w64 \
+            g++-mingw-w64
+
+      - name: Download FFmpeg source
+        run: |
+          wget https://ffmpeg.org/releases/ffmpeg-6.1.tar.bz2
+          tar -xf ffmpeg-6.1.tar.bz2
+
+      - name: Configure and build FFmpeg for Windows
+        run: |
+          cd ffmpeg-6.1
+          ./configure \
+            --prefix=/tmp/ffmpeg-ultra \
+            --arch=x86_64 \
+            --target-os=mingw32 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --pkg-config=pkg-config \
+            --enable-cross-compile \
+            --enable-static \
+            --disable-shared \
+            --disable-doc \
+            --disable-everything \
+            --enable-ffmpeg \
+            --disable-ffplay \
+            --disable-ffprobe \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-avutil \
+            --enable-swscale \
+            --enable-avfilter \
+            --enable-demuxer='matroska,webm' \
+            --enable-decoder='h264,vp9' \
+            --enable-encoder=mjpeg \
+            --enable-muxer=image2 \
+            --enable-protocol=file \
+            --enable-filter='scale,select' \
+            --enable-parser='h264,vp9' \
+            --disable-network \
+            --disable-iconv \
+            --disable-bzlib \
+            --extra-cflags='-static' \
+            --extra-ldflags='-static'
+
+          make -j$(nproc)
+          make install
+
+      - name: Create package directory
+        run: |
+          mkdir -p ffmpeg-package
+
+      - name: Copy FFmpeg binary
+        run: |
+          cp /tmp/ffmpeg-ultra/bin/ffmpeg.exe ffmpeg-package/
+
+      - name: Test FFmpeg build
+        run: |
+          cd ffmpeg-package
+          wine ffmpeg.exe -version
+
+      - name: Upload FFmpeg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-ultra-slim
+          path: ffmpeg-package/
+          retention-days: 30
