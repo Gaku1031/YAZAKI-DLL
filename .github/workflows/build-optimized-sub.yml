@@ -49,13 +49,21 @@ jobs:
       - name: Install vcpkg
         run: |
           echo "Installing vcpkg..."
+          # 既存のvcpkgディレクトリを削除してから再インストール
+          if (Test-Path "C:\vcpkg") {
+            echo "Removing existing vcpkg installation..."
+            Remove-Item "C:\vcpkg" -Recurse -Force
+          }
           git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
-          # vcpkgのデフォルト設定を動的リンクに変更
-          echo "Setting vcpkg default to dynamic linking..."
-          C:\vcpkg\vcpkg set-default triplet x64-windows
+          # vcpkgの設定を確認
+          echo "vcpkg version:"
+          C:\vcpkg\vcpkg version
+          echo "Available triplets:"
+          C:\vcpkg\vcpkg help triplet
+          echo "Note: Using x64-windows triplet for dynamic linking"
       - name: Update vcpkg packages
         run: |
           echo "Updating vcpkg package information..."
@@ -65,9 +73,9 @@ jobs:
         run: |
           echo "Installing OpenCV 4.8.0 via vcpkg with dynamic linking..."
           # 動的リンクを明示的に指定してOpenCVをインストール
-          C:\vcpkg\vcpkg install opencv4:x64-windows --recurse
-          C:\vcpkg\vcpkg install opencv4[contrib]:x64-windows --recurse
-          C:\vcpkg\vcpkg install opencv4[dnn]:x64-windows --recurse
+          C:\vcpkg\vcpkg install opencv4:x64-windows
+          C:\vcpkg\vcpkg install opencv4[contrib]:x64-windows
+          C:\vcpkg\vcpkg install opencv4[dnn]:x64-windows
 
           # OpenCVのインストールを確認
           if (Test-Path "C:\vcpkg\installed\x64-windows") {
