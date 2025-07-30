@@ -189,6 +189,11 @@ set_target_properties(BloodPressureDLL PROPERTIES
 add_executable(test_app test/test_app.cpp)
 target_link_libraries(test_app BloodPressureDLL)
 
+# テストアプリケーションのインクルードディレクトリ設定
+target_include_directories(test_app PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # インストール設定
 install(TARGETS BloodPressureDLL
     LIBRARY DESTINATION lib

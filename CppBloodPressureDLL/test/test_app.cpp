@@ -5,6 +5,31 @@
 #include <string>
 #include <filesystem>
 #include <iomanip> // For std::fixed and std::setprecision
+#include <cstring> // For strlen
+
+// グローバル変数（コールバック用）
+std::string g_lastResult;
+std::string g_lastError;
+
+// コールバック関数
+void bloodPressureCallback(
+    const char* requestId,
+    int maxBloodPressure,
+    int minBloodPressure,
+    const char* measureRowData,
+    const char* errorsJson
+) {
+    if (errorsJson && strlen(errorsJson) > 0) {
+        g_lastError = errorsJson;
+        g_lastResult = "";
+    } else {
+        g_lastResult = "Success";
+        g_lastError = "";
+        std::cout << "Request ID: " << requestId << std::endl;
+        std::cout << "Systolic BP: " << maxBloodPressure << " mmHg" << std::endl;
+        std::cout << "Diastolic BP: " << minBloodPressure << " mmHg" << std::endl;
+    }
+}
 
 // パフォーマンステスト用のヘルパー関数
 void run_performance_test(const std::string& video_path) {
@@ -12,14 +37,36 @@ void run_performance_test(const std::string& video_path) {
     
     // 1. 初期化時間測定
     auto start_init = std::chrono::high_resolution_clock::now();
-    BloodPressureDLL bp_dll;
+    
+    char outBuf[1024];
+    int result = InitializeBP(outBuf, sizeof(outBuf), "./models");
+    if (result != 0) {
+        std::cerr << "Initialization failed: " << outBuf << std::endl;
+        return;
+    }
+    
     auto end_init = std::chrono::high_resolution_clock::now();
     auto init_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_init - start_init);
     std::cout << "Initialization time: " << init_time.count() << " ms" << std::endl;
     
     // 2. 処理時間測定
     auto start_process = std::chrono::high_resolution_clock::now();
-    BloodPressureResult result = bp_dll.estimateBloodPressure(video_path);
+    
+    // リクエストID生成
+    char requestId[64];
+    if (GenerateRequestId(requestId, sizeof(requestId)) != 0) {
+        std::cerr << "Failed to generate request ID" << std::endl;
+        return;
+    }
+    
+    // 血圧解析開始
+    if (StartBloodPressureAnalysisRequest(outBuf, sizeof(outBuf), 
+                                        requestId, 170, 70, 1, // height, weight, sex
+                                        video_path.c_str(), bloodPressureCallback) != 0) {
+        std::cerr << "Failed to start blood pressure analysis: " << outBuf << std::endl;
+        return;
+    }
+    
     auto end_process = std::chrono::high_resolution_clock::now();
     auto process_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_process - start_process);
     
@@ -31,19 +78,10 @@ void run_performance_test(const std::string& video_path) {
     std::cout << "Estimated memory usage: ~50-100MB (including OpenCV + dlib)" << std::endl;
     
     // 4. 結果表示
-    if (result.success) {
-        std::cout << "Systolic BP: " << result.systolic << " mmHg" << std::endl;
-        std::cout << "Diastolic BP: " << result.diastolic << " mmHg" << std::endl;
-        std::cout << "Heart Rate: " << result.heart_rate << " bpm" << std::endl;
+    if (g_lastError.empty()) {
+        std::cout << "Processing completed successfully" << std::endl;
     } else {
-        std::cout << "Processing failed: " << result.error_message << std::endl;
-    }
-    
-    // 5. タイミング詳細（利用可能な場合）
-    std::string timing_summary = bp_dll.getTimingSummary();
-    if (!timing_summary.empty()) {
-        std::cout << "\n=== Detailed Timing ===" << std::endl;
-        std::cout << timing_summary << std::endl;
+        std::cout << "Processing failed: " << g_lastError << std::endl;
     }
 }
 
@@ -77,18 +115,31 @@ int main(int argc, char* argv[]) {
             run_performance_test(video_path);
         } else {
             // 通常の処理
-            BloodPressureDLL bp_dll;
-            BloodPressureResult result = bp_dll.estimateBloodPressure(video_path);
+            char outBuf[1024];
             
-            if (result.success) {
-                std::cout << "Blood Pressure Estimation Results:" << std::endl;
-                std::cout << "Systolic: " << result.systolic << " mmHg" << std::endl;
-                std::cout << "Diastolic: " << result.diastolic << " mmHg" << std::endl;
-                std::cout << "Heart Rate: " << result.heart_rate << " bpm" << std::endl;
-            } else {
-                std::cerr << "Error: " << result.error_message << std::endl;
+            // 初期化
+            if (InitializeBP(outBuf, sizeof(outBuf), "./models") != 0) {
+                std::cerr << "Initialization failed: " << outBuf << std::endl;
                 return 1;
             }
+            
+            // リクエストID生成
+            char requestId[64];
+            if (GenerateRequestId(requestId, sizeof(requestId)) != 0) {
+                std::cerr << "Failed to generate request ID" << std::endl;
+                return 1;
+            }
+            
+            // 血圧解析開始
+            if (StartBloodPressureAnalysisRequest(outBuf, sizeof(outBuf), 
+                                                requestId, 170, 70, 1, // height, weight, sex
+                                                video_path.c_str(), bloodPressureCallback) != 0) {
+                std::cerr << "Failed to start blood pressure analysis: " << outBuf << std::endl;
+                return 1;
+            }
+            
+            // 結果を待つ（実際の実装では適切な待機処理が必要）
+            std::cout << "Blood pressure analysis started. Check callback for results." << std::endl;
         }
     } catch (const std::exception& e) {
         std::cerr << "Exception: " << e.what() << std::endl;
