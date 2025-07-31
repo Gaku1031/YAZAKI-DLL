@@ -267,6 +267,39 @@ jobs:
           echo '                {' >> Program.cs
           echo '                    var exists = File.Exists(dll);' >> Program.cs
           echo '                    Console.WriteLine($"  {dll}: {(exists ? "Found" : "NOT FOUND")}");' >> Program.cs
+          echo '                    if (exists)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        try' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            var fileInfo = new FileInfo(dll);' >> Program.cs
+          echo '                            Console.WriteLine($"    Size: {fileInfo.Length / 1024} KB");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        catch (Exception ex)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"    Error getting file info: {ex.Message}");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // Check DLL dependencies using dumpbin (if available)' >> Program.cs
+          echo '                Console.WriteLine("Checking DLL dependencies...");' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var process = new System.Diagnostics.Process();' >> Program.cs
+          echo '                    process.StartInfo.FileName = "dumpbin";' >> Program.cs
+          echo '                    process.StartInfo.Arguments = "/dependents BloodPressureDLL.dll";' >> Program.cs
+          echo '                    process.StartInfo.UseShellExecute = false;' >> Program.cs
+          echo '                    process.StartInfo.RedirectStandardOutput = true;' >> Program.cs
+          echo '                    process.StartInfo.CreateNoWindow = true;' >> Program.cs
+          echo '                    process.Start();' >> Program.cs
+          echo '                    var output = process.StandardOutput.ReadToEnd();' >> Program.cs
+          echo '                    process.WaitForExit();' >> Program.cs
+          echo '                    Console.WriteLine("DLL dependencies:");' >> Program.cs
+          echo '                    Console.WriteLine(output);' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"Could not check DLL dependencies: {ex.Message}");' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
@@ -386,7 +419,23 @@ jobs:
           echo '                    if (System.IO.File.Exists(file))' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        var fileName = System.IO.Path.GetFileName(file);' >> Program.cs
-          echo '                        System.IO.File.Copy(file, fileName, true);' >> Program.cs
+          echo '                        var destPath = fileName;' >> Program.cs
+          echo '                        ' >> Program.cs
+          echo '                        // Remove existing file if it exists' >> Program.cs
+          echo '                        if (System.IO.File.Exists(destPath))' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            try' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                System.IO.File.Delete(destPath);' >> Program.cs
+          echo '                                Console.WriteLine($"Removed existing: {fileName}");' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                            catch (Exception ex)' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                Console.WriteLine($"Warning: Could not remove existing {fileName}: {ex.Message}");' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        ' >> Program.cs
+          echo '                        System.IO.File.Copy(file, destPath, true);' >> Program.cs
           echo '                        Console.WriteLine($"Copied: {fileName}");' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    else' >> Program.cs
