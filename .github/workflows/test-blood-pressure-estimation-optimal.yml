@@ -410,8 +410,33 @@ jobs:
           '@
 
           # Write files
+          Write-Host "Writing Program.cs..." -ForegroundColor Yellow
           [System.IO.File]::WriteAllText("Program.cs", $testCode)
+
+          Write-Host "Writing BloodPressureTestOptimal.csproj..." -ForegroundColor Yellow
           [System.IO.File]::WriteAllText("BloodPressureTestOptimal.csproj", $projectFile)
+
+          # Verify files were created
+          Write-Host "Verifying created files..." -ForegroundColor Yellow
+          if (Test-Path "Program.cs") {
+            $programSize = (Get-Item "Program.cs").Length
+            Write-Host "Program.cs created successfully ($programSize bytes)" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: Program.cs was not created" -ForegroundColor Red
+            exit 1
+          }
+
+          if (Test-Path "BloodPressureTestOptimal.csproj") {
+            $projectSize = (Get-Item "BloodPressureTestOptimal.csproj").Length
+            Write-Host "BloodPressureTestOptimal.csproj created successfully ($projectSize bytes)" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: BloodPressureTestOptimal.csproj was not created" -ForegroundColor Red
+            exit 1
+          }
+
+          # Show directory contents
+          Write-Host "Current directory contents:" -ForegroundColor Cyan
+          Get-ChildItem -Name
 
           Write-Host "Optimal test application created successfully" -ForegroundColor Green
         shell: powershell
@@ -431,6 +456,12 @@ jobs:
           if (!(Test-Path "test_bp_estimation_optimal/BloodPressureTestOptimal.csproj")) {
             Write-Host "ERROR: BloodPressureTestOptimal.csproj not found" -ForegroundColor Red
             Write-Host "This means the project file was not created properly" -ForegroundColor Red
+            Write-Host "Checking test_bp_estimation_optimal directory contents:" -ForegroundColor Red
+            if (Test-Path "test_bp_estimation_optimal") {
+              Get-ChildItem "test_bp_estimation_optimal" -Name
+            } else {
+              Write-Host "test_bp_estimation_optimal directory does not exist" -ForegroundColor Red
+            }
             exit 1
           }
 
@@ -438,6 +469,12 @@ jobs:
           if (!(Test-Path "test_bp_estimation_optimal/Program.cs")) {
             Write-Host "ERROR: Program.cs not found" -ForegroundColor Red
             Write-Host "This means the source file was not created properly" -ForegroundColor Red
+            Write-Host "Checking test_bp_estimation_optimal directory contents:" -ForegroundColor Red
+            if (Test-Path "test_bp_estimation_optimal") {
+              Get-ChildItem "test_bp_estimation_optimal" -Name
+            } else {
+              Write-Host "test_bp_estimation_optimal directory does not exist" -ForegroundColor Red
+            }
             exit 1
           }
 
