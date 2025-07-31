@@ -147,22 +147,22 @@ jobs:
           echo '        );' >> Program.cs
           echo '' >> Program.cs
           echo '        // DLL imports based on actual BloodPressureDLL.h' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int InitializeBP(StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string modelDir);' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        public static extern int InitializeBP([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string modelDir);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int StartBloodPressureAnalysisRequest(StringBuilder outBuf, int bufSize,' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        public static extern int StartBloodPressureAnalysisRequest([Out] StringBuilder outBuf, int bufSize,' >> Program.cs
           echo '            [MarshalAs(UnmanagedType.LPStr)] string requestId, int height, int weight, int sex,' >> Program.cs
           echo '            [MarshalAs(UnmanagedType.LPStr)] string moviePath, BPCallback callback);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int GetProcessingStatus(StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string requestId);' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        public static extern int GetProcessingStatus([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string requestId);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int GenerateRequestId(StringBuilder outBuf, int bufSize);' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        public static extern int GenerateRequestId([Out] StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int GetVersionInfo(StringBuilder outBuf, int bufSize);' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        public static extern int GetVersionInfo([Out] StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '    }' >> Program.cs
           echo '' >> Program.cs
           echo '    class Program' >> Program.cs
@@ -210,25 +210,60 @@ jobs:
           echo '                Console.WriteLine("Initializing optimal blood pressure estimator...");' >> Program.cs
           echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
           echo '                var modelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");' >> Program.cs
-          echo '                var initResult = BloodPressureEstimator.InitializeBP(outBuf, 1024, modelDir);' >> Program.cs
-          echo '' >> Program.cs
-          echo '                if (initResult != 0)' >> Program.cs
+          echo '                Console.WriteLine($"Model directory: {modelDir}");' >> Program.cs
+          echo '                Console.WriteLine($"Model directory exists: {Directory.Exists(modelDir)}");' >> Program.cs
+          echo '                if (Directory.Exists(modelDir))' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR: Failed to initialize blood pressure estimator: {outBuf}");' >> Program.cs
+          echo '                    var modelFiles = Directory.GetFiles(modelDir);' >> Program.cs
+          echo '                    Console.WriteLine($"Model files found: {modelFiles.Length}");' >> Program.cs
+          echo '                    foreach (var file in modelFiles)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"  - {Path.GetFileName(file)}");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var initResult = BloodPressureEstimator.InitializeBP(outBuf, 1024, modelDir);' >> Program.cs
+          echo '                    Console.WriteLine($"InitializeBP returned: {initResult}");' >> Program.cs
+          echo '                    Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    if (initResult != 0)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"ERROR: Failed to initialize blood pressure estimator: {outBuf}");' >> Program.cs
+          echo '                        return;' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    Console.WriteLine($"Initialization successful: {outBuf}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR during initialization: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
-          echo '                Console.WriteLine($"Initialization successful: {outBuf}");' >> Program.cs
           echo '' >> Program.cs
           echo '                // Generate request ID' >> Program.cs
           echo '                outBuf.Clear();' >> Program.cs
-          echo '                var requestResult = BloodPressureEstimator.GenerateRequestId(outBuf, 1024);' >> Program.cs
-          echo '                if (requestResult != 0)' >> Program.cs
+          echo '                try' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR: Failed to generate request ID: {outBuf}");' >> Program.cs
+          echo '                    var requestResult = BloodPressureEstimator.GenerateRequestId(outBuf, 1024);' >> Program.cs
+          echo '                    Console.WriteLine($"GenerateRequestId returned: {requestResult}");' >> Program.cs
+          echo '                    Console.WriteLine($"GenerateRequestId output: {outBuf}");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    if (requestResult != 0)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"ERROR: Failed to generate request ID: {outBuf}");' >> Program.cs
+          echo '                        return;' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    currentRequestId = outBuf.ToString();' >> Program.cs
+          echo '                    Console.WriteLine($"Generated request ID: {currentRequestId}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR during request ID generation: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
-          echo '                currentRequestId = outBuf.ToString();' >> Program.cs
-          echo '                Console.WriteLine($"Generated request ID: {currentRequestId}");' >> Program.cs
           echo '' >> Program.cs
           echo '                var videoPath = Path.Combine("..", "sample-data", Environment.GetEnvironmentVariable("TEST_VIDEO"));' >> Program.cs
           echo '                if (!File.Exists(videoPath))' >> Program.cs
