@@ -520,9 +520,42 @@ jobs:
             }
           }
 
+          # Copy additional required DLLs
+          $additionalDlls = @(
+            "abseil_dll.dll",
+            "jpeg62.dll",
+            "libgcc_s_seh-1.dll",
+            "libgfortran-5.dll",
+            "liblapack.dll",
+            "liblzma.dll",
+            "libpng16.dll",
+            "libprotobuf.dll",
+            "libquadmath-0.dll",
+            "libsharpyuv.dll",
+            "libwebp.dll",
+            "libwebpdecoder.dll",
+            "libwebpdemux.dll",
+            "libwebpmux.dll",
+            "libwinpthread-1.dll",
+            "openblas.dll",
+            "tiff.dll",
+            "zlib1.dll"
+          )
+
+          foreach ($dll in $additionalDlls) {
+            if (Test-Path $dll) {
+              Copy-Item $dll "test_bp_estimation_optimal/" -Force
+              $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
+              Write-Host "Copied: $dll ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "WARNING: $dll not found in root directory" -ForegroundColor Yellow
+            }
+          }
+
           # Verify copied files
-          Write-Host "Verifying copied OpenCV DLLs..." -ForegroundColor Yellow
-          foreach ($dll in $opencvDlls) {
+          Write-Host "Verifying copied DLLs..." -ForegroundColor Yellow
+          $allDlls = $opencvDlls + $additionalDlls
+          foreach ($dll in $allDlls) {
             $testPath = "test_bp_estimation_optimal/$dll"
             if (Test-Path $testPath) {
               Write-Host "  OK: $dll copied successfully" -ForegroundColor Green
