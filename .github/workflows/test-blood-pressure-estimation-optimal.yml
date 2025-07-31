@@ -593,7 +593,8 @@ jobs:
                 $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
                 Write-Host "  Copied: $(Split-Path $dll -Leaf) ($size MB)" -ForegroundColor Green
               } catch {
-                Write-Host "  ERROR copying $dll: $($_.Exception.Message)" -ForegroundColor Red
+                $errorMsg = $_.Exception.Message
+                Write-Host "  ERROR copying $dll: $errorMsg" -ForegroundColor Red
               }
             } else {
               Write-Host "  WARNING: $dll not found in package directory" -ForegroundColor Yellow
