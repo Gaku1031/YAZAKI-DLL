@@ -82,7 +82,7 @@ jobs:
           }
 
           # Check runtime DLLs
-          $runtimeDlls = @("opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "CppBloodPressureDLL/package/onnxruntime.dll", "CppBloodPressureDLL/package/zlib.dll")
+          $runtimeDlls = @("test_bp_estimation_optimal/opencv_core4.dll", "test_bp_estimation_optimal/opencv_dnn4.dll", "test_bp_estimation_optimal/opencv_imgcodecs4.dll", "test_bp_estimation_optimal/opencv_imgproc4.dll", "test_bp_estimation_optimal/opencv_objdetect4.dll", "CppBloodPressureDLL/package/onnxruntime.dll", "CppBloodPressureDLL/package/zlib.dll")
           foreach ($dll in $runtimeDlls) {
             if (Test-Path $dll) {
               $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
@@ -261,7 +261,7 @@ jobs:
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                // Check if DLL files exist' >> Program.cs
-          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll", "zlib.dll" };' >> Program.cs
+          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll", "zlib.dll" };' >> Program.cs
           echo '                Console.WriteLine("Checking DLL files:");' >> Program.cs
           echo '                foreach (var dll in dllFiles)' >> Program.cs
           echo '                {' >> Program.cs
@@ -370,11 +370,11 @@ jobs:
           echo '            var files = new[]' >> Program.cs
           echo '            {' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/BloodPressureDLL.dll",' >> Program.cs
-          echo '                "../../opencv_core4.dll",' >> Program.cs
-          echo '                "../../opencv_dnn4.dll",' >> Program.cs
-          echo '                "../../opencv_imgcodecs4.dll",' >> Program.cs
-          echo '                "../../opencv_imgproc4.dll",' >> Program.cs
-          echo '                "../../opencv_objdetect4.dll",' >> Program.cs
+          echo '                "opencv_core4.dll",' >> Program.cs
+          echo '                "opencv_dnn4.dll",' >> Program.cs
+          echo '                "opencv_imgcodecs4.dll",' >> Program.cs
+          echo '                "opencv_imgproc4.dll",' >> Program.cs
+          echo '                "opencv_objdetect4.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/onnxruntime.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/zlib.dll"' >> Program.cs
           echo '            };' >> Program.cs
@@ -446,6 +446,41 @@ jobs:
           }
 
           Write-Host "Optimal test application built successfully" -ForegroundColor Green
+        shell: powershell
+
+      - name: Copy individual OpenCV DLLs for optimal configuration
+        run: |
+          Write-Host "Copying individual OpenCV DLLs for optimal configuration..." -ForegroundColor Yellow
+
+          # Copy individual OpenCV DLLs from root directory
+          $opencvDlls = @(
+            "opencv_core4.dll",
+            "opencv_dnn4.dll", 
+            "opencv_imgcodecs4.dll",
+            "opencv_imgproc4.dll",
+            "opencv_objdetect4.dll"
+          )
+
+          foreach ($dll in $opencvDlls) {
+            if (Test-Path $dll) {
+              Copy-Item $dll "test_bp_estimation_optimal/" -Force
+              $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
+              Write-Host "Copied: $dll ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "WARNING: $dll not found in root directory" -ForegroundColor Yellow
+            }
+          }
+
+          # Verify copied files
+          Write-Host "Verifying copied OpenCV DLLs..." -ForegroundColor Yellow
+          foreach ($dll in $opencvDlls) {
+            $testPath = "test_bp_estimation_optimal/$dll"
+            if (Test-Path $testPath) {
+              Write-Host "  ✓ $dll copied successfully" -ForegroundColor Green
+            } else {
+              Write-Host "  ✗ $dll not found in test directory" -ForegroundColor Red
+            }
+          }
         shell: powershell
 
       - name: Run optimal blood pressure estimation test
@@ -762,7 +797,6 @@ jobs:
           echo '- zlib.dll - ZLIB library' >> dist_optimal/README.md
           echo '- models/ - Machine learning model files' >> dist_optimal/README.md
           echo '- BloodPressureWrapper.cs - C# integration example' >> dist_optimal/README.md
-          echo '- docs/ - Documentation' >> dist_optimal/README.md
           echo '' >> dist_optimal/README.md
           echo '## Usage' >> dist_optimal/README.md
           echo '1. Place all files in the same directory as your C# application' >> dist_optimal/README.md
