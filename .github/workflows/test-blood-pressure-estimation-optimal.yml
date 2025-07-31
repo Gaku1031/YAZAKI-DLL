@@ -594,7 +594,7 @@ jobs:
                 Write-Host "  Copied: $(Split-Path $dll -Leaf) ($size MB)" -ForegroundColor Green
               } catch {
                 $errorMsg = $_.Exception.Message
-                Write-Host "  ERROR copying $dll: $errorMsg" -ForegroundColor Red
+                Write-Host "  ERROR copying $dll - $errorMsg" -ForegroundColor Red
               }
             } else {
               Write-Host "  WARNING: $dll not found in package directory" -ForegroundColor Yellow
