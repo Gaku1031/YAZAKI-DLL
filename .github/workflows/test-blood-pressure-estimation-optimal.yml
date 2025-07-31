@@ -82,7 +82,7 @@ jobs:
           }
 
           # Check runtime DLLs
-          $runtimeDlls = @("CppBloodPressureDLL/package/opencv_core4.dll", "CppBloodPressureDLL/package/opencv_dnn4.dll", "CppBloodPressureDLL/package/opencv_imgcodecs4.dll", "CppBloodPressureDLL/package/opencv_imgproc4.dll", "CppBloodPressureDLL/package/opencv_objdetect4.dll", "CppBloodPressureDLL/package/onnxruntime.dll", "CppBloodPressureDLL/package/zlib1.dll")
+          $runtimeDlls = @("opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "CppBloodPressureDLL/package/onnxruntime.dll", "CppBloodPressureDLL/package/zlib.dll")
           foreach ($dll in $runtimeDlls) {
             if (Test-Path $dll) {
               $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
@@ -346,11 +346,11 @@ jobs:
           echo '            var files = new[]' >> Program.cs
           echo '            {' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/BloodPressureDLL.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_core4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_dnn4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_imgcodecs4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_imgproc4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_objdetect4.dll",' >> Program.cs
+          echo '                "../../opencv_core4.dll",' >> Program.cs
+          echo '                "../../opencv_dnn4.dll",' >> Program.cs
+          echo '                "../../opencv_imgcodecs4.dll",' >> Program.cs
+          echo '                "../../opencv_imgproc4.dll",' >> Program.cs
+          echo '                "../../opencv_objdetect4.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/onnxruntime.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/zlib.dll"' >> Program.cs
           echo '            };' >> Program.cs
@@ -554,11 +554,11 @@ jobs:
 
           # Optimal configuration benefits
           Write-Host "=== OPTIMAL CONFIGURATION BENEFITS ===" -ForegroundColor Yellow
-          Write-Host "✓ dlib frontal face detector (high accuracy)" -ForegroundColor Green
-          Write-Host "✓ OpenCV DNN face detection (fast processing)" -ForegroundColor Green
-          Write-Host "✓ No shape predictor (~100MB saved)" -ForegroundColor Green
-          Write-Host "✓ Individual OpenCV DLLs (better compatibility)" -ForegroundColor Green
-          Write-Host "✓ Best balance of accuracy and performance" -ForegroundColor Green
+          Write-Host "- dlib frontal face detector (high accuracy)" -ForegroundColor Green
+          Write-Host "- OpenCV DNN face detection (fast processing)" -ForegroundColor Green
+          Write-Host "- No shape predictor (~100MB saved)" -ForegroundColor Green
+          Write-Host "- Individual OpenCV DLLs (better compatibility)" -ForegroundColor Green
+          Write-Host "- Best balance of accuracy and performance" -ForegroundColor Green
 
           if ($exitCode -ne 0) {
             Write-Host "ERROR: Blood pressure estimation test failed with exit code $exitCode" -ForegroundColor Red
@@ -632,11 +632,11 @@ jobs:
           # Copy main DLL and dependencies
           $files = @(
             "CppBloodPressureDLL/package/BloodPressureDLL.dll",
-            "CppBloodPressureDLL/package/opencv_core4.dll", 
-            "CppBloodPressureDLL/package/opencv_dnn4.dll",
-            "CppBloodPressureDLL/package/opencv_imgcodecs4.dll",
-            "CppBloodPressureDLL/package/opencv_imgproc4.dll",
-            "CppBloodPressureDLL/package/opencv_objdetect4.dll",
+            "opencv_core4.dll", 
+            "opencv_dnn4.dll",
+            "opencv_imgcodecs4.dll",
+            "opencv_imgproc4.dll",
+            "opencv_objdetect4.dll",
             "CppBloodPressureDLL/package/onnxruntime.dll",
             "CppBloodPressureDLL/package/zlib.dll"
           )
@@ -711,13 +711,13 @@ jobs:
           echo 'This package contains the optimized blood pressure estimation DLL with dlib frontal face detector + OpenCV DNN configuration.' >> dist_optimal/README.md
           echo '' >> dist_optimal/README.md
           echo '## Benefits' >> dist_optimal/README.md
-          echo '- High accuracy face detection (dlib frontal detector)' >> dist_optimal/README.md
-          echo '- Fast processing (OpenCV DNN)' >> dist_optimal/README.md
-          echo '- Reduced package size (~100MB smaller)' >> dist_optimal/README.md
-          echo '- Faster initialization' >> dist_optimal/README.md
-          echo '- Lower memory footprint' >> dist_optimal/README.md
-          echo '- Best balance of accuracy and performance' >> dist_optimal/README.md
-          echo '- Individual OpenCV DLLs for better compatibility' >> dist_optimal/README.md
+          echo "- High accuracy face detection (dlib frontal detector)" >> dist_optimal/README.md
+          echo "- Fast processing (OpenCV DNN)" >> dist_optimal/README.md
+          echo "- Reduced package size (~100MB smaller)" >> dist_optimal/README.md
+          echo "- Faster initialization" >> dist_optimal/README.md
+          echo "- Lower memory footprint" >> dist_optimal/README.md
+          echo "- Best balance of accuracy and performance" >> dist_optimal/README.md
+          echo "- Individual OpenCV DLLs for better compatibility" >> dist_optimal/README.md
           echo '' >> dist_optimal/README.md
           echo '## Files' >> dist_optimal/README.md
           echo '- BloodPressureDLL.dll - Main blood pressure estimation DLL' >> dist_optimal/README.md
