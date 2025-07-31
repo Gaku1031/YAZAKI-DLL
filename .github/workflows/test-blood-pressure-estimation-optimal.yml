@@ -130,6 +130,7 @@ jobs:
           echo 'using System.Diagnostics;' >> Program.cs
           echo 'using System.IO;' >> Program.cs
           echo 'using System.Text;' >> Program.cs
+          echo 'using System.Threading;' >> Program.cs
           echo '' >> Program.cs
           echo 'namespace BloodPressureTestOptimal' >> Program.cs
           echo '{' >> Program.cs
