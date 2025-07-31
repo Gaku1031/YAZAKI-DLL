@@ -72,6 +72,99 @@ jobs:
           .\vcpkg\vcpkg install zlib:x64-windows
         shell: powershell
 
+      - name: Install OpenCV (Pre-built)
+        run: |
+          Write-Host "Installing OpenCV from pre-built binaries..." -ForegroundColor Yellow
+          $opencvVersion = "4.8.0"
+          $opencvUrl = "https://github.com/opencv/opencv/releases/download/$opencvVersion/opencv-$opencvVersion-windows.exe"
+          $opencvExe = "opencv-$opencvVersion-windows.exe"
+          $opencvDir = "${{ github.workspace }}/opencv"
+          Write-Host "Downloading OpenCV v$opencvVersion..." -ForegroundColor Yellow
+          Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvExe
+          Write-Host "Extracting OpenCV with 7-Zip..." -ForegroundColor Yellow
+          $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
+          $sevenZipExe = "7z-installer.exe"
+          Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe
+          Start-Process -FilePath $sevenZipExe -ArgumentList "/S" -Wait -NoNewWindow
+          $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
+          if (Test-Path $sevenZipPath) {
+            & "$sevenZipPath" x $opencvExe "-o$opencvDir" -y
+          } else {
+            Write-Host "Error: Could not extract OpenCV (7-Zip not found)" -ForegroundColor Red
+            exit 1
+          }
+          $buildPath1 = "$opencvDir/build"
+          $buildPath2 = "$opencvDir/opencv/build"
+          if (Test-Path $buildPath1) {
+            $buildPath = $buildPath1
+          } elseif (Test-Path $buildPath2) {
+            $buildPath = $buildPath2
+          } else {
+            $buildPath = $null
+          }
+          if ($buildPath) {
+            Write-Host "OpenCV extracted successfully" -ForegroundColor Green
+          } else {
+            Write-Host "Error: OpenCV build directory not found after extraction" -ForegroundColor Red
+            exit 1
+          }
+          $env:OpenCV_DIR = $buildPath
+          echo "OpenCV_DIR=${buildPath}" >> $env:GITHUB_ENV
+          Write-Host "OpenCV installed successfully at: ${buildPath}" -ForegroundColor Green
+        shell: powershell
+
+      - name: Install ONNX Runtime
+        run: |
+          # Download and install ONNX Runtime
+          $onnxVersion = "1.22.1"
+          $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
+          $onnxZip = "onnxruntime.zip"
+          $onnxDir = "${{ github.workspace }}/onnxruntime"
+
+          Write-Host "Downloading ONNX Runtime v$onnxVersion..." -ForegroundColor Yellow
+          Invoke-WebRequest -Uri $onnxUrl -OutFile $onnxZip
+
+          Write-Host "Extracting ONNX Runtime..." -ForegroundColor Yellow
+          Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
+        shell: powershell
+
+      - name: Build BloodPressureDLL
+        run: |
+          cd CppBloodPressureDLL
+
+          # Configure CMake
+          Write-Host "Configuring CMake..." -ForegroundColor Yellow
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1" `
+            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
+            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib" `
+            -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+
+          # Build DLL
+          Write-Host "Building BloodPressureDLL..." -ForegroundColor Yellow
+          cmake --build build --config Release --parallel
+
+          # Check if DLL was built successfully
+          $dllPath = "build/bin/Release/BloodPressureDLL.dll"
+          if (!(Test-Path $dllPath)) {
+            $dllPath = "build/lib/Release/BloodPressureDLL.dll"
+          }
+
+          if (Test-Path $dllPath) {
+            $size = [math]::Round((Get-Item $dllPath).Length / 1MB, 2)
+            Write-Host "DLL built successfully: $dllPath ($size MB)" -ForegroundColor Green
+            
+            # Copy DLL to package directory
+            Copy-Item $dllPath "package/" -Force
+            Write-Host "DLL copied to package directory" -ForegroundColor Green
+          } else {
+            Write-Host "DLL build failed" -ForegroundColor Red
+            exit 1
+          }
+        shell: powershell
+
       - name: Verify downloaded files
         run: |
           Write-Host "Verifying downloaded files for optimal configuration..." -ForegroundColor Yellow
@@ -289,7 +382,7 @@ jobs:
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                // Check if DLL files exist' >> Program.cs
-          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll", "zlib.dll", "abseil_dll.dll", "jpeg62.dll", "libgcc_s_seh-1.dll", "libgfortran-5.dll", "liblapack.dll", "liblzma.dll", "libpng16.dll", "libprotobuf.dll", "libquadmath-0.dll", "libsharpyuv.dll", "libwebp.dll", "libwebpdecoder.dll", "libwebpdemux.dll", "libwebpmux.dll", "libwinpthread-1.dll", "openblas.dll", "tiff.dll", "zlib1.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll" };' >> Program.cs
+          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll", "zlib.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll" };' >> Program.cs
           echo '                Console.WriteLine("Checking DLL files:");' >> Program.cs
           echo '                foreach (var dll in dllFiles)' >> Program.cs
           echo '                {' >> Program.cs
@@ -485,35 +578,17 @@ jobs:
           echo '        static void CopyRequiredFiles()' >> Program.cs
           echo '        {' >> Program.cs
           echo '            Console.WriteLine("Copying required files...");' >> Program.cs
-          echo '            // Copy all required DLLs from package directory' >> Program.cs
+          echo '            // Copy built DLL and dependencies' >> Program.cs
           echo '            var files = new[]' >> Program.cs
           echo '            {' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/BloodPressureDLL.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_core4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_dnn4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_imgcodecs4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_imgproc4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/opencv_objdetect4.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/onnxruntime.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/zlib.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/abseil_dll.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/jpeg62.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libgcc_s_seh-1.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libgfortran-5.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/liblapack.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/liblzma.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libpng16.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libprotobuf.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libquadmath-0.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libsharpyuv.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libwebp.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libwebpdecoder.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libwebpdemux.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libwebpmux.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/libwinpthread-1.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/openblas.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/tiff.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/zlib1.dll",' >> Program.cs
+          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_core4.dll",' >> Program.cs
+          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_dnn4.dll",' >> Program.cs
+          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_imgcodecs4.dll",' >> Program.cs
+          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_imgproc4.dll",' >> Program.cs
+          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_objdetect4.dll",' >> Program.cs
+          echo '                "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll",' >> Program.cs
+          echo '                "../vcpkg/installed/x64-windows/bin/zlib.dll",' >> Program.cs
           echo '                "C:\\Windows\\System32\\msvcp140.dll",' >> Program.cs
           echo '                "C:\\Windows\\System32\\vcruntime140.dll",' >> Program.cs
           echo '                "C:\\Windows\\System32\\vcruntime140_1.dll"' >> Program.cs
@@ -608,63 +683,50 @@ jobs:
         run: |
           Write-Host "Copying all required DLLs from package directory..." -ForegroundColor Yellow
 
-          # Copy all required DLLs from CppBloodPressureDLL/package directory
-          $packageDlls = @(
-            "CppBloodPressureDLL/package/BloodPressureDLL.dll",
-            "CppBloodPressureDLL/package/opencv_core4.dll",
-            "CppBloodPressureDLL/package/opencv_dnn4.dll", 
-            "CppBloodPressureDLL/package/opencv_imgcodecs4.dll",
-            "CppBloodPressureDLL/package/opencv_imgproc4.dll",
-            "CppBloodPressureDLL/package/opencv_objdetect4.dll",
-            "CppBloodPressureDLL/package/onnxruntime.dll",
-            "CppBloodPressureDLL/package/zlib.dll",
-            "CppBloodPressureDLL/package/abseil_dll.dll",
-            "CppBloodPressureDLL/package/jpeg62.dll",
-            "CppBloodPressureDLL/package/libgcc_s_seh-1.dll",
-            "CppBloodPressureDLL/package/libgfortran-5.dll",
-            "CppBloodPressureDLL/package/liblapack.dll",
-            "CppBloodPressureDLL/package/liblzma.dll",
-            "CppBloodPressureDLL/package/libpng16.dll",
-            "CppBloodPressureDLL/package/libprotobuf.dll",
-            "CppBloodPressureDLL/package/libquadmath-0.dll",
-            "CppBloodPressureDLL/package/libsharpyuv.dll",
-            "CppBloodPressureDLL/package/libwebp.dll",
-            "CppBloodPressureDLL/package/libwebpdecoder.dll",
-            "CppBloodPressureDLL/package/libwebpdemux.dll",
-            "CppBloodPressureDLL/package/libwebpmux.dll",
-            "CppBloodPressureDLL/package/libwinpthread-1.dll",
-            "CppBloodPressureDLL/package/openblas.dll",
-            "CppBloodPressureDLL/package/tiff.dll",
-            "CppBloodPressureDLL/package/zlib1.dll"
+          # Copy built DLL from CppBloodPressureDLL/package directory
+          $builtDll = "CppBloodPressureDLL/package/BloodPressureDLL.dll"
+          if (Test-Path $builtDll) {
+            Copy-Item $builtDll "test_bp_estimation_optimal/" -Force
+            $size = [math]::Round((Get-Item $builtDll).Length / 1MB, 2)
+            Write-Host "Copied built DLL: BloodPressureDLL.dll ($size MB)" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: Built DLL not found at $builtDll" -ForegroundColor Red
+            exit 1
+          }
+
+          # Copy OpenCV runtime DLL from OpenCV installation
+          Write-Host "Copying OpenCV runtime DLL..." -ForegroundColor Yellow
+          $opencvDlls = @(
+            "opencv_core4.dll",
+            "opencv_dnn4.dll", 
+            "opencv_imgcodecs4.dll",
+            "opencv_imgproc4.dll",
+            "opencv_objdetect4.dll"
           )
 
-          Write-Host "Checking source files..." -ForegroundColor Yellow
-          foreach ($dll in $packageDlls) {
-            if (Test-Path $dll) {
-              $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
-              Write-Host "  Found: $dll ($size MB)" -ForegroundColor Green
+          foreach ($dllName in $opencvDlls) {
+            $opencvDll = Get-ChildItem -Path "opencv" -Recurse -Filter $dllName | Select-Object -First 1
+            if ($opencvDll) {
+              Copy-Item $opencvDll.FullName "test_bp_estimation_optimal/" -Force
+              $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
+              Write-Host "Copied OpenCV DLL: $dllName ($size MB)" -ForegroundColor Green
             } else {
-              Write-Host "  ERROR: $dll not found" -ForegroundColor Red
+              Write-Host "WARNING: OpenCV DLL not found: $dllName" -ForegroundColor Yellow
             }
           }
 
-          Write-Host "Copying DLLs to test directory..." -ForegroundColor Yellow
-          foreach ($dll in $packageDlls) {
-            if (Test-Path $dll) {
-              try {
-                Copy-Item $dll "test_bp_estimation_optimal/" -Force
-                $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
-                Write-Host "  Copied: $(Split-Path $dll -Leaf) ($size MB)" -ForegroundColor Green
-              } catch {
-                $errorMsg = $_.Exception.Message
-                Write-Host "  ERROR copying $dll - $errorMsg" -ForegroundColor Red
-              }
-            } else {
-              Write-Host "  WARNING: $dll not found in package directory" -ForegroundColor Yellow
-            }
+          # Copy ONNX Runtime DLL
+          Write-Host "Copying ONNX Runtime DLL..." -ForegroundColor Yellow
+          $onnxDll = "onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
+          if (Test-Path $onnxDll) {
+            Copy-Item $onnxDll "test_bp_estimation_optimal/" -Force
+            $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
+            Write-Host "Copied ONNX Runtime DLL: onnxruntime.dll ($size MB)" -ForegroundColor Green
+          } else {
+            Write-Host "WARNING: ONNX Runtime DLL not found" -ForegroundColor Yellow
           }
 
-          # Copy ZLIB from vcpkg if available
+          # Copy ZLIB from vcpkg
           Write-Host "Copying ZLIB from vcpkg..." -ForegroundColor Yellow
           $zlibPaths = @(
             "vcpkg/installed/x64-windows/bin/zlib.dll",
@@ -675,13 +737,13 @@ jobs:
             if (Test-Path $path) {
               Copy-Item $path "test_bp_estimation_optimal/" -Force
               $size = [math]::Round((Get-Item $path).Length / 1KB, 2)
-              Write-Host "  Copied ZLIB from vcpkg: $(Split-Path $path -Leaf) ($size KB)" -ForegroundColor Green
+              Write-Host "Copied ZLIB from vcpkg: $(Split-Path $path -Leaf) ($size KB)" -ForegroundColor Green
               $zlibFound = $true
               break
             }
           }
           if (-not $zlibFound) {
-            Write-Host "  WARNING: ZLIB not found in vcpkg" -ForegroundColor Yellow
+            Write-Host "WARNING: ZLIB not found in vcpkg" -ForegroundColor Yellow
           }
 
           # Copy Visual C++ Runtime files if available
@@ -692,9 +754,9 @@ jobs:
             if (Test-Path $systemPath) {
               Copy-Item $systemPath "test_bp_estimation_optimal/" -Force
               $size = [math]::Round((Get-Item $systemPath).Length / 1KB, 2)
-              Write-Host "  Copied: $file ($size KB)" -ForegroundColor Green
+              Write-Host "Copied: $file ($size KB)" -ForegroundColor Green
             } else {
-              Write-Host "  WARNING: $file not found in System32" -ForegroundColor Yellow
+              Write-Host "WARNING: $file not found in System32" -ForegroundColor Yellow
             }
           }
 
@@ -702,12 +764,14 @@ jobs:
           Write-Host "Verifying copied DLLs..." -ForegroundColor Yellow
           $dllNames = @(
             "BloodPressureDLL.dll",
-            "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll",
-            "onnxruntime.dll", "zlib.dll",
-            "abseil_dll.dll", "jpeg62.dll", "libgcc_s_seh-1.dll", "libgfortran-5.dll", "liblapack.dll",
-            "liblzma.dll", "libpng16.dll", "libprotobuf.dll", "libquadmath-0.dll", "libsharpyuv.dll",
-            "libwebp.dll", "libwebpdecoder.dll", "libwebpdemux.dll", "libwebpmux.dll", "libwinpthread-1.dll",
-            "openblas.dll", "tiff.dll", "zlib1.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"
+            "opencv_core4.dll",
+            "opencv_dnn4.dll",
+            "opencv_imgcodecs4.dll",
+            "opencv_imgproc4.dll",
+            "opencv_objdetect4.dll",
+            "onnxruntime.dll",
+            "zlib.dll",
+            "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"
           )
 
           $missingFiles = @()
