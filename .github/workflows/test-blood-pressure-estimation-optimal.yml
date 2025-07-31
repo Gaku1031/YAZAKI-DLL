@@ -757,7 +757,7 @@ jobs:
             $testPath = "test_bp_estimation_optimal/$dll"
             if (Test-Path $testPath) {
               $arch = Get-DllBitness $testPath
-              Write-Host "  $dll: $arch" -ForegroundColor Cyan
+              Write-Host "  $dll - $arch" -ForegroundColor Cyan
               $architectures += $arch
             }
           }
