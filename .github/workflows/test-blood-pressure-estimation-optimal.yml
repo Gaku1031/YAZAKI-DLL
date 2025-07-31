@@ -75,45 +75,38 @@ jobs:
           .\vcpkg\vcpkg install dlib:x64-windows
         shell: powershell
 
-      - name: Install OpenCV (Pre-built)
+      - name: Install OpenCV via vcpkg
         run: |
-          Write-Host "Installing OpenCV from pre-built binaries..." -ForegroundColor Yellow
-          $opencvVersion = "4.8.0"
-          $opencvUrl = "https://github.com/opencv/opencv/releases/download/$opencvVersion/opencv-$opencvVersion-windows.exe"
-          $opencvExe = "opencv-$opencvVersion-windows.exe"
-          $opencvDir = "${{ github.workspace }}/opencv"
-          Write-Host "Downloading OpenCV v$opencvVersion..." -ForegroundColor Yellow
-          Invoke-WebRequest -Uri $opencvUrl -OutFile $opencvExe
-          Write-Host "Extracting OpenCV with 7-Zip..." -ForegroundColor Yellow
-          $sevenZipUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
-          $sevenZipExe = "7z-installer.exe"
-          Invoke-WebRequest -Uri $sevenZipUrl -OutFile $sevenZipExe
-          Start-Process -FilePath $sevenZipExe -ArgumentList "/S" -Wait -NoNewWindow
-          $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
-          if (Test-Path $sevenZipPath) {
-            & "$sevenZipPath" x $opencvExe "-o$opencvDir" -y
+          Write-Host "Installing OpenCV via vcpkg..." -ForegroundColor Yellow
+
+          # vcpkgでOpenCVをインストール
+          .\vcpkg\vcpkg install opencv4:x64-windows
+          .\vcpkg\vcpkg install opencv4[contrib]:x64-windows
+          .\vcpkg\vcpkg install opencv4[dnn]:x64-windows
+
+          # OpenCVのインストールを確認
+          if (Test-Path "vcpkg/installed/x64-windows/share/opencv4") {
+            Write-Host "OpenCV installed successfully via vcpkg" -ForegroundColor Green
+            Write-Host "OpenCV directory contents:" -ForegroundColor Yellow
+            Get-ChildItem "vcpkg/installed/x64-windows/share/opencv4" -Name
+            
+            # OpenCV DLLの存在を確認
+            Write-Host "Checking for OpenCV DLLs..." -ForegroundColor Yellow
+            $opencvDlls = Get-ChildItem "vcpkg/installed/x64-windows" -Recurse -Filter "*.dll" | Where-Object { $_.Name -like "*opencv*" }
+            if ($opencvDlls) {
+              Write-Host "Found OpenCV DLLs:" -ForegroundColor Green
+              $opencvDlls | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+            } else {
+              Write-Host "No OpenCV DLLs found - might be static build" -ForegroundColor Yellow
+            }
           } else {
-            Write-Host "Error: Could not extract OpenCV (7-Zip not found)" -ForegroundColor Red
+            Write-Host "OpenCV installation failed" -ForegroundColor Red
             exit 1
           }
-          $buildPath1 = "$opencvDir/build"
-          $buildPath2 = "$opencvDir/opencv/build"
-          if (Test-Path $buildPath1) {
-            $buildPath = $buildPath1
-          } elseif (Test-Path $buildPath2) {
-            $buildPath = $buildPath2
-          } else {
-            $buildPath = $null
-          }
-          if ($buildPath) {
-            Write-Host "OpenCV extracted successfully" -ForegroundColor Green
-          } else {
-            Write-Host "Error: OpenCV build directory not found after extraction" -ForegroundColor Red
-            exit 1
-          }
-          $env:OpenCV_DIR = $buildPath
-          echo "OpenCV_DIR=${buildPath}" >> $env:GITHUB_ENV
-          Write-Host "OpenCV installed successfully at: ${buildPath}" -ForegroundColor Green
+
+          $env:OpenCV_DIR = "${{ github.workspace }}/vcpkg/installed/x64-windows/share/opencv4"
+          echo "OpenCV_DIR=$env:OpenCV_DIR" >> $env:GITHUB_ENV
+          Write-Host "OpenCV_DIR set to: $env:OpenCV_DIR" -ForegroundColor Green
         shell: powershell
 
       - name: Install ONNX Runtime
@@ -230,7 +223,8 @@ jobs:
             -DONNXRUNTIME_INCLUDE_DIRS="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/include" `
             -DONNXRUNTIME_LIBRARIES="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.lib" `
             -DUSE_INDIVIDUAL_OPENCV_LIBS=ON `
-            -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON
+            -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON `
+            -DOpenCV_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/opencv4"
 
           # Build DLL
           Write-Host "Building BloodPressureDLL..." -ForegroundColor Yellow
@@ -289,7 +283,7 @@ jobs:
             
             # If not found in OpenCV paths, try recursive search
             if (-not $dllFound) {
-              $opencvDll = Get-ChildItem -Path "../opencv" -Recurse -Filter $dllName | Select-Object -First 1
+              $opencvDll = Get-ChildItem -Path "../vcpkg" -Recurse -Filter $dllName | Select-Object -First 1
               if ($opencvDll) {
                 Copy-Item $opencvDll.FullName "package/" -Force
                 $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
@@ -961,10 +955,10 @@ jobs:
 
           # Try multiple possible OpenCV paths
           $opencvPaths = @(
-            "opencv/opencv/build/x64/vc16/bin",
-            "opencv/build/x64/vc16/bin",
-            "opencv/opencv/build/x64/vc16/lib",
-            "opencv/build/x64/vc16/lib"
+            "vcpkg/installed/x64-windows/bin",
+            "vcpkg/installed/x64-windows/debug/bin",
+            "vcpkg/installed/x64-windows/lib",
+            "vcpkg/installed/x64-windows/debug/lib"
           )
 
           foreach ($dllName in $opencvDlls) {
