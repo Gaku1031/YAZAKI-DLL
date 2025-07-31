@@ -137,11 +137,34 @@ jobs:
 
           # Configure CMake
           Write-Host "Configuring CMake..." -ForegroundColor Yellow
+          $env:ONNXRUNTIME_ROOT = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1"
+          $env:ONNXRUNTIME_INCLUDE_DIRS = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
+          $env:ONNXRUNTIME_LIBRARIES = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib"
+
+          # Verify ONNX Runtime files exist
+          Write-Host "Verifying ONNX Runtime files..." -ForegroundColor Yellow
+          $onnxIncludeDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
+          $onnxLibDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib"
+
+          if (Test-Path "$onnxIncludeDir/onnxruntime_cxx_api.h") {
+            Write-Host "ONNX Runtime header found: onnxruntime_cxx_api.h" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: ONNX Runtime header not found at: $onnxIncludeDir/onnxruntime_cxx_api.h" -ForegroundColor Red
+            exit 1
+          }
+
+          if (Test-Path "$onnxLibDir/onnxruntime.lib") {
+            Write-Host "ONNX Runtime library found: onnxruntime.lib" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: ONNX Runtime library not found at: $onnxLibDir/onnxruntime.lib" -ForegroundColor Red
+            exit 1
+          }
+
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
             -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1" `
-            -DONNXRUNTIME_INCLUDE_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
-            -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib" `
+            -DONNXRUNTIME_INCLUDE_DIRS="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
+            -DONNXRUNTIME_LIBRARIES="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
             -DProtobuf_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/protobuf" `
             -DEigen3_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/eigen3" `
