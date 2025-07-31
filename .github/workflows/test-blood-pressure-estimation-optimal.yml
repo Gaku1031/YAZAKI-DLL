@@ -118,8 +118,8 @@ jobs:
 
       - name: Install ONNX Runtime
         run: |
-          # Download and install ONNX Runtime
-          $onnxVersion = "1.22.1"
+          # Download and install ONNX Runtime (matching build-optimized-sub.yml version)
+          $onnxVersion = "1.15.1"
           $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
           $onnxZip = "onnxruntime.zip"
           $onnxDir = "${{ github.workspace }}/onnxruntime"
@@ -131,20 +131,82 @@ jobs:
           Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
         shell: powershell
 
+      - name: Download OpenCV DNN face detection models
+        run: |
+          Write-Host "Downloading OpenCV DNN face detection models..." -ForegroundColor Yellow
+
+          # Create models directory if it doesn't exist
+          if (!(Test-Path "CppBloodPressureDLL/models")) {
+            New-Item -ItemType Directory -Path "CppBloodPressureDLL/models" -Force
+          }
+
+          # OpenCV DNN face detection models (much smaller than dlib shape predictor)
+          $models = @{
+            "opencv_face_detector_uint8.pb" = "https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
+            "opencv_face_detector.pbtxt" = "https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt"
+          }
+
+          foreach ($model in $models.GetEnumerator()) {
+            $fileName = $model.Key
+            $url = $model.Value
+            
+            try {
+              Write-Host "Downloading $fileName from $url" -ForegroundColor Yellow
+              Invoke-WebRequest -Uri $url -OutFile "CppBloodPressureDLL/models/$fileName" -TimeoutSec 300
+              
+              # ファイルサイズをチェック
+              $fileSize = (Get-Item "CppBloodPressureDLL/models/$fileName").Length
+              Write-Host "Downloaded $fileName, size: $fileSize bytes" -ForegroundColor Green
+              
+            } catch {
+              Write-Host "Failed to download $fileName from $url" -ForegroundColor Red
+              Write-Host "Trying alternative source..." -ForegroundColor Yellow
+              
+              # 代替URLを試行
+              $alternativeUrls = @(
+                "https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/$fileName",
+                "https://github.com/opencv/opencv/raw/master/samples/dnn/face_detector/$fileName"
+              )
+              
+              $success = $false
+              foreach ($altUrl in $alternativeUrls) {
+                try {
+                  Invoke-WebRequest -Uri $altUrl -OutFile "CppBloodPressureDLL/models/$fileName" -TimeoutSec 300
+                  $fileSize = (Get-Item "CppBloodPressureDLL/models/$fileName").Length
+                  Write-Host "Downloaded $fileName from alternative source, size: $fileSize bytes" -ForegroundColor Green
+                  $success = $true
+                  break
+                } catch {
+                  Write-Host "Failed to download from $altUrl" -ForegroundColor Red
+                }
+              }
+              
+              if (-not $success) {
+                Write-Host "ERROR: Could not download $fileName from any source" -ForegroundColor Red
+                exit 1
+              }
+            }
+          }
+
+          Write-Host "OpenCV DNN face detection models downloaded successfully" -ForegroundColor Green
+          Write-Host "Models directory contents:" -ForegroundColor Yellow
+          Get-ChildItem "CppBloodPressureDLL/models/" | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" -ForegroundColor Cyan }
+        shell: powershell
+
       - name: Build BloodPressureDLL
         run: |
           cd CppBloodPressureDLL
 
           # Configure CMake
           Write-Host "Configuring CMake..." -ForegroundColor Yellow
-          $env:ONNXRUNTIME_ROOT = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1"
-          $env:ONNXRUNTIME_INCLUDE_DIRS = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
-          $env:ONNXRUNTIME_LIBRARIES = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib"
+          $env:ONNXRUNTIME_ROOT = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1"
+          $env:ONNXRUNTIME_INCLUDE_DIRS = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/include"
+          $env:ONNXRUNTIME_LIBRARIES = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.lib"
 
           # Verify ONNX Runtime files exist
           Write-Host "Verifying ONNX Runtime files..." -ForegroundColor Yellow
-          $onnxIncludeDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
-          $onnxLibDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib"
+          $onnxIncludeDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/include"
+          $onnxLibDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/lib"
 
           if (Test-Path "$onnxIncludeDir/onnxruntime_cxx_api.h") {
             Write-Host "ONNX Runtime header found: onnxruntime_cxx_api.h" -ForegroundColor Green
@@ -162,14 +224,13 @@ jobs:
 
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
-            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1" `
-            -DONNXRUNTIME_INCLUDE_DIRS="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
-            -DONNXRUNTIME_LIBRARIES="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib" `
-            -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
-            -DProtobuf_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/protobuf" `
-            -DEigen3_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/eigen3" `
-            -Ddlib_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/dlib" `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1" `
+            -DONNXRUNTIME_INCLUDE_DIRS="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/include" `
+            -DONNXRUNTIME_LIBRARIES="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.lib" `
+            -DUSE_INDIVIDUAL_OPENCV_LIBS=ON `
+            -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON
 
           # Build DLL
           Write-Host "Building BloodPressureDLL..." -ForegroundColor Yellow
@@ -242,7 +303,7 @@ jobs:
 
           # Copy ONNX Runtime DLL to package directory
           Write-Host "Copying ONNX Runtime DLL to package directory..." -ForegroundColor Yellow
-          $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
+          $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.dll"
           if (Test-Path $onnxDll) {
             Copy-Item $onnxDll "package/" -Force
             $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
@@ -956,7 +1017,7 @@ jobs:
 
           # Copy ONNX Runtime DLL
           Write-Host "Copying ONNX Runtime DLL..." -ForegroundColor Yellow
-          $onnxDll = "onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
+          $onnxDll = "onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.dll"
           if (Test-Path $onnxDll) {
             Copy-Item $onnxDll "test_bp_estimation_optimal/" -Force
             $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
