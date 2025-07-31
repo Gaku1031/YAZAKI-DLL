@@ -751,11 +751,60 @@ jobs:
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
-          echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
+          echo '                // Test with different buffer sizes' >> Program.cs
+          echo '                Console.WriteLine("Testing with different buffer sizes...");' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var smallBuf = new StringBuilder(64);' >> Program.cs
+          echo '                    var smallResult = BloodPressureEstimator.GetVersionInfo(smallBuf, smallBuf.Capacity);' >> Program.cs
+          echo '                    Console.WriteLine($"Small buffer test result: {smallResult}");' >> Program.cs
+          echo '                    Console.WriteLine($"Small buffer output: {smallBuf}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"Small buffer test failed: {ex.Message}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // Test GenerateRequestId before InitializeBP' >> Program.cs
+          echo '                Console.WriteLine("Testing GenerateRequestId before InitializeBP...");' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var requestIdBuf = new StringBuilder(256);' >> Program.cs
+          echo '                    var requestResult = BloodPressureEstimator.GenerateRequestId(requestIdBuf, requestIdBuf.Capacity);' >> Program.cs
+          echo '                    Console.WriteLine($"GenerateRequestId test result: {requestResult}");' >> Program.cs
+          echo '                    Console.WriteLine($"Request ID: {requestIdBuf}");' >> Program.cs
+          echo '                    Console.WriteLine("GenerateRequestId test successful");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (AccessViolationException ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"CRITICAL ERROR: AccessViolationException in GenerateRequestId: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine("DLL function call failed");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: GenerateRequestId failed: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine($"Exception type: {ex.GetType().Name}");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // InitializeBP with improved memory management' >> Program.cs
+          echo '                Console.WriteLine("Attempting InitializeBP with improved memory management...");' >> Program.cs
+          echo '                var outBuf = new StringBuilder(2048); // Increased buffer size' >> Program.cs
           echo '                int result = 0;' >> Program.cs
           echo '                try' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, modelDir);' >> Program.cs
+          echo '                    // Ensure model directory path is absolute and exists' >> Program.cs
+          echo '                    var absoluteModelDir = Path.GetFullPath(modelDir);' >> Program.cs
+          echo '                    Console.WriteLine($"Using absolute model directory: {absoluteModelDir}");' >> Program.cs
+          echo '                    Console.WriteLine($"Model directory exists: {Directory.Exists(absoluteModelDir)}");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    // Clear buffer before use' >> Program.cs
+          echo '                    outBuf.Clear();' >> Program.cs
+          echo '                    outBuf.Capacity = 2048;' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    // Call InitializeBP with proper error handling' >> Program.cs
+          echo '                    result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
           echo '                    Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
           echo '                    Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
           echo '                }' >> Program.cs
@@ -768,6 +817,7 @@ jobs:
           echo '                    Console.WriteLine("2. Missing or incompatible dependencies");' >> Program.cs
           echo '                    Console.WriteLine("3. ONNX Runtime version mismatch");' >> Program.cs
           echo '                    Console.WriteLine("4. OpenCV DLL version mismatch");' >> Program.cs
+          echo '                    Console.WriteLine("5. Model files not found or corrupted");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
           echo '                catch (BadImageFormatException ex)' >> Program.cs
@@ -1309,6 +1359,30 @@ jobs:
               Write-Host "  Found: $dll ($size MB)" -ForegroundColor Green
             } else {
               Write-Host "  ERROR: $dll not found" -ForegroundColor Red
+            }
+          }
+
+          # Check for additional dependencies that might be missing
+          Write-Host "Checking for additional dependencies..." -ForegroundColor Yellow
+          $additionalDlls = @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "zlib.dll")
+          foreach ($dll in $additionalDlls) {
+            if (Test-Path $dll) {
+              $size = [math]::Round((Get-Item $dll).Length / 1KB, 2)
+              Write-Host "  Found: $dll ($size KB)" -ForegroundColor Green
+            } else {
+              Write-Host "  WARNING: $dll not found" -ForegroundColor Yellow
+            }
+          }
+
+          # Check model files
+          Write-Host "Checking model files..." -ForegroundColor Yellow
+          $modelFiles = @("models/diastolicbloodpressure.onnx", "models/systolicbloodpressure.onnx", "models/opencv_face_detector.pbtxt", "models/opencv_face_detector_uint8.pb")
+          foreach ($model in $modelFiles) {
+            if (Test-Path $model) {
+              $size = [math]::Round((Get-Item $model).Length / 1KB, 2)
+              Write-Host "  Found: $model ($size KB)" -ForegroundColor Green
+            } else {
+              Write-Host "  ERROR: $model not found" -ForegroundColor Red
             }
           }
 
