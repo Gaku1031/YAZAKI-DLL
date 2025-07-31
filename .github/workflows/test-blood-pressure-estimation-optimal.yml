@@ -790,7 +790,7 @@ jobs:
           echo '' >> Program.cs
           echo '                // InitializeBP with improved memory management' >> Program.cs
           echo '                Console.WriteLine("Attempting InitializeBP with improved memory management...");' >> Program.cs
-          echo '                var outBuf = new StringBuilder(2048); // Increased buffer size' >> Program.cs
+          echo '                var outBuf = new StringBuilder(4096); // Further increased buffer size' >> Program.cs
           echo '                int result = 0;' >> Program.cs
           echo '                try' >> Program.cs
           echo '                {' >> Program.cs
@@ -799,14 +799,51 @@ jobs:
           echo '                    Console.WriteLine($"Using absolute model directory: {absoluteModelDir}");' >> Program.cs
           echo '                    Console.WriteLine($"Model directory exists: {Directory.Exists(absoluteModelDir)}");' >> Program.cs
           echo '' >> Program.cs
+          echo '                    // Check individual model files' >> Program.cs
+          echo '                    var modelFiles = new[] { "diastolicbloodpressure.onnx", "systolicbloodpressure.onnx", "opencv_face_detector.pbtxt", "opencv_face_detector_uint8.pb" };' >> Program.cs
+          echo '                    var allModelsExist = true;' >> Program.cs
+          echo '                    foreach (var modelFile in modelFiles)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        var modelPath = Path.Combine(absoluteModelDir, modelFile);' >> Program.cs
+          echo '                        var exists = File.Exists(modelPath);' >> Program.cs
+          echo '                        var size = exists ? new FileInfo(modelPath).Length : 0;' >> Program.cs
+          echo '                        Console.WriteLine($"  {modelFile}: {(exists ? "Found" : "NOT FOUND")} ({(size / 1024):F1} KB)");' >> Program.cs
+          echo '                        if (!exists)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            allModelsExist = false;' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    Console.WriteLine($"All model files exist: {allModelsExist}");' >> Program.cs
+          echo '                    if (!allModelsExist)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine("ERROR: Not all model files exist. Cannot proceed with InitializeBP.");' >> Program.cs
+          echo '                        return;' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '' >> Program.cs
           echo '                    // Clear buffer before use' >> Program.cs
           echo '                    outBuf.Clear();' >> Program.cs
-          echo '                    outBuf.Capacity = 2048;' >> Program.cs
+          echo '                    outBuf.Capacity = 4096;' >> Program.cs
+          echo '                    Console.WriteLine($"Buffer cleared and capacity set to: {outBuf.Capacity}");' >> Program.cs
           echo '' >> Program.cs
           echo '                    // Call InitializeBP with proper error handling' >> Program.cs
-          echo '                    result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
-          echo '                    Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
-          echo '                    Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+          echo '                    Console.WriteLine("Calling InitializeBP...");' >> Program.cs
+          echo '                    Console.WriteLine($"Buffer capacity: {outBuf.Capacity}");' >> Program.cs
+          echo '                    Console.WriteLine($"Model directory: {absoluteModelDir}");' >> Program.cs
+          echo '                    Console.WriteLine("About to call InitializeBP...");' >> Program.cs
+          echo '                    Console.WriteLine($"Current working directory: {Directory.GetCurrentDirectory()}");' >> Program.cs
+          echo '                    Console.WriteLine($"Available memory: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+          echo '                    try' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
+          echo '                        Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
+          echo '                        Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    catch (AccessViolationException ex)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"CRITICAL: AccessViolationException during InitializeBP: {ex.Message}");' >> Program.cs
+          echo '                        Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
+          echo '                        throw; // Re-throw to be caught by outer try-catch' >> Program.cs
+          echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
           echo '                catch (AccessViolationException ex)' >> Program.cs
           echo '                {' >> Program.cs
