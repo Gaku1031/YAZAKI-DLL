@@ -769,10 +769,10 @@ jobs:
           echo '                Console.WriteLine("Testing GenerateRequestId before InitializeBP...");' >> Program.cs
           echo '                try' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    var requestIdBuf = new StringBuilder(256);' >> Program.cs
-          echo '                    var requestResult = BloodPressureEstimator.GenerateRequestId(requestIdBuf, requestIdBuf.Capacity);' >> Program.cs
+          echo '                    var testRequestIdBuf = new StringBuilder(256);' >> Program.cs
+          echo '                    var requestResult = BloodPressureEstimator.GenerateRequestId(testRequestIdBuf, testRequestIdBuf.Capacity);' >> Program.cs
           echo '                    Console.WriteLine($"GenerateRequestId test result: {requestResult}");' >> Program.cs
-          echo '                    Console.WriteLine($"Request ID: {requestIdBuf}");' >> Program.cs
+          echo '                    Console.WriteLine($"Request ID: {testRequestIdBuf}");' >> Program.cs
           echo '                    Console.WriteLine("GenerateRequestId test successful");' >> Program.cs
           echo '                }' >> Program.cs
           echo '                catch (AccessViolationException ex)' >> Program.cs
@@ -850,14 +850,14 @@ jobs:
           echo '                Console.WriteLine("Blood pressure estimator initialized successfully");' >> Program.cs
           echo '' >> Program.cs
           echo '                // Generate request ID' >> Program.cs
-          echo '                var requestIdBuf = new StringBuilder(256);' >> Program.cs
-          echo '                result = BloodPressureEstimator.GenerateRequestId(requestIdBuf, requestIdBuf.Capacity);' >> Program.cs
+          echo '                var mainRequestIdBuf = new StringBuilder(256);' >> Program.cs
+          echo '                result = BloodPressureEstimator.GenerateRequestId(mainRequestIdBuf, mainRequestIdBuf.Capacity);' >> Program.cs
           echo '                if (result != 0)' >> Program.cs
           echo '                {' >> Program.cs
           echo '                    Console.WriteLine($"ERROR: GenerateRequestId failed with code {result}");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
-          echo '                currentRequestId = requestIdBuf.ToString();' >> Program.cs
+          echo '                currentRequestId = mainRequestIdBuf.ToString();' >> Program.cs
           echo '                Console.WriteLine($"Generated request ID: {currentRequestId}");' >> Program.cs
           echo '' >> Program.cs
           echo '                // Start blood pressure analysis' >> Program.cs
