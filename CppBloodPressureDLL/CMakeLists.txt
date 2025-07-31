@@ -209,6 +209,12 @@ install(FILES ${HEADERS}
     DESTINATION include
 )
 
-# dlibモデルファイルのコピー
-file(COPY ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat
-     DESTINATION ${CMAKE_BINARY_DIR}/bin) 
+# dlibモデルファイルのコピー（存在する場合のみ）
+if(EXISTS ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat)
+    file(COPY ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat
+         DESTINATION ${CMAKE_BINARY_DIR}/bin)
+    message(STATUS "dlib face landmarks file copied")
+else()
+    message(WARNING "dlib face landmarks file not found: ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat")
+    message(STATUS "This file is optional for dlib face detection")
+endif() 
