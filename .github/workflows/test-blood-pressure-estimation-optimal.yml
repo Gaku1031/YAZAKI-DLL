@@ -1,12 +1,11 @@
 name: Test Blood Pressure Estimation (Optimal - dlib + OpenCV DNN)
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      [main, develop]
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches: [main, develop]
   workflow_dispatch:
     inputs:
       test_video:
@@ -46,7 +45,7 @@ jobs:
       - name: Verify required files exist (Optimal)
         run: |
           Write-Host "Verifying required files for optimal blood pressure estimation test..." -ForegroundColor Yellow
-          
+
           # Check main DLL
           if (!(Test-Path "BloodPressureDLL.dll")) {
             Write-Host "ERROR: BloodPressureDLL.dll not found in root directory" -ForegroundColor Red
@@ -54,7 +53,7 @@ jobs:
           }
           $dllSize = [math]::Round((Get-Item "BloodPressureDLL.dll").Length / 1MB, 2)
           Write-Host "BloodPressureDLL.dll found ($dllSize MB)" -ForegroundColor Green
-          
+
           # Check critical dependency DLLs
           $criticalDlls = @(
             "opencv_core4.dll",
@@ -64,7 +63,7 @@ jobs:
             "opencv_objdetect4.dll",
             "onnxruntime.dll"
           )
-          
+
           foreach ($dll in $criticalDlls) {
             if (Test-Path $dll) {
               $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
@@ -74,7 +73,7 @@ jobs:
               exit 1
             }
           }
-          
+
           # Check model files (OpenCV DNN models)
           $modelFiles = @(
             "CppBloodPressureDLL/models/systolicbloodpressure.onnx",
@@ -82,7 +81,7 @@ jobs:
             "CppBloodPressureDLL/models/opencv_face_detector.pbtxt",
             "CppBloodPressureDLL/models/opencv_face_detector_uint8.pb"
           )
-          
+
           foreach ($model in $modelFiles) {
             if (Test-Path $model) {
               $size = [math]::Round((Get-Item $model).Length / 1MB, 2)
@@ -92,7 +91,7 @@ jobs:
               exit 1
             }
           }
-          
+
           # Check header file
           if (Test-Path "CppBloodPressureDLL/include/BloodPressureDLL.h") {
             Write-Host "BloodPressureDLL.h found" -ForegroundColor Green
@@ -100,25 +99,25 @@ jobs:
             Write-Host "ERROR: BloodPressureDLL.h not found" -ForegroundColor Red
             exit 1
           }
-          
+
           # Note: Optimal configuration
           Write-Host "Optimal configuration verified" -ForegroundColor Green
           Write-Host "  - dlib frontal face detector (built-in, high accuracy)" -ForegroundColor Cyan
           Write-Host "  - OpenCV DNN face detection (fast, GPU-accelerated)" -ForegroundColor Cyan
           Write-Host "  - No shape predictor (~100MB saved)" -ForegroundColor Cyan
           Write-Host "  - Best balance of accuracy and performance" -ForegroundColor Cyan
-          
+
           Write-Host "All required files verified successfully!" -ForegroundColor Green
         shell: powershell
 
       - name: Create optimal test application
         run: |
           Write-Host "Creating optimal blood pressure estimation test application..." -ForegroundColor Yellow
-          
+
           # Create test directory
           New-Item -ItemType Directory -Path "test_bp_estimation_optimal" -Force | Out-Null
           cd test_bp_estimation_optimal
-          
+
           # Create C# test application (optimal version)
           $testCode = @'
           using System;
@@ -397,7 +396,7 @@ jobs:
               }
           }
           '@
-          
+
           # Create project file
           $projectFile = @'
           <Project Sdk="Microsoft.NET.Sdk">
@@ -409,68 +408,162 @@ jobs:
             </PropertyGroup>
           </Project>
           '@
-          
+
           # Write files
           [System.IO.File]::WriteAllText("Program.cs", $testCode)
           [System.IO.File]::WriteAllText("BloodPressureTestOptimal.csproj", $projectFile)
-          
+
           Write-Host "Optimal test application created successfully" -ForegroundColor Green
         shell: powershell
 
       - name: Build optimal test application
         run: |
-          cd test_bp_estimation_optimal
-          dotnet restore
-          dotnet build -c Release
-          
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Failed to build optimal test application" -ForegroundColor Red
+          Write-Host "Building optimal test application..." -ForegroundColor Yellow
+
+          # Check if test directory exists
+          if (!(Test-Path "test_bp_estimation_optimal")) {
+            Write-Host "ERROR: test_bp_estimation_optimal directory not found" -ForegroundColor Red
+            Write-Host "This means the Create optimal test application step failed" -ForegroundColor Red
             exit 1
           }
-          
-          Write-Host "Optimal test application built successfully" -ForegroundColor Green
+
+          # Check if project file exists
+          if (!(Test-Path "test_bp_estimation_optimal/BloodPressureTestOptimal.csproj")) {
+            Write-Host "ERROR: BloodPressureTestOptimal.csproj not found" -ForegroundColor Red
+            Write-Host "This means the project file was not created properly" -ForegroundColor Red
+            exit 1
+          }
+
+          # Check if Program.cs exists
+          if (!(Test-Path "test_bp_estimation_optimal/Program.cs")) {
+            Write-Host "ERROR: Program.cs not found" -ForegroundColor Red
+            Write-Host "This means the source file was not created properly" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "Test directory and files verified, proceeding with build..." -ForegroundColor Green
+
+          cd test_bp_estimation_optimal
+
+          # Show current directory contents
+          Write-Host "Current directory contents:" -ForegroundColor Cyan
+          Get-ChildItem -Name
+
+          # Restore dependencies
+          Write-Host "Restoring dependencies..." -ForegroundColor Yellow
+          dotnet restore
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: Failed to restore dependencies" -ForegroundColor Red
+            exit 1
+          }
+
+          # Build the application
+          Write-Host "Building application..." -ForegroundColor Yellow
+          dotnet build -c Release
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: Failed to build optimal test application" -ForegroundColor Red
+            Write-Host "Build output:" -ForegroundColor Red
+            dotnet build -c Release --verbosity detailed
+            exit 1
+          }
+
+          # Verify build output
+          if (Test-Path "bin/Release/net6.0/BloodPressureTestOptimal.exe") {
+            Write-Host "✓ Optimal test application built successfully" -ForegroundColor Green
+            Write-Host "Executable location: bin/Release/net6.0/BloodPressureTestOptimal.exe" -ForegroundColor Cyan
+          } else {
+            Write-Host "ERROR: Executable not found after build" -ForegroundColor Red
+            Write-Host "Build output directory contents:" -ForegroundColor Red
+            if (Test-Path "bin/Release/net6.0") {
+              Get-ChildItem "bin/Release/net6.0" -Name
+            } else {
+              Write-Host "bin/Release/net6.0 directory does not exist" -ForegroundColor Red
+            }
+            exit 1
+          }
         shell: powershell
 
       - name: Run optimal blood pressure estimation test
         run: |
+          Write-Host "Running optimal blood pressure estimation test..." -ForegroundColor Yellow
+
+          # Check if test directory exists
+          if (!(Test-Path "test_bp_estimation_optimal")) {
+            Write-Host "ERROR: test_bp_estimation_optimal directory not found" -ForegroundColor Red
+            exit 1
+          }
+
+          # Check if executable exists
+          if (!(Test-Path "test_bp_estimation_optimal/bin/Release/net6.0/BloodPressureTestOptimal.exe")) {
+            Write-Host "ERROR: BloodPressureTestOptimal.exe not found" -ForegroundColor Red
+            Write-Host "This means the build step failed" -ForegroundColor Red
+            exit 1
+          }
+
           cd test_bp_estimation_optimal
-          
+
           # Set environment variables
           $env:TEST_VIDEO = "${{ env.TEST_VIDEO }}"
           $env:TEST_DURATION = "${{ env.TEST_DURATION }}"
           $env:PERFORMANCE_MONITORING = "${{ env.PERFORMANCE_MONITORING }}"
-          
+
           # Create results directory
           New-Item -ItemType Directory -Path "results" -Force | Out-Null
-          
-          Write-Host "Running optimal blood pressure estimation test..." -ForegroundColor Yellow
+
           Write-Host "Test video: $env:TEST_VIDEO" -ForegroundColor Cyan
           Write-Host "Test duration: $env:TEST_DURATION seconds" -ForegroundColor Cyan
           Write-Host "Performance monitoring: $env:PERFORMANCE_MONITORING" -ForegroundColor Cyan
-          
+
+          # Check if test video exists
+          $videoPath = Path.Combine("..", "sample-data", $env:TEST_VIDEO)
+          if (!(Test-Path $videoPath)) {
+            Write-Host "ERROR: Test video not found: $videoPath" -ForegroundColor Red
+            Write-Host "Available files in sample-data:" -ForegroundColor Red
+            if (Test-Path "..\sample-data") {
+              Get-ChildItem "..\sample-data" -Name
+            } else {
+              Write-Host "sample-data directory does not exist" -ForegroundColor Red
+            }
+            exit 1
+          }
+
+          Write-Host "Test video found: $videoPath" -ForegroundColor Green
+
           # Run test with output capture
+          Write-Host "Starting blood pressure estimation test..." -ForegroundColor Yellow
           $output = dotnet run -c Release 2>&1
           $exitCode = $LASTEXITCODE
-          
+
           # Save output to file
           $output | Out-File -FilePath "results/optimal_test_output.txt" -Encoding UTF8
-          
+
           # Display output
           Write-Host "=== OPTIMAL TEST OUTPUT ===" -ForegroundColor Green
           $output
-          
+
           if ($exitCode -ne 0) {
             Write-Host "ERROR: Optimal test failed with exit code $exitCode" -ForegroundColor Red
+            Write-Host "Check the output above for error details" -ForegroundColor Red
             exit 1
           }
-          
+
           Write-Host "Optimal test completed successfully" -ForegroundColor Green
         shell: powershell
 
       - name: Analyze optimal test results
         run: |
+          Write-Host "Analyzing optimal test results..." -ForegroundColor Yellow
+
+          # Check if test directory exists
+          if (!(Test-Path "test_bp_estimation_optimal")) {
+            Write-Host "ERROR: test_bp_estimation_optimal directory not found" -ForegroundColor Red
+            exit 1
+          }
+
           cd test_bp_estimation_optimal
-          
+
           if (Test-Path "results/optimal_test_output.txt") {
             Write-Host "=== OPTIMAL TEST RESULTS ANALYSIS ===" -ForegroundColor Green
             
@@ -543,7 +636,15 @@ jobs:
             Write-Host "  Best balance of accuracy and performance" -ForegroundColor Green
             
           } else {
-            Write-Host "ERROR: Optimal test output file not found" -ForegroundColor Red
+            Write-Host "ERROR: optimal_test_output.txt not found" -ForegroundColor Red
+            Write-Host "This means the test execution failed" -ForegroundColor Red
+            Write-Host "Available files in results directory:" -ForegroundColor Red
+            if (Test-Path "results") {
+              Get-ChildItem "results" -Name
+            } else {
+              Write-Host "results directory does not exist" -ForegroundColor Red
+            }
+            exit 1
           }
         shell: powershell
 
@@ -590,4 +691,4 @@ jobs:
           Write-Host "2. Compare with other versions if available" -ForegroundColor Cyan
           Write-Host "3. Deploy optimal version for production use" -ForegroundColor Cyan
           Write-Host "4. Monitor performance in real-world conditions" -ForegroundColor Cyan
-        shell: powershell 
+        shell: powershell
