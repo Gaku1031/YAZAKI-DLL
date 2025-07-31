@@ -44,6 +44,34 @@ jobs:
         with:
           dotnet-version: "6.0.x"
 
+      - name: Install Visual C++ Redistributable
+        run: |
+          Write-Host "Installing Visual C++ Redistributable..." -ForegroundColor Yellow
+
+          # Download and install Visual C++ Redistributable
+          $vcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          $vcRedistPath = "vc_redist.x64.exe"
+
+          try {
+            Invoke-WebRequest -Uri $vcRedistUrl -OutFile $vcRedistPath
+            Write-Host "Downloaded Visual C++ Redistributable" -ForegroundColor Green
+            
+            # Install silently
+            Start-Process -FilePath $vcRedistPath -ArgumentList "/quiet", "/norestart" -Wait
+            Write-Host "Installed Visual C++ Redistributable" -ForegroundColor Green
+          } catch {
+            Write-Host "WARNING: Could not install Visual C++ Redistributable: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "This might be already installed or not required" -ForegroundColor Yellow
+          }
+        shell: powershell
+
+      - name: Install vcpkg and ZLIB
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install zlib:x64-windows
+        shell: powershell
+
       - name: Verify downloaded files
         run: |
           Write-Host "Verifying downloaded files for optimal configuration..." -ForegroundColor Yellow
@@ -261,7 +289,7 @@ jobs:
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                // Check if DLL files exist' >> Program.cs
-          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll", "zlib.dll", "abseil_dll.dll", "jpeg62.dll", "libgcc_s_seh-1.dll", "libgfortran-5.dll", "liblapack.dll", "liblzma.dll", "libpng16.dll", "libprotobuf.dll", "libquadmath-0.dll", "libsharpyuv.dll", "libwebp.dll", "libwebpdecoder.dll", "libwebpdemux.dll", "libwebpmux.dll", "libwinpthread-1.dll", "openblas.dll", "tiff.dll", "zlib1.dll" };' >> Program.cs
+          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll", "zlib.dll", "abseil_dll.dll", "jpeg62.dll", "libgcc_s_seh-1.dll", "libgfortran-5.dll", "liblapack.dll", "liblzma.dll", "libpng16.dll", "libprotobuf.dll", "libquadmath-0.dll", "libsharpyuv.dll", "libwebp.dll", "libwebpdecoder.dll", "libwebpdemux.dll", "libwebpmux.dll", "libwinpthread-1.dll", "openblas.dll", "tiff.dll", "zlib1.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll" };' >> Program.cs
           echo '                Console.WriteLine("Checking DLL files:");' >> Program.cs
           echo '                foreach (var dll in dllFiles)' >> Program.cs
           echo '                {' >> Program.cs
@@ -309,6 +337,24 @@ jobs:
           echo '                    Console.WriteLine("This is normal if dumpbin is not available in the environment");' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
+          echo '                // Check for missing Visual C++ Runtime' >> Program.cs
+          echo '                Console.WriteLine("Checking for Visual C++ Runtime...");' >> Program.cs
+          echo '                var vcRuntimeFiles = new[] { "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll" };' >> Program.cs
+          echo '                foreach (var file in vcRuntimeFiles)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var exists = File.Exists(file);' >> Program.cs
+          echo '                    Console.WriteLine($"  {file}: {(exists ? "Found" : "NOT FOUND")}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // Check DLL bitness compatibility' >> Program.cs
+          echo '                Console.WriteLine("Checking DLL bitness compatibility...");' >> Program.cs
+          echo '                var criticalDlls = new[] { "BloodPressureDLL.dll", "onnxruntime.dll" };' >> Program.cs
+          echo '                foreach (var dll in criticalDlls)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var exists = File.Exists(dll);' >> Program.cs
+          echo '                    Console.WriteLine($"  {dll}: {(exists ? "Found" : "NOT FOUND")}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
           echo '                // Try to load DLL manually to check for issues' >> Program.cs
           echo '                Console.WriteLine("Attempting to load BloodPressureDLL.dll...");' >> Program.cs
           echo '                try' >> Program.cs
@@ -324,6 +370,20 @@ jobs:
           echo '                    {' >> Program.cs
           echo '                        Console.WriteLine($"Inner exception: {ex.InnerException.Message}");' >> Program.cs
           echo '                    }' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // Test DLL function availability' >> Program.cs
+          echo '                Console.WriteLine("Testing DLL function availability...");' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var testBuf = new StringBuilder(256);' >> Program.cs
+          echo '                    var testResult = BloodPressureEstimator.GetVersionInfo(testBuf, testBuf.Capacity);' >> Program.cs
+          echo '                    Console.WriteLine($"GetVersionInfo test result: {testResult}");' >> Program.cs
+          echo '                    Console.WriteLine($"Version info: {testBuf}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR testing DLL functions: {ex.Message}");' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
@@ -453,7 +513,10 @@ jobs:
           echo '                "../CppBloodPressureDLL/package/libwinpthread-1.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/openblas.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/tiff.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/zlib1.dll"' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/zlib1.dll",' >> Program.cs
+          echo '                "C:\\Windows\\System32\\msvcp140.dll",' >> Program.cs
+          echo '                "C:\\Windows\\System32\\vcruntime140.dll",' >> Program.cs
+          echo '                "C:\\Windows\\System32\\vcruntime140_1.dll"' >> Program.cs
           echo '            };' >> Program.cs
           echo '' >> Program.cs
           echo '            foreach (var file in files)' >> Program.cs
@@ -601,6 +664,40 @@ jobs:
             }
           }
 
+          # Copy ZLIB from vcpkg if available
+          Write-Host "Copying ZLIB from vcpkg..." -ForegroundColor Yellow
+          $zlibPaths = @(
+            "vcpkg/installed/x64-windows/bin/zlib.dll",
+            "vcpkg/installed/x64-windows/debug/bin/zlib.dll"
+          )
+          $zlibFound = $false
+          foreach ($path in $zlibPaths) {
+            if (Test-Path $path) {
+              Copy-Item $path "test_bp_estimation_optimal/" -Force
+              $size = [math]::Round((Get-Item $path).Length / 1KB, 2)
+              Write-Host "  Copied ZLIB from vcpkg: $(Split-Path $path -Leaf) ($size KB)" -ForegroundColor Green
+              $zlibFound = $true
+              break
+            }
+          }
+          if (-not $zlibFound) {
+            Write-Host "  WARNING: ZLIB not found in vcpkg" -ForegroundColor Yellow
+          }
+
+          # Copy Visual C++ Runtime files if available
+          Write-Host "Checking for Visual C++ Runtime files..." -ForegroundColor Yellow
+          $vcRuntimeFiles = @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+          foreach ($file in $vcRuntimeFiles) {
+            $systemPath = "C:\Windows\System32\$file"
+            if (Test-Path $systemPath) {
+              Copy-Item $systemPath "test_bp_estimation_optimal/" -Force
+              $size = [math]::Round((Get-Item $systemPath).Length / 1KB, 2)
+              Write-Host "  Copied: $file ($size KB)" -ForegroundColor Green
+            } else {
+              Write-Host "  WARNING: $file not found in System32" -ForegroundColor Yellow
+            }
+          }
+
           # Verify copied files
           Write-Host "Verifying copied DLLs..." -ForegroundColor Yellow
           $dllNames = @(
@@ -610,7 +707,7 @@ jobs:
             "abseil_dll.dll", "jpeg62.dll", "libgcc_s_seh-1.dll", "libgfortran-5.dll", "liblapack.dll",
             "liblzma.dll", "libpng16.dll", "libprotobuf.dll", "libquadmath-0.dll", "libsharpyuv.dll",
             "libwebp.dll", "libwebpdecoder.dll", "libwebpdemux.dll", "libwebpmux.dll", "libwinpthread-1.dll",
-            "openblas.dll", "tiff.dll", "zlib1.dll"
+            "openblas.dll", "tiff.dll", "zlib1.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"
           )
 
           $missingFiles = @()
@@ -636,6 +733,40 @@ jobs:
           Get-ChildItem "test_bp_estimation_optimal/*.dll" | ForEach-Object {
             Write-Host "  $($_.Name): $($_.Length) bytes, ReadOnly: $($_.IsReadOnly)" -ForegroundColor Cyan
           }
+
+          # Check DLL bitness compatibility
+          Write-Host "Checking DLL bitness compatibility..." -ForegroundColor Yellow
+          function Get-DllBitness($dllPath) {
+            if (!(Test-Path $dllPath)) { return "Not found" }
+            $bytes = [System.IO.File]::ReadAllBytes($dllPath)
+            if ($bytes.Length -lt 64) { return "Unknown" }
+            $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+            if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length) { return "Unknown" }
+            if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset+1] -ne 0x45) { return "Unknown" }
+            $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+            switch ($machine) {
+              0x8664 { return "x64" }
+              0x14c  { return "x86" }
+              default { return "Unknown(0x$([Convert]::ToString($machine,16)))" }
+            }
+          }
+
+          $criticalDlls = @("BloodPressureDLL.dll", "onnxruntime.dll")
+          $architectures = @()
+          foreach ($dll in $criticalDlls) {
+            $testPath = "test_bp_estimation_optimal/$dll"
+            if (Test-Path $testPath) {
+              $arch = Get-DllBitness $testPath
+              Write-Host "  $dll: $arch" -ForegroundColor Cyan
+              $architectures += $arch
+            }
+          }
+
+          if ($architectures.Count -gt 1 -and ($architectures | Select-Object -Unique).Count -gt 1) {
+            Write-Host "WARNING: DLL architecture mismatch detected!" -ForegroundColor Red
+          } else {
+            Write-Host "DLL architecture check passed" -ForegroundColor Green
+          }
         shell: powershell
 
       - name: Run optimal blood pressure estimation test
@@ -659,6 +790,13 @@ jobs:
           New-Item -ItemType Directory -Path "test-results" -Force | Out-Null
 
           Write-Host "Starting blood pressure estimation test..." -ForegroundColor Yellow
+
+          # Set up environment variables like build-cpp-dll.yml
+          Write-Host "Setting up environment variables..." -ForegroundColor Yellow
+          $env:PATH = "$PWD;" + $env:PATH
+          $env:OPENCV_DIR = "$PWD"
+          $env:ONNXRUNTIME_ROOT = "$PWD"
+          Write-Host "Environment variables set: PATH, OPENCV_DIR, ONNXRUNTIME_ROOT" -ForegroundColor Green
 
           # Final verification of DLL files before running test
           Write-Host "Final verification of DLL files..." -ForegroundColor Yellow
