@@ -684,6 +684,29 @@ jobs:
           echo '                    Console.WriteLine($"Error checking DLL architecture: {ex.Message}");' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
+          echo '                // Check all DLL dependencies' >> Program.cs
+          echo '                Console.WriteLine("Checking all DLL dependencies...");' >> Program.cs
+          echo '                var allDlls = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll" };' >> Program.cs
+          echo '                foreach (var dll in allDlls)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    if (File.Exists(dll))' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        try' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            var fileInfo = new FileInfo(dll);' >> Program.cs
+          echo '                            Console.WriteLine($"  {dll}: {fileInfo.Length / 1024} KB");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        catch (Exception ex)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"  {dll}: Error - {ex.Message}");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    else' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"  {dll}: NOT FOUND");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
           echo '                // Test DLL function availability' >> Program.cs
           echo '                Console.WriteLine("Testing DLL function availability...");' >> Program.cs
           echo '                try' >> Program.cs
@@ -696,6 +719,36 @@ jobs:
           echo '                catch (Exception ex)' >> Program.cs
           echo '                {' >> Program.cs
           echo '                    Console.WriteLine($"ERROR testing DLL functions: {ex.Message}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // Test DLL loading before InitializeBP' >> Program.cs
+          echo '                Console.WriteLine("Testing DLL loading before InitializeBP...");' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    // Test simple DLL function first' >> Program.cs
+          echo '                    var testBuf = new StringBuilder(256);' >> Program.cs
+          echo '                    var testResult = BloodPressureEstimator.GetVersionInfo(testBuf, testBuf.Capacity);' >> Program.cs
+          echo '                    Console.WriteLine($"GetVersionInfo test result: {testResult}");' >> Program.cs
+          echo '                    Console.WriteLine($"Version info: {testBuf}");' >> Program.cs
+          echo '                    Console.WriteLine("DLL loading test successful");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (AccessViolationException ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"CRITICAL ERROR: AccessViolationException in DLL test: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine("DLL is corrupted or incompatible");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (BadImageFormatException ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"CRITICAL ERROR: BadImageFormatException in DLL test: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine("DLL architecture mismatch");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: DLL test failed: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine($"Exception type: {ex.GetType().Name}");' >> Program.cs
+          echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
@@ -1259,11 +1312,70 @@ jobs:
             }
           }
 
-          # Run test with detailed output capture
+          # Run test with detailed output capture and error handling
+          Write-Host "Starting blood pressure estimation test with enhanced error handling..." -ForegroundColor Yellow
+
           $startTime = Get-Date
-          $output = dotnet run -c Release 2>&1
+          $output = ""
+          $exitCode = 0
+
+          try {
+            # より安全な実行方法
+            $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
+            $exitCode = $process.ExitCode
+            
+            # 出力ファイルを読み取り
+            if (Test-Path "test_output.txt") {
+              $output = Get-Content "test_output.txt" -Raw
+            }
+            if (Test-Path "test_error.txt") {
+              $errorOutput = Get-Content "test_error.txt" -Raw
+              $output += "`nERROR OUTPUT:`n$errorOutput"
+            }
+          } catch {
+            Write-Host "Exception during test execution: $($_.Exception.Message)" -ForegroundColor Red
+            $exitCode = 1
+            $output = "Test execution failed with exception: $($_.Exception.Message)"
+            
+            # 代替テスト方法を試行
+            Write-Host "Trying alternative test method..." -ForegroundColor Yellow
+            try {
+              $output = "Alternative test method:`n"
+              $output += "Testing DLL existence and basic functionality...`n"
+              
+              # DLLファイルの存在確認
+              $dlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
+              foreach ($dll in $dlls) {
+                if (Test-Path $dll) {
+                  $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
+                  $output += "  Found: $dll ($size MB)`n"
+                } else {
+                  $output += "  ERROR: $dll not found`n"
+                }
+              }
+              
+              # 簡単なテストを実行（DLLの存在確認のみ）
+              $output += "`nSimple test output:`n"
+              $output += "Testing DLL existence and basic file operations...`n"
+              
+              # DLLファイルの詳細情報を取得
+              $dlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
+              foreach ($dll in $dlls) {
+                if (Test-Path $dll) {
+                  $fileInfo = Get-Item $dll
+                  $size = [math]::Round($fileInfo.Length / 1MB, 2)
+                  $output += "  Found: $dll ($size MB) - Last modified: $($fileInfo.LastWriteTime)`n"
+                } else {
+                  $output += "  ERROR: $dll not found`n"
+                }
+              }
+              
+            } catch {
+              $output += "`nAlternative test also failed: $($_.Exception.Message)"
+            }
+          }
+
           $endTime = Get-Date
-          $exitCode = $LASTEXITCODE
 
           # Save detailed output to file
           $output | Out-File -FilePath "test-results/detailed_test_output.txt" -Encoding UTF8
