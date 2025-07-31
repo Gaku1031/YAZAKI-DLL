@@ -270,6 +270,38 @@ jobs:
           if (-not $zlibFound) {
             Write-Host "WARNING: ZLIB not found in vcpkg" -ForegroundColor Yellow
           }
+
+          # Copy additional dependency DLLs to package directory
+          Write-Host "Copying additional dependency DLLs to package directory..." -ForegroundColor Yellow
+          $additionalDlls = @(
+            "../vcpkg/installed/x64-windows/bin/abseil_dll.dll",
+            "../vcpkg/installed/x64-windows/bin/jpeg62.dll",
+            "../vcpkg/installed/x64-windows/bin/libgcc_s_seh-1.dll",
+            "../vcpkg/installed/x64-windows/bin/libgfortran-5.dll",
+            "../vcpkg/installed/x64-windows/bin/liblapack.dll",
+            "../vcpkg/installed/x64-windows/bin/liblzma.dll",
+            "../vcpkg/installed/x64-windows/bin/libpng16.dll",
+            "../vcpkg/installed/x64-windows/bin/libprotobuf.dll",
+            "../vcpkg/installed/x64-windows/bin/libquadmath-0.dll",
+            "../vcpkg/installed/x64-windows/bin/libsharpyuv.dll",
+            "../vcpkg/installed/x64-windows/bin/libwebp.dll",
+            "../vcpkg/installed/x64-windows/bin/libwebpdecoder.dll",
+            "../vcpkg/installed/x64-windows/bin/libwebpdemux.dll",
+            "../vcpkg/installed/x64-windows/bin/libwebpmux.dll",
+            "../vcpkg/installed/x64-windows/bin/libwinpthread-1.dll",
+            "../vcpkg/installed/x64-windows/bin/openblas.dll",
+            "../vcpkg/installed/x64-windows/bin/tiff.dll"
+          )
+
+          foreach ($dllPath in $additionalDlls) {
+            if (Test-Path $dllPath) {
+              Copy-Item $dllPath "package/" -Force
+              $size = [math]::Round((Get-Item $dllPath).Length / 1MB, 2)
+              Write-Host "Copied additional DLL to package: $(Split-Path $dllPath -Leaf) ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "WARNING: Additional DLL not found: $(Split-Path $dllPath -Leaf)" -ForegroundColor Yellow
+            }
+          }
         shell: powershell
 
       - name: Verify downloaded files
@@ -689,12 +721,30 @@ jobs:
           echo '            var files = new[]' >> Program.cs
           echo '            {' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/BloodPressureDLL.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/abseil_dll.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/jpeg62.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libgcc_s_seh-1.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libgfortran-5.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/liblapack.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/liblzma.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libpng16.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libprotobuf.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libquadmath-0.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libsharpyuv.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebp.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebpdecoder.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebpdemux.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebpmux.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwinpthread-1.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/openblas.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/opencv_core4.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/opencv_dnn4.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/opencv_imgcodecs4.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/opencv_imgproc4.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/opencv_objdetect4.dll",' >> Program.cs
-          echo '                "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/onnxruntime.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/onnxruntime_providers_shared.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/tiff.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/zlib.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/zlib1.dll",' >> Program.cs
           echo '                "C:\\Windows\\System32\\msvcp140.dll",' >> Program.cs
@@ -800,6 +850,40 @@ jobs:
           } else {
             Write-Host "ERROR: Built DLL not found at $builtDll" -ForegroundColor Red
             exit 1
+          }
+
+          # Copy ALL dependency DLLs from package directory
+          Write-Host "Copying all dependency DLLs from package directory..." -ForegroundColor Yellow
+          $packageDlls = @(
+            "CppBloodPressureDLL/package/abseil_dll.dll",
+            "CppBloodPressureDLL/package/jpeg62.dll",
+            "CppBloodPressureDLL/package/libgcc_s_seh-1.dll",
+            "CppBloodPressureDLL/package/libgfortran-5.dll",
+            "CppBloodPressureDLL/package/liblapack.dll",
+            "CppBloodPressureDLL/package/liblzma.dll",
+            "CppBloodPressureDLL/package/libpng16.dll",
+            "CppBloodPressureDLL/package/libprotobuf.dll",
+            "CppBloodPressureDLL/package/libquadmath-0.dll",
+            "CppBloodPressureDLL/package/libsharpyuv.dll",
+            "CppBloodPressureDLL/package/libwebp.dll",
+            "CppBloodPressureDLL/package/libwebpdecoder.dll",
+            "CppBloodPressureDLL/package/libwebpdemux.dll",
+            "CppBloodPressureDLL/package/libwebpmux.dll",
+            "CppBloodPressureDLL/package/libwinpthread-1.dll",
+            "CppBloodPressureDLL/package/openblas.dll",
+            "CppBloodPressureDLL/package/onnxruntime_providers_shared.dll",
+            "CppBloodPressureDLL/package/tiff.dll",
+            "CppBloodPressureDLL/package/zlib1.dll"
+          )
+
+          foreach ($dllPath in $packageDlls) {
+            if (Test-Path $dllPath) {
+              Copy-Item $dllPath "test_bp_estimation_optimal/" -Force
+              $size = [math]::Round((Get-Item $dllPath).Length / 1MB, 2)
+              Write-Host "Copied dependency DLL: $(Split-Path $dllPath -Leaf) ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "WARNING: Dependency DLL not found: $(Split-Path $dllPath -Leaf)" -ForegroundColor Yellow
+            }
           }
 
           # Copy OpenCV runtime DLL from OpenCV installation
