@@ -290,16 +290,40 @@ jobs:
           echo '                    process.StartInfo.Arguments = "/dependents BloodPressureDLL.dll";' >> Program.cs
           echo '                    process.StartInfo.UseShellExecute = false;' >> Program.cs
           echo '                    process.StartInfo.RedirectStandardOutput = true;' >> Program.cs
+          echo '                    process.StartInfo.RedirectStandardError = true;' >> Program.cs
           echo '                    process.StartInfo.CreateNoWindow = true;' >> Program.cs
           echo '                    process.Start();' >> Program.cs
           echo '                    var output = process.StandardOutput.ReadToEnd();' >> Program.cs
+          echo '                    var error = process.StandardError.ReadToEnd();' >> Program.cs
           echo '                    process.WaitForExit();' >> Program.cs
           echo '                    Console.WriteLine("DLL dependencies:");' >> Program.cs
           echo '                    Console.WriteLine(output);' >> Program.cs
+          echo '                    if (!string.IsNullOrEmpty(error))' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"Dumpbin error: {error}");' >> Program.cs
+          echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
           echo '                catch (Exception ex)' >> Program.cs
           echo '                {' >> Program.cs
           echo '                    Console.WriteLine($"Could not check DLL dependencies: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine("This is normal if dumpbin is not available in the environment");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // Try to load DLL manually to check for issues' >> Program.cs
+          echo '                Console.WriteLine("Attempting to load BloodPressureDLL.dll...");' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var handle = System.Runtime.InteropServices.NativeLibrary.Load("BloodPressureDLL.dll");' >> Program.cs
+          echo '                    Console.WriteLine($"DLL loaded successfully: {handle}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR loading DLL: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine($"Exception type: {ex.GetType().Name}");' >> Program.cs
+          echo '                    if (ex.InnerException != null)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"Inner exception: {ex.InnerException.Message}");' >> Program.cs
+          echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
@@ -310,6 +334,8 @@ jobs:
           echo '                if (result != 0)' >> Program.cs
           echo '                {' >> Program.cs
           echo '                    Console.WriteLine($"ERROR: InitializeBP failed with code {result}");' >> Program.cs
+          echo '                    Console.WriteLine("This usually indicates missing dependencies or incorrect DLL architecture");' >> Program.cs
+          echo '                    Console.WriteLine("Please check that all required DLLs are present and compatible");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
@@ -549,13 +575,28 @@ jobs:
             "CppBloodPressureDLL/package/zlib1.dll"
           )
 
+          Write-Host "Checking source files..." -ForegroundColor Yellow
           foreach ($dll in $packageDlls) {
             if (Test-Path $dll) {
-              Copy-Item $dll "test_bp_estimation_optimal/" -Force
               $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
-              Write-Host "Copied: $(Split-Path $dll -Leaf) ($size MB)" -ForegroundColor Green
+              Write-Host "  Found: $dll ($size MB)" -ForegroundColor Green
             } else {
-              Write-Host "WARNING: $dll not found in package directory" -ForegroundColor Yellow
+              Write-Host "  ERROR: $dll not found" -ForegroundColor Red
+            }
+          }
+
+          Write-Host "Copying DLLs to test directory..." -ForegroundColor Yellow
+          foreach ($dll in $packageDlls) {
+            if (Test-Path $dll) {
+              try {
+                Copy-Item $dll "test_bp_estimation_optimal/" -Force
+                $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
+                Write-Host "  Copied: $(Split-Path $dll -Leaf) ($size MB)" -ForegroundColor Green
+              } catch {
+                Write-Host "  ERROR copying $dll: $($_.Exception.Message)" -ForegroundColor Red
+              }
+            } else {
+              Write-Host "  WARNING: $dll not found in package directory" -ForegroundColor Yellow
             }
           }
 
@@ -571,13 +612,28 @@ jobs:
             "openblas.dll", "tiff.dll", "zlib1.dll"
           )
 
+          $missingFiles = @()
           foreach ($dll in $dllNames) {
             $testPath = "test_bp_estimation_optimal/$dll"
             if (Test-Path $testPath) {
-              Write-Host "  OK: $dll copied successfully" -ForegroundColor Green
+              $size = [math]::Round((Get-Item $testPath).Length / 1MB, 2)
+              Write-Host "  OK: $dll ($size MB)" -ForegroundColor Green
             } else {
               Write-Host "  ERROR: $dll not found in test directory" -ForegroundColor Red
+              $missingFiles += $dll
             }
+          }
+
+          if ($missingFiles.Count -gt 0) {
+            Write-Host "WARNING: Missing files: $($missingFiles -join ', ')" -ForegroundColor Yellow
+          } else {
+            Write-Host "All DLL files copied successfully!" -ForegroundColor Green
+          }
+
+          # Check file permissions and attributes
+          Write-Host "Checking file attributes..." -ForegroundColor Yellow
+          Get-ChildItem "test_bp_estimation_optimal/*.dll" | ForEach-Object {
+            Write-Host "  $($_.Name): $($_.Length) bytes, ReadOnly: $($_.IsReadOnly)" -ForegroundColor Cyan
           }
         shell: powershell
 
@@ -602,6 +658,19 @@ jobs:
           New-Item -ItemType Directory -Path "test-results" -Force | Out-Null
 
           Write-Host "Starting blood pressure estimation test..." -ForegroundColor Yellow
+
+          # Final verification of DLL files before running test
+          Write-Host "Final verification of DLL files..." -ForegroundColor Yellow
+          $criticalDlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
+          foreach ($dll in $criticalDlls) {
+            $testPath = "$dll"
+            if (Test-Path $testPath) {
+              $size = [math]::Round((Get-Item $testPath).Length / 1MB, 2)
+              Write-Host "  Found: $dll ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "  ERROR: $dll not found - test will likely fail" -ForegroundColor Red
+            }
+          }
 
           # Run test with detailed output capture
           $startTime = Get-Date
