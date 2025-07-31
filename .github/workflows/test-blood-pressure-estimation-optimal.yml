@@ -135,27 +135,58 @@ jobs:
           echo '{' >> Program.cs
           echo '    public class BloodPressureEstimator' >> Program.cs
           echo '    {' >> Program.cs
+          echo '        // Callback delegate for blood pressure results' >> Program.cs
+          echo '        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]' >> Program.cs
+          echo '        public delegate void BPCallback(' >> Program.cs
+          echo '            [MarshalAs(UnmanagedType.LPStr)] string requestId,' >> Program.cs
+          echo '            int maxBloodPressure,' >> Program.cs
+          echo '            int minBloodPressure,' >> Program.cs
+          echo '            [MarshalAs(UnmanagedType.LPStr)] string measureRowData,' >> Program.cs
+          echo '            [MarshalAs(UnmanagedType.LPStr)] string errorsJson' >> Program.cs
+          echo '        );' >> Program.cs
+          echo '' >> Program.cs
+          echo '        // DLL imports based on actual BloodPressureDLL.h' >> Program.cs
           echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern IntPtr CreateBloodPressureEstimator();' >> Program.cs
+          echo '        public static extern int InitializeBP(StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string modelDir);' >> Program.cs
           echo '' >> Program.cs
           echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern void DestroyBloodPressureEstimator(IntPtr estimator);' >> Program.cs
+          echo '        public static extern int StartBloodPressureAnalysisRequest(StringBuilder outBuf, int bufSize,' >> Program.cs
+          echo '            [MarshalAs(UnmanagedType.LPStr)] string requestId, int height, int weight, int sex,' >> Program.cs
+          echo '            [MarshalAs(UnmanagedType.LPStr)] string moviePath, BPCallback callback);' >> Program.cs
           echo '' >> Program.cs
           echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int EstimateBloodPressure(IntPtr estimator, string videoPath,' >> Program.cs
-          echo '            out double systolic, out double diastolic, out double confidence);' >> Program.cs
+          echo '        public static extern int GetProcessingStatus(StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string requestId);' >> Program.cs
           echo '' >> Program.cs
           echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int GetLastError(IntPtr estimator, StringBuilder errorMessage, int maxLength);' >> Program.cs
+          echo '        public static extern int GenerateRequestId(StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '' >> Program.cs
           echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]' >> Program.cs
-          echo '        public static extern int GetPerformanceMetrics(IntPtr estimator,' >> Program.cs
-          echo '            out double initializationTime, out double processingTime, out double totalTime,' >> Program.cs
-          echo '            out int frameCount, out double fps);' >> Program.cs
+          echo '        public static extern int GetVersionInfo(StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '    }' >> Program.cs
           echo '' >> Program.cs
           echo '    class Program' >> Program.cs
           echo '    {' >> Program.cs
+          echo '        private static string currentRequestId = "";' >> Program.cs
+          echo '        private static bool analysisCompleted = false;' >> Program.cs
+          echo '        private static int systolicResult = 0;' >> Program.cs
+          echo '        private static int diastolicResult = 0;' >> Program.cs
+          echo '        private static string errorMessage = "";' >> Program.cs
+          echo '' >> Program.cs
+          echo '        // Callback function for blood pressure results' >> Program.cs
+          echo '        static void BloodPressureCallback(string requestId, int maxBloodPressure, int minBloodPressure, string measureRowData, string errorsJson)' >> Program.cs
+          echo '        {' >> Program.cs
+          echo '            Console.WriteLine($"Callback received for request: {requestId}");' >> Program.cs
+          echo '            Console.WriteLine($"Systolic (max): {maxBloodPressure} mmHg");' >> Program.cs
+          echo '            Console.WriteLine($"Diastolic (min): {minBloodPressure} mmHg");' >> Program.cs
+          echo '            Console.WriteLine($"Measure data: {measureRowData}");' >> Program.cs
+          echo '            Console.WriteLine($"Errors: {errorsJson}");' >> Program.cs
+          echo '' >> Program.cs
+          echo '            systolicResult = maxBloodPressure;' >> Program.cs
+          echo '            diastolicResult = minBloodPressure;' >> Program.cs
+          echo '            errorMessage = errorsJson;' >> Program.cs
+          echo '            analysisCompleted = true;' >> Program.cs
+          echo '        }' >> Program.cs
+          echo '' >> Program.cs
           echo '        static void Main(string[] args)' >> Program.cs
           echo '        {' >> Program.cs
           echo '            Console.WriteLine("=== Optimal Blood Pressure Estimation Test ===");' >> Program.cs
@@ -176,13 +207,27 @@ jobs:
           echo '                CopyRequiredFiles();' >> Program.cs
           echo '' >> Program.cs
           echo '                Console.WriteLine("Initializing optimal blood pressure estimator...");' >> Program.cs
-          echo '                var estimator = BloodPressureEstimator.CreateBloodPressureEstimator();' >> Program.cs
+          echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
+          echo '                var modelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");' >> Program.cs
+          echo '                var initResult = BloodPressureEstimator.InitializeBP(outBuf, 1024, modelDir);' >> Program.cs
           echo '' >> Program.cs
-          echo '                if (estimator == IntPtr.Zero)' >> Program.cs
+          echo '                if (initResult != 0)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Console.WriteLine("ERROR: Failed to create blood pressure estimator");' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: Failed to initialize blood pressure estimator: {outBuf}");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
+          echo '                Console.WriteLine($"Initialization successful: {outBuf}");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                // Generate request ID' >> Program.cs
+          echo '                outBuf.Clear();' >> Program.cs
+          echo '                var requestResult = BloodPressureEstimator.GenerateRequestId(outBuf, 1024);' >> Program.cs
+          echo '                if (requestResult != 0)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: Failed to generate request ID: {outBuf}");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                currentRequestId = outBuf.ToString();' >> Program.cs
+          echo '                Console.WriteLine($"Generated request ID: {currentRequestId}");' >> Program.cs
           echo '' >> Program.cs
           echo '                var videoPath = Path.Combine("..", "sample-data", Environment.GetEnvironmentVariable("TEST_VIDEO"));' >> Program.cs
           echo '                if (!File.Exists(videoPath))' >> Program.cs
@@ -195,18 +240,32 @@ jobs:
           echo '                var fileInfo = new FileInfo(videoPath);' >> Program.cs
           echo '                Console.WriteLine($"Video size: {fileInfo.Length / 1024 / 1024:F2} MB");' >> Program.cs
           echo '' >> Program.cs
-          echo '                double systolic, diastolic, confidence;' >> Program.cs
-          echo '                var result = BloodPressureEstimator.EstimateBloodPressure(estimator, videoPath,' >> Program.cs
-          echo '                    out systolic, out diastolic, out confidence);' >> Program.cs
+          echo '                // Start blood pressure analysis' >> Program.cs
+          echo '                var callback = new BloodPressureEstimator.BPCallback(BloodPressureCallback);' >> Program.cs
+          echo '                outBuf.Clear();' >> Program.cs
+          echo '                var analysisResult = BloodPressureEstimator.StartBloodPressureAnalysisRequest(' >> Program.cs
+          echo '                    outBuf, 1024, currentRequestId, 170, 70, 1, videoPath, callback);' >> Program.cs
           echo '' >> Program.cs
-          echo '                if (result == 0)' >> Program.cs
+          echo '                if (analysisResult != 0)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    double initTime, procTime, totalTime;' >> Program.cs
-          echo '                    int frameCount;' >> Program.cs
-          echo '                    double fps;' >> Program.cs
-          echo '                    BloodPressureEstimator.GetPerformanceMetrics(estimator,' >> Program.cs
-          echo '                        out initTime, out procTime, out totalTime, out frameCount, out fps);' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: Failed to start blood pressure analysis: {outBuf}");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                Console.WriteLine($"Analysis started: {outBuf}");' >> Program.cs
           echo '' >> Program.cs
+          echo '                // Wait for analysis to complete' >> Program.cs
+          echo '                Console.WriteLine("Waiting for analysis to complete...");' >> Program.cs
+          echo '                var timeout = TimeSpan.FromSeconds(30);' >> Program.cs
+          echo '                var startTime = DateTime.Now;' >> Program.cs
+          echo '' >> Program.cs
+          echo '                while (!analysisCompleted && (DateTime.Now - startTime) < timeout)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Thread.Sleep(1000);' >> Program.cs
+          echo '                    Console.WriteLine("Checking analysis status...");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                if (analysisCompleted)' >> Program.cs
+          echo '                {' >> Program.cs
           echo '                    process.Refresh();' >> Program.cs
           echo '                    var finalMemory = process.WorkingSet64;' >> Program.cs
           echo '                    var memoryUsed = (finalMemory - initialMemory) / 1024 / 1024;' >> Program.cs
@@ -217,31 +276,17 @@ jobs:
           echo '                    Console.WriteLine();' >> Program.cs
           echo '                    Console.WriteLine("=== OPTIMAL RESULTS ===");' >> Program.cs
           echo '                    Console.WriteLine($"Success: true");' >> Program.cs
-          echo '                    Console.WriteLine($"Systolic Blood Pressure: {systolic:F1} mmHg");' >> Program.cs
-          echo '                    Console.WriteLine($"Diastolic Blood Pressure: {diastolic:F1} mmHg");' >> Program.cs
-          echo '                    Console.WriteLine($"Confidence: {confidence:F2}");' >> Program.cs
+          echo '                    Console.WriteLine($"Systolic Blood Pressure: {systolicResult} mmHg");' >> Program.cs
+          echo '                    Console.WriteLine($"Diastolic Blood Pressure: {diastolicResult} mmHg");' >> Program.cs
+          echo '                    Console.WriteLine($"Error Message: {errorMessage}");' >> Program.cs
           echo '                    Console.WriteLine();' >> Program.cs
           echo '                    Console.WriteLine("=== PERFORMANCE METRICS (Optimal) ===");' >> Program.cs
-          echo '                    Console.WriteLine($"Total Time: {totalTime:F2} seconds");' >> Program.cs
-          echo '                    Console.WriteLine($"Initialization Time: {initTime:F2} seconds");' >> Program.cs
-          echo '                    Console.WriteLine($"Processing Time: {procTime:F2} seconds");' >> Program.cs
-          echo '                    Console.WriteLine($"Frame Count: {frameCount}");' >> Program.cs
-          echo '                    Console.WriteLine($"Frames Per Second: {fps:F2}");' >> Program.cs
+          echo '                    Console.WriteLine($"Total Time: {stopwatch.ElapsedMilliseconds / 1000:F2} seconds");' >> Program.cs
           echo '                    Console.WriteLine($"Memory Usage: {memoryUsed:F2} MB");' >> Program.cs
           echo '                    Console.WriteLine($"CPU Usage: {cpuUsage:F1}%");' >> Program.cs
           echo '                    Console.WriteLine($"Video File Size: {fileInfo.Length / 1024 / 1024:F2} MB");' >> Program.cs
           echo '                    Console.WriteLine();' >> Program.cs
           echo '' >> Program.cs
-          echo '                    var processingEfficiency = (procTime / totalTime) * 100;' >> Program.cs
-          echo '                    Console.WriteLine($"Processing Efficiency: {processingEfficiency:F1}%");' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    var throughput = frameCount / totalTime;' >> Program.cs
-          echo '                    Console.WriteLine($"Throughput: {throughput:F2} frames/second");' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    var memoryEfficiency = fileInfo.Length / 1024 / 1024 / memoryUsed;' >> Program.cs
-          echo '                    Console.WriteLine($"Memory Efficiency: {memoryEfficiency:F2} MB video per MB RAM");' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    Console.WriteLine();' >> Program.cs
           echo '                    Console.WriteLine("=== OPTIMAL BENEFITS ===");' >> Program.cs
           echo '                    Console.WriteLine("dlib frontal face detector (high accuracy, low false positives)");' >> Program.cs
           echo '                    Console.WriteLine("OpenCV DNN face detection (fast, GPU-accelerated)");' >> Program.cs
@@ -256,12 +301,8 @@ jobs:
           echo '                }' >> Program.cs
           echo '                else' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    var errorMessage = new StringBuilder(1024);' >> Program.cs
-          echo '                    BloodPressureEstimator.GetLastError(estimator, errorMessage, 1024);' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR: Blood pressure estimation failed: {errorMessage}");' >> Program.cs
+          echo '                    Console.WriteLine("ERROR: Analysis timed out or failed");' >> Program.cs
           echo '                }' >> Program.cs
-          echo '' >> Program.cs
-          echo '                BloodPressureEstimator.DestroyBloodPressureEstimator(estimator);' >> Program.cs
           echo '            }' >> Program.cs
           echo '            catch (Exception ex)' >> Program.cs
           echo '            {' >> Program.cs
