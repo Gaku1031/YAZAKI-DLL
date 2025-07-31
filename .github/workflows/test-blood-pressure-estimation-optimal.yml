@@ -497,7 +497,7 @@ jobs:
           Write-Host "Performance monitoring: $env:PERFORMANCE_MONITORING" -ForegroundColor Cyan
 
           # Check if test video exists
-          $videoPath = Path.Combine("..", "sample-data", $env:TEST_VIDEO)
+          $videoPath = [System.IO.Path]::Combine("..", "sample-data", $env:TEST_VIDEO)
           if (!(Test-Path $videoPath)) {
             Write-Host "ERROR: Test video not found: $videoPath" -ForegroundColor Red
             Write-Host "Available files in sample-data:" -ForegroundColor Red
