@@ -476,9 +476,9 @@ jobs:
           foreach ($dll in $opencvDlls) {
             $testPath = "test_bp_estimation_optimal/$dll"
             if (Test-Path $testPath) {
-              Write-Host "  ✓ $dll copied successfully" -ForegroundColor Green
+              Write-Host "  OK: $dll copied successfully" -ForegroundColor Green
             } else {
-              Write-Host "  ✗ $dll not found in test directory" -ForegroundColor Red
+              Write-Host "  ERROR: $dll not found in test directory" -ForegroundColor Red
             }
           }
         shell: powershell
