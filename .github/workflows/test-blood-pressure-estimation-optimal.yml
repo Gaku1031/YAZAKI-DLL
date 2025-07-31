@@ -264,7 +264,7 @@ jobs:
                               Console.WriteLine("=== BOTTLENECK ANALYSIS (Optimal) ===");
                               if (initTime > procTime * 0.1)
                               {
-                                  Console.WriteLine("• Initialization time is significant (>10% of processing time)");
+                                  Console.WriteLine("Initialization time is significant (>10% of processing time)");
                                   Console.WriteLine("  - Consider lazy initialization or caching");
                               }
                               
@@ -291,7 +291,7 @@ jobs:
                               
                               if (throughput < 30)
                               {
-                                  Console.WriteLine("• Low throughput detected");
+                                  Console.WriteLine("Low throughput detected");
                                   Console.WriteLine("  - Consider parallel processing or GPU acceleration");
                               }
                               
@@ -470,16 +470,18 @@ jobs:
           }
 
           # Verify build output
-          if (Test-Path "bin/Release/net6.0/BloodPressureTestOptimal.exe") {
-            Write-Host "✓ Optimal test application built successfully" -ForegroundColor Green
-            Write-Host "Executable location: bin/Release/net6.0/BloodPressureTestOptimal.exe" -ForegroundColor Cyan
+          $exePath = "bin/Release/net6.0/BloodPressureTestOptimal.exe"
+          if (Test-Path $exePath) {
+            Write-Host "Optimal test application built successfully" -ForegroundColor Green
+            Write-Host "Executable location: $exePath" -ForegroundColor Cyan
           } else {
             Write-Host "ERROR: Executable not found after build" -ForegroundColor Red
             Write-Host "Build output directory contents:" -ForegroundColor Red
-            if (Test-Path "bin/Release/net6.0") {
-              Get-ChildItem "bin/Release/net6.0" -Name
+            $buildDir = "bin/Release/net6.0"
+            if (Test-Path $buildDir) {
+              Get-ChildItem $buildDir -Name
             } else {
-              Write-Host "bin/Release/net6.0 directory does not exist" -ForegroundColor Red
+              Write-Host "$buildDir directory does not exist" -ForegroundColor Red
             }
             exit 1
           }
