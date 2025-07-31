@@ -433,16 +433,191 @@ jobs:
             exit 1
           }
 
-          Write-Host "Starting blood pressure estimation test..." -ForegroundColor Yellow
-          $output = dotnet run -c Release 2>&1
+          # Create results directory
+          New-Item -ItemType Directory -Path "test-results" -Force | Out-Null
 
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Blood pressure estimation test failed" -ForegroundColor Red
-            Write-Host "Output: $output" -ForegroundColor Red
+          Write-Host "Starting blood pressure estimation test..." -ForegroundColor Yellow
+
+          # Run test with detailed output capture
+          $startTime = Get-Date
+          $output = dotnet run -c Release 2>&1
+          $endTime = Get-Date
+          $exitCode = $LASTEXITCODE
+
+          # Save detailed output to file
+          $output | Out-File -FilePath "test-results/detailed_test_output.txt" -Encoding UTF8
+
+          # Display detailed output
+          Write-Host "=== DETAILED TEST OUTPUT ===" -ForegroundColor Green
+          $output
+          Write-Host "=== END OF TEST OUTPUT ===" -ForegroundColor Green
+
+          # Extract and display key metrics
+          Write-Host "=== EXTRACTED METRICS ===" -ForegroundColor Yellow
+
+          # Extract blood pressure values
+          $systolicMatch = [regex]::Match($output, "Systolic Blood Pressure: ([\d.]+)")
+          $diastolicMatch = [regex]::Match($output, "Diastolic Blood Pressure: ([\d.]+)")
+
+          if ($systolicMatch.Success) {
+            Write-Host "Systolic Blood Pressure: $($systolicMatch.Groups[1].Value) mmHg" -ForegroundColor Cyan
+          } else {
+            Write-Host "Systolic Blood Pressure: Not found" -ForegroundColor Red
+          }
+
+          if ($diastolicMatch.Success) {
+            Write-Host "Diastolic Blood Pressure: $($diastolicMatch.Groups[1].Value) mmHg" -ForegroundColor Cyan
+          } else {
+            Write-Host "Diastolic Blood Pressure: Not found" -ForegroundColor Red
+          }
+
+          # Extract timing information
+          $totalTimeMatch = [regex]::Match($output, "Total Time: ([\d.]+)")
+          if ($totalTimeMatch.Success) {
+            Write-Host "Total Processing Time: $($totalTimeMatch.Groups[1].Value) seconds" -ForegroundColor Cyan
+          }
+
+          # Extract memory usage
+          $memoryMatch = [regex]::Match($output, "Memory Usage: ([\d.]+)")
+          if ($memoryMatch.Success) {
+            Write-Host "Memory Usage: $($memoryMatch.Groups[1].Value) MB" -ForegroundColor Cyan
+          }
+
+          # Extract CPU usage
+          $cpuMatch = [regex]::Match($output, "CPU Usage: ([\d.]+)")
+          if ($cpuMatch.Success) {
+            Write-Host "CPU Usage: $($cpuMatch.Groups[1].Value)%" -ForegroundColor Cyan
+          }
+
+          # Extract video file size
+          $videoSizeMatch = [regex]::Match($output, "Video File Size: ([\d.]+)")
+          if ($videoSizeMatch.Success) {
+            Write-Host "Video File Size: $($videoSizeMatch.Groups[1].Value) MB" -ForegroundColor Cyan
+          }
+
+          # Extract error messages
+          $errorMatch = [regex]::Match($output, "Error Message: (.+)")
+          if ($errorMatch.Success) {
+            Write-Host "Error Message: $($errorMatch.Groups[1].Value)" -ForegroundColor Yellow
+          }
+
+          # Extract measure data
+          $measureDataMatch = [regex]::Match($output, "Measure Data: (.+)")
+          if ($measureDataMatch.Success) {
+            Write-Host "Measure Data: $($measureDataMatch.Groups[1].Value)" -ForegroundColor Cyan
+          }
+
+          # Calculate test duration
+          $testDuration = ($endTime - $startTime).TotalSeconds
+          Write-Host "Test Duration: $testDuration seconds" -ForegroundColor Cyan
+
+          # Performance assessment
+          Write-Host "=== PERFORMANCE ASSESSMENT ===" -ForegroundColor Yellow
+
+          if ($systolicMatch.Success -and $diastolicMatch.Success) {
+            $systolic = [double]$systolicMatch.Groups[1].Value
+            $diastolic = [double]$diastolicMatch.Groups[1].Value
+            
+            # Blood pressure validation
+            if ($systolic -ge 80 -and $systolic -le 200) {
+              Write-Host "Systolic pressure is within normal range (80-200 mmHg)" -ForegroundColor Green
+            } else {
+              Write-Host "Systolic pressure is outside normal range" -ForegroundColor Yellow
+            }
+            
+            if ($diastolic -ge 40 -and $diastolic -le 120) {
+              Write-Host "Diastolic pressure is within normal range (40-120 mmHg)" -ForegroundColor Green
+            } else {
+              Write-Host "Diastolic pressure is outside normal range" -ForegroundColor Yellow
+            }
+          }
+
+          # Timing assessment
+          if ($totalTimeMatch.Success) {
+            $totalTime = [double]$totalTimeMatch.Groups[1].Value
+            if ($totalTime -le 30) {
+              Write-Host "Processing time is acceptable (≤30 seconds)" -ForegroundColor Green
+            } else {
+              Write-Host "Processing time is slow (>30 seconds)" -ForegroundColor Yellow
+            }
+          }
+
+          # Memory assessment
+          if ($memoryMatch.Success) {
+            $memory = [double]$memoryMatch.Groups[1].Value
+            if ($memory -le 1000) {
+              Write-Host "Memory usage is acceptable (≤1000 MB)" -ForegroundColor Green
+            } else {
+              Write-Host "Memory usage is high (>1000 MB)" -ForegroundColor Yellow
+            }
+          }
+
+          # Optimal configuration benefits
+          Write-Host "=== OPTIMAL CONFIGURATION BENEFITS ===" -ForegroundColor Yellow
+          Write-Host "✓ dlib frontal face detector (high accuracy)" -ForegroundColor Green
+          Write-Host "✓ OpenCV DNN face detection (fast processing)" -ForegroundColor Green
+          Write-Host "✓ No shape predictor (~100MB saved)" -ForegroundColor Green
+          Write-Host "✓ Individual OpenCV DLLs (better compatibility)" -ForegroundColor Green
+          Write-Host "✓ Best balance of accuracy and performance" -ForegroundColor Green
+
+          if ($exitCode -ne 0) {
+            Write-Host "ERROR: Blood pressure estimation test failed with exit code $exitCode" -ForegroundColor Red
             exit 1
           } else {
             Write-Host "Blood pressure estimation test completed successfully" -ForegroundColor Green
           }
+
+          # Create summary report
+          echo "# Blood Pressure Estimation Test Results - Optimal Configuration" > test-results/summary_report.md
+          echo "" >> test-results/summary_report.md
+          echo "## Test Information" >> test-results/summary_report.md
+          echo "- Test Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> test-results/summary_report.md
+          echo "- Test Video: $env:TEST_VIDEO" >> test-results/summary_report.md
+          echo "- Test Duration: $testDuration seconds" >> test-results/summary_report.md
+          echo "- Configuration: dlib + OpenCV DNN" >> test-results/summary_report.md
+          echo "" >> test-results/summary_report.md
+          echo "## Results" >> test-results/summary_report.md
+          if ($systolicMatch.Success) {
+            echo "Systolic Blood Pressure: $($systolicMatch.Groups[1].Value) mmHg" >> test-results/summary_report.md
+          } else {
+            echo "Systolic Blood Pressure: Not found" >> test-results/summary_report.md
+          }
+          if ($diastolicMatch.Success) {
+            echo "Diastolic Blood Pressure: $($diastolicMatch.Groups[1].Value) mmHg" >> test-results/summary_report.md
+          } else {
+            echo "Diastolic Blood Pressure: Not found" >> test-results/summary_report.md
+          }
+          if ($totalTimeMatch.Success) {
+            echo "Total Processing Time: $($totalTimeMatch.Groups[1].Value) seconds" >> test-results/summary_report.md
+          } else {
+            echo "Total Processing Time: Not found" >> test-results/summary_report.md
+          }
+          if ($memoryMatch.Success) {
+            echo "Memory Usage: $($memoryMatch.Groups[1].Value) MB" >> test-results/summary_report.md
+          } else {
+            echo "Memory Usage: Not found" >> test-results/summary_report.md
+          }
+          if ($cpuMatch.Success) {
+            echo "CPU Usage: $($cpuMatch.Groups[1].Value)%" >> test-results/summary_report.md
+          } else {
+            echo "CPU Usage: Not found" >> test-results/summary_report.md
+          }
+          echo "" >> test-results/summary_report.md
+          echo "## Status" >> test-results/summary_report.md
+          if ($exitCode -eq 0) {
+            echo "Test Status: SUCCESS" >> test-results/summary_report.md
+          } else {
+            echo "Test Status: FAILED (Exit Code: $exitCode)" >> test-results/summary_report.md
+          }
+          echo "" >> test-results/summary_report.md
+          echo "## Optimal Configuration Benefits" >> test-results/summary_report.md
+          echo "- High accuracy face detection (dlib frontal detector)" >> test-results/summary_report.md
+          echo "- Fast processing (OpenCV DNN)" >> test-results/summary_report.md
+          echo "- Reduced package size (~100MB smaller)" >> test-results/summary_report.md
+          echo "- Individual OpenCV DLLs for better compatibility" >> test-results/summary_report.md
+          echo "- Best balance of accuracy and performance" >> test-results/summary_report.md
+
+          Write-Host "Summary report created: test-results/summary_report.md" -ForegroundColor Green
         shell: powershell
 
       - name: Create distribution package for C# integration
@@ -592,6 +767,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BloodPressureDLL-TestResults-Optimal-${{ github.sha }}
-          path: test_bp_estimation_optimal/
+          path: |
+            test_bp_estimation_optimal/test-results/
+            test_bp_estimation_optimal/
           retention-days: 30
           if-no-files-found: warn
