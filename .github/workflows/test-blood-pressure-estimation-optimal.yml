@@ -1,6 +1,12 @@
 name: Test Blood Pressure Estimation (Optimal - dlib + OpenCV DNN)
 
 on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       test_video:
