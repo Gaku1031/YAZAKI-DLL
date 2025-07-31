@@ -71,6 +71,7 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat
           .\vcpkg\vcpkg install zlib:x64-windows
           .\vcpkg\vcpkg install protobuf:x64-windows
+          .\vcpkg\vcpkg install eigen3:x64-windows
         shell: powershell
 
       - name: Install OpenCV (Pre-built)
@@ -142,6 +143,7 @@ jobs:
             -DONNXRUNTIME_LIB_DIR="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib" `
             -DOpenCV_DIR="${{ github.workspace }}/opencv/opencv/build/x64/vc16/lib" `
             -DProtobuf_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/protobuf" `
+            -DEigen3_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/eigen3" `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
 
           # Build DLL
