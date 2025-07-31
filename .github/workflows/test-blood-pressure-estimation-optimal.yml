@@ -192,6 +192,84 @@ jobs:
             Write-Host "DLL build failed" -ForegroundColor Red
             exit 1
           }
+
+          # Copy OpenCV DLLs to package directory
+          Write-Host "Copying OpenCV DLLs to package directory..." -ForegroundColor Yellow
+          $opencvDlls = @(
+            "opencv_core4.dll",
+            "opencv_dnn4.dll", 
+            "opencv_imgcodecs4.dll",
+            "opencv_imgproc4.dll",
+            "opencv_objdetect4.dll"
+          )
+
+          # Try multiple possible OpenCV paths
+          $opencvPaths = @(
+            "../opencv/opencv/build/x64/vc16/bin",
+            "../opencv/build/x64/vc16/bin",
+            "../opencv/opencv/build/x64/vc16/lib",
+            "../opencv/build/x64/vc16/lib"
+          )
+
+          foreach ($dllName in $opencvDlls) {
+            $dllFound = $false
+            
+            # Try to find DLL in OpenCV paths
+            foreach ($opencvPath in $opencvPaths) {
+              $fullPath = "$opencvPath/$dllName"
+              if (Test-Path $fullPath) {
+                Copy-Item $fullPath "package/" -Force
+                $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
+                Write-Host "Copied OpenCV DLL to package: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
+                $dllFound = $true
+                break
+              }
+            }
+            
+            # If not found in OpenCV paths, try recursive search
+            if (-not $dllFound) {
+              $opencvDll = Get-ChildItem -Path "../opencv" -Recurse -Filter $dllName | Select-Object -First 1
+              if ($opencvDll) {
+                Copy-Item $opencvDll.FullName "package/" -Force
+                $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
+                Write-Host "Copied OpenCV DLL to package: $dllName ($size MB) from recursive search" -ForegroundColor Green
+                $dllFound = $true
+              } else {
+                Write-Host "WARNING: OpenCV DLL not found: $dllName" -ForegroundColor Yellow
+              }
+            }
+          }
+
+          # Copy ONNX Runtime DLL to package directory
+          Write-Host "Copying ONNX Runtime DLL to package directory..." -ForegroundColor Yellow
+          $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
+          if (Test-Path $onnxDll) {
+            Copy-Item $onnxDll "package/" -Force
+            $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
+            Write-Host "Copied ONNX Runtime DLL to package: onnxruntime.dll ($size MB)" -ForegroundColor Green
+          } else {
+            Write-Host "WARNING: ONNX Runtime DLL not found" -ForegroundColor Yellow
+          }
+
+          # Copy ZLIB to package directory
+          Write-Host "Copying ZLIB to package directory..." -ForegroundColor Yellow
+          $zlibPaths = @(
+            "../vcpkg/installed/x64-windows/bin/zlib.dll",
+            "../vcpkg/installed/x64-windows/debug/bin/zlib.dll"
+          )
+          $zlibFound = $false
+          foreach ($path in $zlibPaths) {
+            if (Test-Path $path) {
+              Copy-Item $path "package/" -Force
+              $size = [math]::Round((Get-Item $path).Length / 1KB, 2)
+              Write-Host "Copied ZLIB to package: $(Split-Path $path -Leaf) ($size KB)" -ForegroundColor Green
+              $zlibFound = $true
+              break
+            }
+          }
+          if (-not $zlibFound) {
+            Write-Host "WARNING: ZLIB not found in vcpkg" -ForegroundColor Yellow
+          }
         shell: powershell
 
       - name: Verify downloaded files
@@ -611,13 +689,14 @@ jobs:
           echo '            var files = new[]' >> Program.cs
           echo '            {' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/BloodPressureDLL.dll",' >> Program.cs
-          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_core4.dll",' >> Program.cs
-          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_dnn4.dll",' >> Program.cs
-          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_imgcodecs4.dll",' >> Program.cs
-          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_imgproc4.dll",' >> Program.cs
-          echo '                "../opencv/opencv/build/x64/vc16/bin/opencv_objdetect4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_core4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_dnn4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_imgcodecs4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_imgproc4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_objdetect4.dll",' >> Program.cs
           echo '                "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll",' >> Program.cs
-          echo '                "../vcpkg/installed/x64-windows/bin/zlib.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/zlib.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/zlib1.dll",' >> Program.cs
           echo '                "C:\\Windows\\System32\\msvcp140.dll",' >> Program.cs
           echo '                "C:\\Windows\\System32\\vcruntime140.dll",' >> Program.cs
           echo '                "C:\\Windows\\System32\\vcruntime140_1.dll"' >> Program.cs
@@ -725,6 +804,8 @@ jobs:
 
           # Copy OpenCV runtime DLL from OpenCV installation
           Write-Host "Copying OpenCV runtime DLL..." -ForegroundColor Yellow
+
+          # First, try to find OpenCV DLLs in the extracted OpenCV directory
           $opencvDlls = @(
             "opencv_core4.dll",
             "opencv_dnn4.dll", 
@@ -733,14 +814,59 @@ jobs:
             "opencv_objdetect4.dll"
           )
 
+          # Try multiple possible OpenCV paths
+          $opencvPaths = @(
+            "opencv/opencv/build/x64/vc16/bin",
+            "opencv/build/x64/vc16/bin",
+            "opencv/opencv/build/x64/vc16/lib",
+            "opencv/build/x64/vc16/lib"
+          )
+
           foreach ($dllName in $opencvDlls) {
-            $opencvDll = Get-ChildItem -Path "opencv" -Recurse -Filter $dllName | Select-Object -First 1
-            if ($opencvDll) {
-              Copy-Item $opencvDll.FullName "test_bp_estimation_optimal/" -Force
-              $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
-              Write-Host "Copied OpenCV DLL: $dllName ($size MB)" -ForegroundColor Green
-            } else {
-              Write-Host "WARNING: OpenCV DLL not found: $dllName" -ForegroundColor Yellow
+            $dllFound = $false
+            
+            # Try to find DLL in OpenCV paths
+            foreach ($opencvPath in $opencvPaths) {
+              $fullPath = "$opencvPath/$dllName"
+              if (Test-Path $fullPath) {
+                Copy-Item $fullPath "test_bp_estimation_optimal/" -Force
+                $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
+                Write-Host "Copied OpenCV DLL: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
+                $dllFound = $true
+                break
+              }
+            }
+            
+            # If not found in OpenCV paths, try recursive search
+            if (-not $dllFound) {
+              $opencvDll = Get-ChildItem -Path "opencv" -Recurse -Filter $dllName | Select-Object -First 1
+              if ($opencvDll) {
+                Copy-Item $opencvDll.FullName "test_bp_estimation_optimal/" -Force
+                $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
+                Write-Host "Copied OpenCV DLL: $dllName ($size MB) from recursive search" -ForegroundColor Green
+                $dllFound = $true
+              } else {
+                Write-Host "WARNING: OpenCV DLL not found: $dllName" -ForegroundColor Yellow
+              }
+            }
+          }
+
+          # Also try to copy from package directory if available
+          Write-Host "Checking package directory for OpenCV DLLs..." -ForegroundColor Yellow
+          $packageOpencvDlls = @(
+            "CppBloodPressureDLL/package/opencv_core4.dll",
+            "CppBloodPressureDLL/package/opencv_dnn4.dll",
+            "CppBloodPressureDLL/package/opencv_imgcodecs4.dll",
+            "CppBloodPressureDLL/package/opencv_imgproc4.dll",
+            "CppBloodPressureDLL/package/opencv_objdetect4.dll"
+          )
+
+          foreach ($dllPath in $packageOpencvDlls) {
+            if (Test-Path $dllPath) {
+              $dllName = Split-Path $dllPath -Leaf
+              Copy-Item $dllPath "test_bp_estimation_optimal/" -Force
+              $size = [math]::Round((Get-Item $dllPath).Length / 1MB, 2)
+              Write-Host "Copied OpenCV DLL from package: $dllName ($size MB)" -ForegroundColor Green
             }
           }
 
@@ -759,20 +885,22 @@ jobs:
           Write-Host "Copying ZLIB from vcpkg..." -ForegroundColor Yellow
           $zlibPaths = @(
             "vcpkg/installed/x64-windows/bin/zlib.dll",
-            "vcpkg/installed/x64-windows/debug/bin/zlib.dll"
+            "vcpkg/installed/x64-windows/debug/bin/zlib.dll",
+            "CppBloodPressureDLL/package/zlib.dll",
+            "CppBloodPressureDLL/package/zlib1.dll"
           )
           $zlibFound = $false
           foreach ($path in $zlibPaths) {
             if (Test-Path $path) {
               Copy-Item $path "test_bp_estimation_optimal/" -Force
               $size = [math]::Round((Get-Item $path).Length / 1KB, 2)
-              Write-Host "Copied ZLIB from vcpkg: $(Split-Path $path -Leaf) ($size KB)" -ForegroundColor Green
+              Write-Host "Copied ZLIB: $(Split-Path $path -Leaf) ($size KB) from $path" -ForegroundColor Green
               $zlibFound = $true
               break
             }
           }
           if (-not $zlibFound) {
-            Write-Host "WARNING: ZLIB not found in vcpkg" -ForegroundColor Yellow
+            Write-Host "WARNING: ZLIB not found in any expected location" -ForegroundColor Yellow
           }
 
           # Copy Visual C++ Runtime files if available
@@ -901,6 +1029,24 @@ jobs:
               Write-Host "  Found: $dll ($size MB)" -ForegroundColor Green
             } else {
               Write-Host "  ERROR: $dll not found - test will likely fail" -ForegroundColor Red
+            }
+          }
+
+          # Check package directory for OpenCV DLLs
+          Write-Host "Checking package directory for OpenCV DLLs..." -ForegroundColor Yellow
+          $packageDlls = @(
+            "../CppBloodPressureDLL/package/opencv_core4.dll",
+            "../CppBloodPressureDLL/package/opencv_dnn4.dll",
+            "../CppBloodPressureDLL/package/opencv_imgcodecs4.dll",
+            "../CppBloodPressureDLL/package/opencv_imgproc4.dll",
+            "../CppBloodPressureDLL/package/opencv_objdetect4.dll"
+          )
+          foreach ($dllPath in $packageDlls) {
+            if (Test-Path $dllPath) {
+              $size = [math]::Round((Get-Item $dllPath).Length / 1MB, 2)
+              Write-Host "  Package has: $(Split-Path $dllPath -Leaf) ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "  Package missing: $(Split-Path $dllPath -Leaf)" -ForegroundColor Red
             }
           }
 
