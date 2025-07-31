@@ -233,7 +233,7 @@ jobs:
           echo '        {' >> Program.cs
           echo '            Console.WriteLine("=== Optimal Blood Pressure Estimation Test ===");' >> Program.cs
           echo '            Console.WriteLine("Configuration: dlib frontal face detector + OpenCV DNN");' >> Program.cs
-          echo '            Console.WriteLine("Benefits: High accuracy + Fast processing + Small package");' >> Program.cs
+          echo '            Console.WriteLine("Benefits: High accuracy + Fast processing + Small package + Individual OpenCV DLLs");' >> Program.cs
           echo '            Console.WriteLine($"Test Video: {testVideo}");' >> Program.cs
           echo '            Console.WriteLine($"Test Duration: {testDuration} seconds");' >> Program.cs
           echo '            Console.WriteLine($"Performance Monitoring: {performanceMonitoring}");' >> Program.cs
@@ -261,7 +261,7 @@ jobs:
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                // Check if DLL files exist' >> Program.cs
-          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll", "zlib.dll" };' >> Program.cs
+          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll", "onnxruntime.dll", "zlib.dll", "abseil_dll.dll", "jpeg62.dll", "libgcc_s_seh-1.dll", "libgfortran-5.dll", "liblapack.dll", "liblzma.dll", "libpng16.dll", "libprotobuf.dll", "libquadmath-0.dll", "libsharpyuv.dll", "libwebp.dll", "libwebpdecoder.dll", "libwebpdemux.dll", "libwebpmux.dll", "libwinpthread-1.dll", "openblas.dll", "tiff.dll", "zlib1.dll" };' >> Program.cs
           echo '                Console.WriteLine("Checking DLL files:");' >> Program.cs
           echo '                foreach (var dll in dllFiles)' >> Program.cs
           echo '                {' >> Program.cs
@@ -399,17 +399,35 @@ jobs:
           echo '        static void CopyRequiredFiles()' >> Program.cs
           echo '        {' >> Program.cs
           echo '            Console.WriteLine("Copying required files...");' >> Program.cs
-          echo '            // Copy main DLL and dependencies' >> Program.cs
+          echo '            // Copy all required DLLs from package directory' >> Program.cs
           echo '            var files = new[]' >> Program.cs
           echo '            {' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/BloodPressureDLL.dll",' >> Program.cs
-          echo '                "opencv_core4.dll",' >> Program.cs
-          echo '                "opencv_dnn4.dll",' >> Program.cs
-          echo '                "opencv_imgcodecs4.dll",' >> Program.cs
-          echo '                "opencv_imgproc4.dll",' >> Program.cs
-          echo '                "opencv_objdetect4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_core4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_dnn4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_imgcodecs4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_imgproc4.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/opencv_objdetect4.dll",' >> Program.cs
           echo '                "../CppBloodPressureDLL/package/onnxruntime.dll",' >> Program.cs
-          echo '                "../CppBloodPressureDLL/package/zlib.dll"' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/zlib.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/abseil_dll.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/jpeg62.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libgcc_s_seh-1.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libgfortran-5.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/liblapack.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/liblzma.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libpng16.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libprotobuf.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libquadmath-0.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libsharpyuv.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebp.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebpdecoder.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebpdemux.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwebpmux.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/libwinpthread-1.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/openblas.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/tiff.dll",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/zlib1.dll"' >> Program.cs
           echo '            };' >> Program.cs
           echo '' >> Program.cs
           echo '            foreach (var file in files)' >> Program.cs
@@ -499,63 +517,61 @@ jobs:
 
       - name: Copy individual OpenCV DLLs for optimal configuration
         run: |
-          Write-Host "Copying individual OpenCV DLLs for optimal configuration..." -ForegroundColor Yellow
+          Write-Host "Copying all required DLLs from package directory..." -ForegroundColor Yellow
 
-          # Copy individual OpenCV DLLs from root directory
-          $opencvDlls = @(
-            "opencv_core4.dll",
-            "opencv_dnn4.dll", 
-            "opencv_imgcodecs4.dll",
-            "opencv_imgproc4.dll",
-            "opencv_objdetect4.dll"
+          # Copy all required DLLs from CppBloodPressureDLL/package directory
+          $packageDlls = @(
+            "CppBloodPressureDLL/package/BloodPressureDLL.dll",
+            "CppBloodPressureDLL/package/opencv_core4.dll",
+            "CppBloodPressureDLL/package/opencv_dnn4.dll", 
+            "CppBloodPressureDLL/package/opencv_imgcodecs4.dll",
+            "CppBloodPressureDLL/package/opencv_imgproc4.dll",
+            "CppBloodPressureDLL/package/opencv_objdetect4.dll",
+            "CppBloodPressureDLL/package/onnxruntime.dll",
+            "CppBloodPressureDLL/package/zlib.dll",
+            "CppBloodPressureDLL/package/abseil_dll.dll",
+            "CppBloodPressureDLL/package/jpeg62.dll",
+            "CppBloodPressureDLL/package/libgcc_s_seh-1.dll",
+            "CppBloodPressureDLL/package/libgfortran-5.dll",
+            "CppBloodPressureDLL/package/liblapack.dll",
+            "CppBloodPressureDLL/package/liblzma.dll",
+            "CppBloodPressureDLL/package/libpng16.dll",
+            "CppBloodPressureDLL/package/libprotobuf.dll",
+            "CppBloodPressureDLL/package/libquadmath-0.dll",
+            "CppBloodPressureDLL/package/libsharpyuv.dll",
+            "CppBloodPressureDLL/package/libwebp.dll",
+            "CppBloodPressureDLL/package/libwebpdecoder.dll",
+            "CppBloodPressureDLL/package/libwebpdemux.dll",
+            "CppBloodPressureDLL/package/libwebpmux.dll",
+            "CppBloodPressureDLL/package/libwinpthread-1.dll",
+            "CppBloodPressureDLL/package/openblas.dll",
+            "CppBloodPressureDLL/package/tiff.dll",
+            "CppBloodPressureDLL/package/zlib1.dll"
           )
 
-          foreach ($dll in $opencvDlls) {
+          foreach ($dll in $packageDlls) {
             if (Test-Path $dll) {
               Copy-Item $dll "test_bp_estimation_optimal/" -Force
               $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
-              Write-Host "Copied: $dll ($size MB)" -ForegroundColor Green
+              Write-Host "Copied: $(Split-Path $dll -Leaf) ($size MB)" -ForegroundColor Green
             } else {
-              Write-Host "WARNING: $dll not found in root directory" -ForegroundColor Yellow
-            }
-          }
-
-          # Copy additional required DLLs
-          $additionalDlls = @(
-            "abseil_dll.dll",
-            "jpeg62.dll",
-            "libgcc_s_seh-1.dll",
-            "libgfortran-5.dll",
-            "liblapack.dll",
-            "liblzma.dll",
-            "libpng16.dll",
-            "libprotobuf.dll",
-            "libquadmath-0.dll",
-            "libsharpyuv.dll",
-            "libwebp.dll",
-            "libwebpdecoder.dll",
-            "libwebpdemux.dll",
-            "libwebpmux.dll",
-            "libwinpthread-1.dll",
-            "openblas.dll",
-            "tiff.dll",
-            "zlib1.dll"
-          )
-
-          foreach ($dll in $additionalDlls) {
-            if (Test-Path $dll) {
-              Copy-Item $dll "test_bp_estimation_optimal/" -Force
-              $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
-              Write-Host "Copied: $dll ($size MB)" -ForegroundColor Green
-            } else {
-              Write-Host "WARNING: $dll not found in root directory" -ForegroundColor Yellow
+              Write-Host "WARNING: $dll not found in package directory" -ForegroundColor Yellow
             }
           }
 
           # Verify copied files
           Write-Host "Verifying copied DLLs..." -ForegroundColor Yellow
-          $allDlls = $opencvDlls + $additionalDlls
-          foreach ($dll in $allDlls) {
+          $dllNames = @(
+            "BloodPressureDLL.dll",
+            "opencv_core4.dll", "opencv_dnn4.dll", "opencv_imgcodecs4.dll", "opencv_imgproc4.dll", "opencv_objdetect4.dll",
+            "onnxruntime.dll", "zlib.dll",
+            "abseil_dll.dll", "jpeg62.dll", "libgcc_s_seh-1.dll", "libgfortran-5.dll", "liblapack.dll",
+            "liblzma.dll", "libpng16.dll", "libprotobuf.dll", "libquadmath-0.dll", "libsharpyuv.dll",
+            "libwebp.dll", "libwebpdecoder.dll", "libwebpdemux.dll", "libwebpmux.dll", "libwinpthread-1.dll",
+            "openblas.dll", "tiff.dll", "zlib1.dll"
+          )
+
+          foreach ($dll in $dllNames) {
             $testPath = "test_bp_estimation_optimal/$dll"
             if (Test-Path $testPath) {
               Write-Host "  OK: $dll copied successfully" -ForegroundColor Green
@@ -778,16 +794,34 @@ jobs:
           New-Item -ItemType Directory -Path "dist_optimal/models" -Force | Out-Null
           New-Item -ItemType Directory -Path "dist_optimal/docs" -Force | Out-Null
 
-          # Copy main DLL and dependencies
+          # Copy all required DLLs from package directory
           $files = @(
             "CppBloodPressureDLL/package/BloodPressureDLL.dll",
-            "opencv_core4.dll", 
-            "opencv_dnn4.dll",
-            "opencv_imgcodecs4.dll",
-            "opencv_imgproc4.dll",
-            "opencv_objdetect4.dll",
+            "CppBloodPressureDLL/package/opencv_core4.dll",
+            "CppBloodPressureDLL/package/opencv_dnn4.dll",
+            "CppBloodPressureDLL/package/opencv_imgcodecs4.dll",
+            "CppBloodPressureDLL/package/opencv_imgproc4.dll",
+            "CppBloodPressureDLL/package/opencv_objdetect4.dll",
             "CppBloodPressureDLL/package/onnxruntime.dll",
-            "CppBloodPressureDLL/package/zlib.dll"
+            "CppBloodPressureDLL/package/zlib.dll",
+            "CppBloodPressureDLL/package/abseil_dll.dll",
+            "CppBloodPressureDLL/package/jpeg62.dll",
+            "CppBloodPressureDLL/package/libgcc_s_seh-1.dll",
+            "CppBloodPressureDLL/package/libgfortran-5.dll",
+            "CppBloodPressureDLL/package/liblapack.dll",
+            "CppBloodPressureDLL/package/liblzma.dll",
+            "CppBloodPressureDLL/package/libpng16.dll",
+            "CppBloodPressureDLL/package/libprotobuf.dll",
+            "CppBloodPressureDLL/package/libquadmath-0.dll",
+            "CppBloodPressureDLL/package/libsharpyuv.dll",
+            "CppBloodPressureDLL/package/libwebp.dll",
+            "CppBloodPressureDLL/package/libwebpdecoder.dll",
+            "CppBloodPressureDLL/package/libwebpdemux.dll",
+            "CppBloodPressureDLL/package/libwebpmux.dll",
+            "CppBloodPressureDLL/package/libwinpthread-1.dll",
+            "CppBloodPressureDLL/package/openblas.dll",
+            "CppBloodPressureDLL/package/tiff.dll",
+            "CppBloodPressureDLL/package/zlib1.dll"
           )
 
           foreach ($file in $files) {
@@ -877,6 +911,7 @@ jobs:
           echo '- opencv_objdetect4.dll - OpenCV object detection' >> dist_optimal/README.md
           echo '- onnxruntime.dll - ONNX Runtime' >> dist_optimal/README.md
           echo '- zlib.dll - ZLIB library' >> dist_optimal/README.md
+          echo '- Additional dependency DLLs (abseil, jpeg, libgcc, etc.)' >> dist_optimal/README.md
           echo '- models/ - Machine learning model files' >> dist_optimal/README.md
           echo '- BloodPressureWrapper.cs - C# integration example' >> dist_optimal/README.md
           echo '' >> dist_optimal/README.md
