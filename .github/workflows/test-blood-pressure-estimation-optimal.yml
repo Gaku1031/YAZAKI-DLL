@@ -153,12 +153,25 @@ jobs:
           echo '' >> Program.cs
           echo '    class Program' >> Program.cs
           echo '    {' >> Program.cs
-          echo '        private static string currentRequestId = "";' >> Program.cs
-          echo '        private static bool analysisCompleted = false;' >> Program.cs
-          echo '        private static int systolicResult = 0;' >> Program.cs
-          echo '        private static int diastolicResult = 0;' >> Program.cs
-          echo '        private static string errorMessage = "";' >> Program.cs
-          echo '        private static string measureData = "";' >> Program.cs
+          echo '        // Static variables for results' >> Program.cs
+          echo '        static string currentRequestId = "";' >> Program.cs
+          echo '        static bool analysisCompleted = false;' >> Program.cs
+          echo '        static int systolicResult = 0;' >> Program.cs
+          echo '        static int diastolicResult = 0;' >> Program.cs
+          echo '        static string errorMessage = "";' >> Program.cs
+          echo '        static string measureData = "";' >> Program.cs
+          echo '        static int frameCount = 0;' >> Program.cs
+          echo '        static long memoryUsage = 0;' >> Program.cs
+          echo '        static double cpuUsage = 0.0;' >> Program.cs
+          echo '' >> Program.cs
+          echo '        // Test parameters' >> Program.cs
+          echo '        static string testVideo = "sample_1M.webm";' >> Program.cs
+          echo '        static int testDuration = 30;' >> Program.cs
+          echo '        static bool performanceMonitoring = true;' >> Program.cs
+          echo '        static string videoFile = "../sample-data/sample_1M.webm";' >> Program.cs
+          echo '        static int height = 170;' >> Program.cs
+          echo '        static int weight = 70;' >> Program.cs
+          echo '        static int sex = 1;' >> Program.cs
           echo '' >> Program.cs
           echo '        // Callback function for blood pressure results' >> Program.cs
           echo '        static void BloodPressureCallback(string requestId, int maxBloodPressure, int minBloodPressure, string measureRowData, string errorsJson)' >> Program.cs
@@ -176,30 +189,67 @@ jobs:
           echo '            analysisCompleted = true;' >> Program.cs
           echo '        }' >> Program.cs
           echo '' >> Program.cs
+          echo '        static void CopyModelFiles()' >> Program.cs
+          echo '        {' >> Program.cs
+          echo '            Console.WriteLine("Copying model files...");' >> Program.cs
+          echo '            var modelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");' >> Program.cs
+          echo '            if (!Directory.Exists(modelDir))' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Directory.CreateDirectory(modelDir);' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '' >> Program.cs
+          echo '            var modelFiles = new[]' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/models/diastolicbloodpressure.onnx",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/models/systolicbloodpressure.onnx",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/models/opencv_face_detector.pbtxt",' >> Program.cs
+          echo '                "../CppBloodPressureDLL/package/models/opencv_face_detector_uint8.pb"' >> Program.cs
+          echo '            };' >> Program.cs
+          echo '' >> Program.cs
+          echo '            foreach (var file in modelFiles)' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    if (System.IO.File.Exists(file))' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        var fileName = System.IO.Path.GetFileName(file);' >> Program.cs
+          echo '                        var destPath = Path.Combine(modelDir, fileName);' >> Program.cs
+          echo '                        System.IO.File.Copy(file, destPath, true);' >> Program.cs
+          echo '                        Console.WriteLine($"Copied model: {fileName}");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    else' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"Warning: Model file not found: {file}");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"Error copying model {file}: {ex.Message}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '        }' >> Program.cs
+          echo '' >> Program.cs
           echo '        static void Main(string[] args)' >> Program.cs
           echo '        {' >> Program.cs
           echo '            Console.WriteLine("=== Optimal Blood Pressure Estimation Test ===");' >> Program.cs
           echo '            Console.WriteLine("Configuration: dlib frontal face detector + OpenCV DNN");' >> Program.cs
           echo '            Console.WriteLine("Benefits: High accuracy + Fast processing + Small package");' >> Program.cs
-          echo '            Console.WriteLine($"Test Video: {Environment.GetEnvironmentVariable("TEST_VIDEO")}");' >> Program.cs
-          echo '            Console.WriteLine($"Test Duration: {Environment.GetEnvironmentVariable("TEST_DURATION")} seconds");' >> Program.cs
-          echo '            Console.WriteLine($"Performance Monitoring: {Environment.GetEnvironmentVariable("PERFORMANCE_MONITORING")}");' >> Program.cs
+          echo '            Console.WriteLine($"Test Video: {testVideo}");' >> Program.cs
+          echo '            Console.WriteLine($"Test Duration: {testDuration} seconds");' >> Program.cs
+          echo '            Console.WriteLine($"Performance Monitoring: {performanceMonitoring}");' >> Program.cs
           echo '            Console.WriteLine();' >> Program.cs
-          echo '' >> Program.cs
-          echo '            var stopwatch = Stopwatch.StartNew();' >> Program.cs
-          echo '            var process = Process.GetCurrentProcess();' >> Program.cs
-          echo '            var initialMemory = process.WorkingSet64;' >> Program.cs
           echo '' >> Program.cs
           echo '            try' >> Program.cs
           echo '            {' >> Program.cs
           echo '                Console.WriteLine("Setting up optimal test environment...");' >> Program.cs
           echo '                CopyRequiredFiles();' >> Program.cs
+          echo '                CopyModelFiles();' >> Program.cs
           echo '' >> Program.cs
           echo '                Console.WriteLine("Initializing optimal blood pressure estimator...");' >> Program.cs
-          echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
           echo '                var modelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");' >> Program.cs
           echo '                Console.WriteLine($"Model directory: {modelDir}");' >> Program.cs
           echo '                Console.WriteLine($"Model directory exists: {Directory.Exists(modelDir)}");' >> Program.cs
+          echo '' >> Program.cs
           echo '                if (Directory.Exists(modelDir))' >> Program.cs
           echo '                {' >> Program.cs
           echo '                    var modelFiles = Directory.GetFiles(modelDir);' >> Program.cs
@@ -210,138 +260,112 @@ jobs:
           echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
-          echo '                try' >> Program.cs
+          echo '                // Check if DLL files exist' >> Program.cs
+          echo '                var dllFiles = new[] { "BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll", "zlib.dll" };' >> Program.cs
+          echo '                Console.WriteLine("Checking DLL files:");' >> Program.cs
+          echo '                foreach (var dll in dllFiles)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    var initResult = BloodPressureEstimator.InitializeBP(outBuf, 1024, modelDir);' >> Program.cs
-          echo '                    Console.WriteLine($"InitializeBP returned: {initResult}");' >> Program.cs
-          echo '                    Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    if (initResult != 0)' >> Program.cs
-          echo '                    {' >> Program.cs
-          echo '                        Console.WriteLine($"ERROR: Failed to initialize blood pressure estimator: {outBuf}");' >> Program.cs
-          echo '                        return;' >> Program.cs
-          echo '                    }' >> Program.cs
-          echo '                    Console.WriteLine($"Initialization successful: {outBuf}");' >> Program.cs
+          echo '                    var exists = File.Exists(dll);' >> Program.cs
+          echo '                    Console.WriteLine($"  {dll}: {(exists ? "Found" : "NOT FOUND")}");' >> Program.cs
           echo '                }' >> Program.cs
-          echo '                catch (Exception ex)' >> Program.cs
+          echo '' >> Program.cs
+          echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
+          echo '                var result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, modelDir);' >> Program.cs
+          echo '                Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
+          echo '                Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                if (result != 0)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR during initialization: {ex.Message}");' >> Program.cs
-          echo '                    Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: InitializeBP failed with code {result}");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                Console.WriteLine("Blood pressure estimator initialized successfully");' >> Program.cs
           echo '' >> Program.cs
           echo '                // Generate request ID' >> Program.cs
-          echo '                outBuf.Clear();' >> Program.cs
-          echo '                try' >> Program.cs
+          echo '                var requestIdBuf = new StringBuilder(256);' >> Program.cs
+          echo '                result = BloodPressureEstimator.GenerateRequestId(requestIdBuf, requestIdBuf.Capacity);' >> Program.cs
+          echo '                if (result != 0)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    var requestResult = BloodPressureEstimator.GenerateRequestId(outBuf, 1024);' >> Program.cs
-          echo '                    Console.WriteLine($"GenerateRequestId returned: {requestResult}");' >> Program.cs
-          echo '                    Console.WriteLine($"GenerateRequestId output: {outBuf}");' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    if (requestResult != 0)' >> Program.cs
-          echo '                    {' >> Program.cs
-          echo '                        Console.WriteLine($"ERROR: Failed to generate request ID: {outBuf}");' >> Program.cs
-          echo '                        return;' >> Program.cs
-          echo '                    }' >> Program.cs
-          echo '                    currentRequestId = outBuf.ToString();' >> Program.cs
-          echo '                    Console.WriteLine($"Generated request ID: {currentRequestId}");' >> Program.cs
-          echo '                }' >> Program.cs
-          echo '                catch (Exception ex)' >> Program.cs
-          echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR during request ID generation: {ex.Message}");' >> Program.cs
-          echo '                    Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: GenerateRequestId failed with code {result}");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
-          echo '' >> Program.cs
-          echo '                var videoPath = Path.Combine("..", "sample-data", Environment.GetEnvironmentVariable("TEST_VIDEO"));' >> Program.cs
-          echo '                if (!File.Exists(videoPath))' >> Program.cs
-          echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR: Test video not found: {videoPath}");' >> Program.cs
-          echo '                    return;' >> Program.cs
-          echo '                }' >> Program.cs
-          echo '' >> Program.cs
-          echo '                Console.WriteLine($"Processing video: {videoPath}");' >> Program.cs
-          echo '                var fileInfo = new FileInfo(videoPath);' >> Program.cs
-          echo '                Console.WriteLine($"Video size: {fileInfo.Length / 1024 / 1024:F2} MB");' >> Program.cs
+          echo '                currentRequestId = requestIdBuf.ToString();' >> Program.cs
+          echo '                Console.WriteLine($"Generated request ID: {currentRequestId}");' >> Program.cs
           echo '' >> Program.cs
           echo '                // Start blood pressure analysis' >> Program.cs
-          echo '                var callback = new BloodPressureEstimator.BPCallback(BloodPressureCallback);' >> Program.cs
-          echo '                outBuf.Clear();' >> Program.cs
-          echo '                var analysisResult = BloodPressureEstimator.StartBloodPressureAnalysisRequest(outBuf, 1024, currentRequestId, 170, 70, 1, videoPath, callback);' >> Program.cs
-          echo '' >> Program.cs
-          echo '                if (analysisResult != 0)' >> Program.cs
+          echo '                var videoPath = Path.GetFullPath(videoFile);' >> Program.cs
+          echo '                Console.WriteLine($"Starting blood pressure analysis for: {videoPath}");' >> Program.cs
+          echo '                Console.WriteLine($"Video file exists: {File.Exists(videoPath)}");' >> Program.cs
+          echo '                if (File.Exists(videoPath))' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR: Failed to start blood pressure analysis: {outBuf}");' >> Program.cs
+          echo '                    var fileInfo = new FileInfo(videoPath);' >> Program.cs
+          echo '                    Console.WriteLine($"Video file size: {fileInfo.Length / 1024 / 1024} MB");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                var startTime = DateTime.Now;' >> Program.cs
+          echo '                result = BloodPressureEstimator.StartBloodPressureAnalysisRequest(' >> Program.cs
+          echo '                    outBuf, outBuf.Capacity, currentRequestId, height, weight, sex, videoPath, BloodPressureCallback);' >> Program.cs
+          echo '                var endTime = DateTime.Now;' >> Program.cs
+          echo '                Console.WriteLine($"StartBloodPressureAnalysisRequest result: {result}");' >> Program.cs
+          echo '                Console.WriteLine($"StartBloodPressureAnalysisRequest output: {outBuf}");' >> Program.cs
+          echo '                Console.WriteLine($"Request time: {(endTime - startTime).TotalMilliseconds} ms");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                if (result != 0)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: StartBloodPressureAnalysisRequest failed with code {result}");' >> Program.cs
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
-          echo '                Console.WriteLine($"Analysis started: {outBuf}");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                Console.WriteLine("Blood pressure analysis started successfully");' >> Program.cs
+          echo '                Console.WriteLine("Waiting for analysis to complete...");' >> Program.cs
           echo '' >> Program.cs
           echo '                // Wait for analysis to complete' >> Program.cs
-          echo '                Console.WriteLine("Waiting for analysis to complete...");' >> Program.cs
-          echo '                var timeout = TimeSpan.FromSeconds(int.Parse(Environment.GetEnvironmentVariable("TEST_DURATION")));' >> Program.cs
-          echo '                var startTime = DateTime.Now;' >> Program.cs
-          echo '' >> Program.cs
-          echo '                while (!analysisCompleted && (DateTime.Now - startTime) < timeout)' >> Program.cs
+          echo '                var maxWaitTime = TimeSpan.FromSeconds(testDuration);' >> Program.cs
+          echo '                var waitStartTime = DateTime.Now;' >> Program.cs
+          echo '                while (!analysisCompleted && (DateTime.Now - waitStartTime) < maxWaitTime)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Thread.Sleep(1000);' >> Program.cs
-          echo '                    Console.WriteLine("Checking analysis status...");' >> Program.cs
+          echo '                    Thread.Sleep(100);' >> Program.cs
+          echo '                    var statusBuf = new StringBuilder(1024);' >> Program.cs
+          echo '                    var statusResult = BloodPressureEstimator.GetProcessingStatus(statusBuf, statusBuf.Capacity, currentRequestId);' >> Program.cs
+          echo '                    if (statusResult == 0)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"Status: {statusBuf}");' >> Program.cs
+          echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                var totalTime = DateTime.Now - startTime;' >> Program.cs
+          echo '                Console.WriteLine($"Total processing time: {totalTime.TotalSeconds:F2} seconds");' >> Program.cs
           echo '' >> Program.cs
           echo '                if (analysisCompleted)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    process.Refresh();' >> Program.cs
-          echo '                    var finalMemory = process.WorkingSet64;' >> Program.cs
-          echo '                    var memoryUsed = (finalMemory - initialMemory) / 1024 / 1024;' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    var cpuTime = process.TotalProcessorTime;' >> Program.cs
-          echo '                    var cpuUsage = (cpuTime.TotalMilliseconds / stopwatch.ElapsedMilliseconds) * 100;' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    Console.WriteLine();' >> Program.cs
-          echo '                    Console.WriteLine("=== OPTIMAL RESULTS ===");' >> Program.cs
-          echo '                    Console.WriteLine($"Success: true");' >> Program.cs
+          echo '                    Console.WriteLine("=== BLOOD PRESSURE RESULTS ===");' >> Program.cs
           echo '                    Console.WriteLine($"Systolic Blood Pressure: {systolicResult} mmHg");' >> Program.cs
           echo '                    Console.WriteLine($"Diastolic Blood Pressure: {diastolicResult} mmHg");' >> Program.cs
-          echo '                    Console.WriteLine($"Error Message: {errorMessage}");' >> Program.cs
           echo '                    Console.WriteLine($"Measure Data: {measureData}");' >> Program.cs
-          echo '                    Console.WriteLine();' >> Program.cs
-          echo '                    Console.WriteLine("=== PERFORMANCE METRICS (Optimal) ===");' >> Program.cs
-          echo '                    Console.WriteLine($"Total Time: {stopwatch.ElapsedMilliseconds / 1000:F2} seconds");' >> Program.cs
-          echo '                    Console.WriteLine($"Memory Usage: {memoryUsed:F2} MB");' >> Program.cs
-          echo '                    Console.WriteLine($"CPU Usage: {cpuUsage:F1}%");' >> Program.cs
-          echo '                    Console.WriteLine($"Video File Size: {fileInfo.Length / 1024 / 1024:F2} MB");' >> Program.cs
-          echo '                    Console.WriteLine();' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    Console.WriteLine("=== OPTIMAL BENEFITS ===");' >> Program.cs
-          echo '                    Console.WriteLine("dlib frontal face detector (high accuracy, low false positives)");' >> Program.cs
-          echo '                    Console.WriteLine("OpenCV DNN face detection (fast, GPU-accelerated)");' >> Program.cs
-          echo '                    Console.WriteLine("Reduced package size by ~100MB (no shape predictor)");' >> Program.cs
-          echo '                    Console.WriteLine("Faster initialization (no large model loading)");' >> Program.cs
-          echo '                    Console.WriteLine("Lower memory footprint");' >> Program.cs
-          echo '                    Console.WriteLine("Best balance of accuracy and performance");' >> Program.cs
-          echo '                    Console.WriteLine("Robust face detection (dual approach)");' >> Program.cs
-          echo '' >> Program.cs
-          echo '                    Console.WriteLine();' >> Program.cs
-          echo '                    Console.WriteLine("=== OPTIMAL TEST COMPLETED SUCCESSFULLY ===");' >> Program.cs
+          echo '                    Console.WriteLine($"Error Message: {errorMessage}");' >> Program.cs
+          echo '                    Console.WriteLine("=== PERFORMANCE METRICS ===");' >> Program.cs
+          echo '                    Console.WriteLine($"Total Time: {totalTime.TotalSeconds:F2} seconds");' >> Program.cs
+          echo '                    Console.WriteLine($"Frames Processed: {frameCount}");' >> Program.cs
+          echo '                    Console.WriteLine($"FPS: {(frameCount > 0 ? frameCount / totalTime.TotalSeconds : 0):F2}");' >> Program.cs
+          echo '                    Console.WriteLine($"Memory Usage: {memoryUsage / 1024 / 1024:F2} MB");' >> Program.cs
+          echo '                    Console.WriteLine($"CPU Usage: {cpuUsage:F2}%");' >> Program.cs
           echo '                }' >> Program.cs
           echo '                else' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Console.WriteLine("ERROR: Analysis timed out or failed");' >> Program.cs
+          echo '                    Console.WriteLine("ERROR: Analysis did not complete within the specified time");' >> Program.cs
           echo '                }' >> Program.cs
           echo '            }' >> Program.cs
           echo '            catch (Exception ex)' >> Program.cs
           echo '            {' >> Program.cs
-          echo '                Console.WriteLine($"ERROR: {ex.Message}");' >> Program.cs
+          echo '                Console.WriteLine($"ERROR during initialization: {ex.Message}");' >> Program.cs
           echo '                Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
-          echo '            }' >> Program.cs
-          echo '            finally' >> Program.cs
-          echo '            {' >> Program.cs
-          echo '                stopwatch.Stop();' >> Program.cs
-          echo '                Console.WriteLine($"Total test time: {stopwatch.ElapsedMilliseconds / 1000:F2} seconds");' >> Program.cs
           echo '            }' >> Program.cs
           echo '        }' >> Program.cs
           echo '' >> Program.cs
           echo '        static void CopyRequiredFiles()' >> Program.cs
           echo '        {' >> Program.cs
+          echo '            Console.WriteLine("Copying required files...");' >> Program.cs
           echo '            // Copy main DLL and dependencies' >> Program.cs
           echo '            var files = new[]' >> Program.cs
           echo '            {' >> Program.cs
@@ -357,14 +381,22 @@ jobs:
           echo '' >> Program.cs
           echo '            foreach (var file in files)' >> Program.cs
           echo '            {' >> Program.cs
-          echo '                if (File.Exists(file))' >> Program.cs
+          echo '                try' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    File.Copy(file, Path.GetFileName(file), true);' >> Program.cs
-          echo '                    Console.WriteLine($"Copied: {Path.GetFileName(file)}");' >> Program.cs
+          echo '                    if (System.IO.File.Exists(file))' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        var fileName = System.IO.Path.GetFileName(file);' >> Program.cs
+          echo '                        System.IO.File.Copy(file, fileName, true);' >> Program.cs
+          echo '                        Console.WriteLine($"Copied: {fileName}");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    else' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"Warning: {file} not found");' >> Program.cs
+          echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
-          echo '                else' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"Warning: {Path.GetFileName(file)} not found");' >> Program.cs
+          echo '                    Console.WriteLine($"Error copying {file}: {ex.Message}");' >> Program.cs
           echo '                }' >> Program.cs
           echo '            }' >> Program.cs
           echo '' >> Program.cs
