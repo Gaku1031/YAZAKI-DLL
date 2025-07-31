@@ -111,8 +111,8 @@ jobs:
 
       - name: Install ONNX Runtime
         run: |
-          # Download and install ONNX Runtime (matching build-optimized-sub.yml version)
-          $onnxVersion = "1.15.1"
+          # Download and install ONNX Runtime (using stable version)
+          $onnxVersion = "1.22.1"
           $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
           $onnxZip = "onnxruntime.zip"
           $onnxDir = "${{ github.workspace }}/onnxruntime"
@@ -192,14 +192,14 @@ jobs:
 
           # Configure CMake
           Write-Host "Configuring CMake..." -ForegroundColor Yellow
-          $env:ONNXRUNTIME_ROOT = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1"
-          $env:ONNXRUNTIME_INCLUDE_DIRS = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/include"
-          $env:ONNXRUNTIME_LIBRARIES = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.lib"
+          $env:ONNXRUNTIME_ROOT = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1"
+          $env:ONNXRUNTIME_INCLUDE_DIRS = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
+          $env:ONNXRUNTIME_LIBRARIES = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib"
 
           # Verify ONNX Runtime files exist
           Write-Host "Verifying ONNX Runtime files..." -ForegroundColor Yellow
-          $onnxIncludeDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/include"
-          $onnxLibDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/lib"
+          $onnxIncludeDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
+          $onnxLibDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib"
 
           if (Test-Path "$onnxIncludeDir/onnxruntime_cxx_api.h") {
             Write-Host "ONNX Runtime header found: onnxruntime_cxx_api.h" -ForegroundColor Green
@@ -219,9 +219,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
-            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1" `
-            -DONNXRUNTIME_INCLUDE_DIRS="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/include" `
-            -DONNXRUNTIME_LIBRARIES="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.lib" `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1" `
+            -DONNXRUNTIME_INCLUDE_DIRS="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
+            -DONNXRUNTIME_LIBRARIES="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib" `
             -DUSE_INDIVIDUAL_OPENCV_LIBS=ON `
             -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON `
             -DOpenCV_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/opencv4"
@@ -297,7 +297,7 @@ jobs:
 
           # Copy ONNX Runtime DLL to package directory
           Write-Host "Copying ONNX Runtime DLL to package directory..." -ForegroundColor Yellow
-          $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.dll"
+          $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
           if (Test-Path $onnxDll) {
             Copy-Item $onnxDll "package/" -Force
             $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
@@ -659,6 +659,31 @@ jobs:
           echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
+          echo '                // Check DLL architecture compatibility' >> Program.cs
+          echo '                Console.WriteLine("Checking DLL architecture compatibility...");' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var dllPath = Path.GetFullPath("BloodPressureDLL.dll");' >> Program.cs
+          echo '                    var bytes = File.ReadAllBytes(dllPath);' >> Program.cs
+          echo '                    if (bytes.Length >= 64)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        var peOffset = BitConverter.ToInt32(bytes, 60);' >> Program.cs
+          echo '                        if (peOffset >= 0 && peOffset + 6 < bytes.Length)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            if (bytes[peOffset] == 0x50 && bytes[peOffset + 1] == 0x45)' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                var machine = BitConverter.ToUInt16(bytes, peOffset + 4);' >> Program.cs
+          echo '                                var arch = machine == 0x8664 ? "x64" : machine == 0x14c ? "x86" : $"Unknown(0x{machine:X})";' >> Program.cs
+          echo '                                Console.WriteLine($"BloodPressureDLL.dll architecture: {arch}");' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"Error checking DLL architecture: {ex.Message}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
           echo '                // Test DLL function availability' >> Program.cs
           echo '                Console.WriteLine("Testing DLL function availability...");' >> Program.cs
           echo '                try' >> Program.cs
@@ -674,9 +699,42 @@ jobs:
           echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
-          echo '                var result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, modelDir);' >> Program.cs
-          echo '                Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
-          echo '                Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+          echo '                int result = 0;' >> Program.cs
+          echo '                try' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, modelDir);' >> Program.cs
+          echo '                    Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
+          echo '                    Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (AccessViolationException ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"CRITICAL ERROR: AccessViolationException in InitializeBP: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine("This indicates a serious memory corruption or DLL compatibility issue");' >> Program.cs
+          echo '                    Console.WriteLine("Possible causes:");' >> Program.cs
+          echo '                    Console.WriteLine("1. DLL architecture mismatch (x86 vs x64)");' >> Program.cs
+          echo '                    Console.WriteLine("2. Missing or incompatible dependencies");' >> Program.cs
+          echo '                    Console.WriteLine("3. ONNX Runtime version mismatch");' >> Program.cs
+          echo '                    Console.WriteLine("4. OpenCV DLL version mismatch");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (BadImageFormatException ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"CRITICAL ERROR: BadImageFormatException in InitializeBP: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine("This indicates DLL architecture mismatch");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (DllNotFoundException ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"CRITICAL ERROR: DllNotFoundException in InitializeBP: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine("This indicates missing dependencies");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '                catch (Exception ex)' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"ERROR: InitializeBP failed with exception: {ex.Message}");' >> Program.cs
+          echo '                    Console.WriteLine($"Exception type: {ex.GetType().Name}");' >> Program.cs
+          echo '                    return;' >> Program.cs
+          echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                if (result != 0)' >> Program.cs
           echo '                {' >> Program.cs
@@ -1011,7 +1069,7 @@ jobs:
 
           # Copy ONNX Runtime DLL
           Write-Host "Copying ONNX Runtime DLL..." -ForegroundColor Yellow
-          $onnxDll = "onnxruntime/onnxruntime-win-x64-1.15.1/lib/onnxruntime.dll"
+          $onnxDll = "onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
           if (Test-Path $onnxDll) {
             Copy-Item $onnxDll "test_bp_estimation_optimal/" -Force
             $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
@@ -1186,6 +1244,18 @@ jobs:
               Write-Host "  Package has: $(Split-Path $dllPath -Leaf) ($size MB)" -ForegroundColor Green
             } else {
               Write-Host "  Package missing: $(Split-Path $dllPath -Leaf)" -ForegroundColor Red
+            }
+          }
+
+          # Check DLL dependencies before running test
+          Write-Host "Checking DLL dependencies before test..." -ForegroundColor Yellow
+          $criticalDlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
+          foreach ($dll in $criticalDlls) {
+            if (Test-Path $dll) {
+              $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
+              Write-Host "  Found: $dll ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "  ERROR: $dll not found" -ForegroundColor Red
             }
           }
 
