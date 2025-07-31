@@ -285,6 +285,78 @@ jobs:
           echo '                }' >> Program.cs
           echo '            }' >> Program.cs
           echo '        }' >> Program.cs
+          echo '' >> Program.cs
+          echo '        static void TestDllBasicFunctionality()' >> Program.cs
+          echo '        {' >> Program.cs
+          echo '            try' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Console.WriteLine("  Testing if DLL can be loaded...");' >> Program.cs
+          echo '                var assembly = System.Reflection.Assembly.LoadFrom("BloodPressureDLL.dll");' >> Program.cs
+          echo '                Console.WriteLine($"  DLL loaded successfully: {assembly.FullName}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '            catch (Exception ex)' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Console.WriteLine($"  ERROR loading DLL: {ex.Message}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '        }' >> Program.cs
+          echo '' >> Program.cs
+          echo '        static void TestDllVersionInfo()' >> Program.cs
+          echo '        {' >> Program.cs
+          echo '            try' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
+          echo '                var result = BloodPressureEstimator.GetVersionInfo(outBuf, 1024);' >> Program.cs
+          echo '                Console.WriteLine($"  GetVersionInfo returned: {result}");' >> Program.cs
+          echo '                Console.WriteLine($"  Version info: {outBuf}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '            catch (Exception ex)' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Console.WriteLine($"  ERROR getting version info: {ex.Message}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '        }' >> Program.cs
+          echo '' >> Program.cs
+          echo '        static void TestDllInitialization()' >> Program.cs
+          echo '        {' >> Program.cs
+          echo '            try' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
+          echo '                var modelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");' >> Program.cs
+          echo '                Console.WriteLine($"  Model directory: {modelDir}");' >> Program.cs
+          echo '                Console.WriteLine($"  Model directory exists: {Directory.Exists(modelDir)}");' >> Program.cs
+          echo '                if (Directory.Exists(modelDir))' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    var modelFiles = Directory.GetFiles(modelDir);' >> Program.cs
+          echo '                    Console.WriteLine($"  Model files found: {modelFiles.Length}");' >> Program.cs
+          echo '                    foreach (var file in modelFiles)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"    - {Path.GetFileName(file)}");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                var result = BloodPressureEstimator.InitializeBP(outBuf, 1024, modelDir);' >> Program.cs
+          echo '                Console.WriteLine($"  InitializeBP returned: {result}");' >> Program.cs
+          echo '                Console.WriteLine($"  InitializeBP output: {outBuf}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '            catch (Exception ex)' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Console.WriteLine($"  ERROR during initialization: {ex.Message}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '        }' >> Program.cs
+          echo '' >> Program.cs
+          echo '        static void TestRequestIdGeneration()' >> Program.cs
+          echo '        {' >> Program.cs
+          echo '            try' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                var outBuf = new StringBuilder(1024);' >> Program.cs
+          echo '                var result = BloodPressureEstimator.GenerateRequestId(outBuf, 1024);' >> Program.cs
+          echo '                Console.WriteLine($"  GenerateRequestId returned: {result}");' >> Program.cs
+          echo '                Console.WriteLine($"  Generated request ID: {outBuf}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '            catch (Exception ex)' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Console.WriteLine($"  ERROR during request ID generation: {ex.Message}");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '        }' >> Program.cs
           echo '    }' >> Program.cs
           echo '}' >> Program.cs
 
