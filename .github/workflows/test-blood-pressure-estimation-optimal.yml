@@ -119,84 +119,289 @@ jobs:
           cd test_bp_estimation_optimal
 
           # Create C# test application (optimal version)
-          $testCode = @'
-          using System;
-          using System.Runtime.InteropServices;
-          using System.Diagnostics;
-          using System.IO;
-          using System.Text;
+          Write-Host "Creating Program.cs content..." -ForegroundColor Yellow
 
-          namespace BloodPressureTestOptimal
-          {
-              public class BloodPressureEstimator
-              {
-                  // DLL imports
-                  [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]
-                  public static extern IntPtr CreateBloodPressureEstimator();
-                  
-                  [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]
-                  public static extern void DestroyBloodPressureEstimator(IntPtr estimator);
-                  
-                  [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]
-                  public static extern int EstimateBloodPressure(IntPtr estimator, string videoPath, 
-                      out double systolic, out double diastolic, out double confidence);
-                  
-                  [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]
-                  public static extern int GetLastError(IntPtr estimator, StringBuilder errorMessage, int maxLength);
-                  
-                  [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl)]
-                  public static extern int GetPerformanceMetrics(IntPtr estimator, 
-                      out double initializationTime, out double processingTime, out double totalTime,
-                      out int frameCount, out double fps);
-              }
-              
-              class Program
-              {
-                  static void Main(string[] args)
-                  {
-                      Console.WriteLine("=== Optimal Blood Pressure Estimation Test ===");
-                      Console.WriteLine("Configuration: dlib frontal face detector + OpenCV DNN");
-                      Console.WriteLine("Benefits: High accuracy + Fast processing + Small package");
-                      Console.WriteLine($"Test Video: {Environment.GetEnvironmentVariable("TEST_VIDEO")}");
-                      Console.WriteLine($"Test Duration: {Environment.GetEnvironmentVariable("TEST_DURATION")} seconds");
-                      Console.WriteLine($"Performance Monitoring: {Environment.GetEnvironmentVariable("PERFORMANCE_MONITORING")}");
-                      Console.WriteLine();
-                      
-                      // Performance monitoring setup
-                      var stopwatch = Stopwatch.StartNew();
-                      var process = Process.GetCurrentProcess();
-                      var initialMemory = process.WorkingSet64;
-                      
-                      try
-                      {
-                          // Copy DLLs to test directory
-                          Console.WriteLine("Setting up optimal test environment...");
-                          CopyRequiredFiles();
-                          
-                          // Create estimator
-                          Console.WriteLine("Initializing optimal blood pressure estimator...");
-                          var estimator = BloodPressureEstimator.CreateBloodPressureEstimator();
-                          
-                          if (estimator == IntPtr.Zero)
-                          {
-                              Console.WriteLine("ERROR: Failed to create blood pressure estimator");
-                              return;
-                          }
-                          
-                          // Get video path
-                          var videoPath = Path.Combine("..", "sample-data", Environment.GetEnvironmentVariable("TEST_VIDEO"));
-                          if (!File.Exists(videoPath))
-                          {
-                              Console.WriteLine($"ERROR: Test video not found: {videoPath}");
-                              return;
-                          }
-                          
-                          Console.WriteLine($"Processing video: {videoPath}");
-                          var fileInfo = new FileInfo(videoPath);
-                          Console.WriteLine($"Video size: {fileInfo.Length / 1024 / 1024:F2} MB");
-                          
-                          // Estimate blood pressure
-                          double systolic, diastolic, confidence;
+          # Create Program.cs content line by line to avoid here-string issues
+          $programLines = @(
+              "using System;",
+              "using System.Runtime.InteropServices;",
+              "using System.Diagnostics;",
+              "using System.IO;",
+              "using System.Text;",
+              "",
+              "namespace BloodPressureTestOptimal",
+              "{",
+              "    public class BloodPressureEstimator",
+              "    {",
+              "        // DLL imports",
+              "        [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl)]",
+              "        public static extern IntPtr CreateBloodPressureEstimator();",
+              "        ",
+              "        [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl)]",
+              "        public static extern void DestroyBloodPressureEstimator(IntPtr estimator);",
+              "        ",
+              "        [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl)]",
+              "        public static extern int EstimateBloodPressure(IntPtr estimator, string videoPath,",
+              "            out double systolic, out double diastolic, out double confidence);",
+              "        ",
+              "        [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl)]",
+              "        public static extern int GetLastError(IntPtr estimator, StringBuilder errorMessage, int maxLength);",
+              "        ",
+              "        [DllImport(\"BloodPressureDLL.dll\", CallingConvention = CallingConvention.Cdecl)]",
+              "        public static extern int GetPerformanceMetrics(IntPtr estimator,",
+              "            out double initializationTime, out double processingTime, out double totalTime,",
+              "            out int frameCount, out double fps);",
+              "    }",
+              "    ",
+              "    class Program",
+              "    {",
+              "        static void Main(string[] args)",
+              "        {",
+              "            Console.WriteLine(\"=== Optimal Blood Pressure Estimation Test ===\");",
+              "            Console.WriteLine(\"Configuration: dlib frontal face detector + OpenCV DNN\");",
+              "            Console.WriteLine(\"Benefits: High accuracy + Fast processing + Small package\");",
+              "            Console.WriteLine($\"Test Video: {Environment.GetEnvironmentVariable(\"TEST_VIDEO\")}\");",
+              "            Console.WriteLine($\"Test Duration: {Environment.GetEnvironmentVariable(\"TEST_DURATION\")} seconds\");",
+              "            Console.WriteLine($\"Performance Monitoring: {Environment.GetEnvironmentVariable(\"PERFORMANCE_MONITORING\")}\");",
+              "            Console.WriteLine();",
+              "            ",
+              "            // Performance monitoring setup",
+              "            var stopwatch = Stopwatch.StartNew();",
+              "            var process = Process.GetCurrentProcess();",
+              "            var initialMemory = process.WorkingSet64;",
+              "            ",
+              "            try",
+              "            {",
+              "                // Copy DLLs to test directory",
+              "                Console.WriteLine(\"Setting up optimal test environment...\");",
+              "                CopyRequiredFiles();",
+              "                ",
+              "                // Create estimator",
+              "                Console.WriteLine(\"Initializing optimal blood pressure estimator...\");",
+              "                var estimator = BloodPressureEstimator.CreateBloodPressureEstimator();",
+              "                ",
+              "                if (estimator == IntPtr.Zero)",
+              "                {",
+              "                    Console.WriteLine(\"ERROR: Failed to create blood pressure estimator\");",
+              "                    return;",
+              "                }",
+              "                ",
+              "                // Get video path",
+              "                var videoPath = Path.Combine(\"..\", \"sample-data\", Environment.GetEnvironmentVariable(\"TEST_VIDEO\"));",
+              "                if (!File.Exists(videoPath))",
+              "                {",
+              "                    Console.WriteLine($\"ERROR: Test video not found: {videoPath}\");",
+              "                    return;",
+              "                }",
+              "                ",
+              "                Console.WriteLine($\"Processing video: {videoPath}\");",
+              "                var fileInfo = new FileInfo(videoPath);",
+              "                Console.WriteLine($\"Video size: {fileInfo.Length / 1024 / 1024:F2} MB\");",
+              "                ",
+              "                // Estimate blood pressure",
+              "                double systolic, diastolic, confidence;",
+              "                var result = BloodPressureEstimator.EstimateBloodPressure(estimator, videoPath,",
+              "                    out systolic, out diastolic, out confidence);",
+              "                ",
+              "                if (result == 0)",
+              "                {",
+              "                    // Get performance metrics",
+              "                    double initTime, procTime, totalTime;",
+              "                    int frameCount;",
+              "                    double fps;",
+              "                    BloodPressureEstimator.GetPerformanceMetrics(estimator,",
+              "                        out initTime, out procTime, out totalTime, out frameCount, out fps);",
+              "                    ",
+              "                    // Get memory usage",
+              "                    process.Refresh();",
+              "                    var finalMemory = process.WorkingSet64;",
+              "                    var memoryUsed = (finalMemory - initialMemory) / 1024 / 1024;",
+              "                    ",
+              "                    // Get CPU usage (approximate)",
+              "                    var cpuTime = process.TotalProcessorTime;",
+              "                    var cpuUsage = (cpuTime.TotalMilliseconds / stopwatch.ElapsedMilliseconds) * 100;",
+              "                    ",
+              "                    // Output results",
+              "                    Console.WriteLine();",
+              "                    Console.WriteLine(\"=== OPTIMAL RESULTS ===\");",
+              "                    Console.WriteLine($\"Success: true\");",
+              "                    Console.WriteLine($\"Systolic Blood Pressure: {systolic:F1} mmHg\");",
+              "                    Console.WriteLine($\"Diastolic Blood Pressure: {diastolic:F1} mmHg\");",
+              "                    Console.WriteLine($\"Confidence: {confidence:F2}\");",
+              "                    Console.WriteLine();",
+              "                    Console.WriteLine(\"=== PERFORMANCE METRICS (Optimal) ===\");",
+              "                    Console.WriteLine($\"Total Time: {totalTime:F2} seconds\");",
+              "                    Console.WriteLine($\"Initialization Time: {initTime:F2} seconds\");",
+              "                    Console.WriteLine($\"Processing Time: {procTime:F2} seconds\");",
+              "                    Console.WriteLine($\"Frame Count: {frameCount}\");",
+              "                    Console.WriteLine($\"Frames Per Second: {fps:F2}\");",
+              "                    Console.WriteLine($\"Memory Usage: {memoryUsed:F2} MB\");",
+              "                    Console.WriteLine($\"CPU Usage: {cpuUsage:F1}%\");",
+              "                    Console.WriteLine($\"Video File Size: {fileInfo.Length / 1024 / 1024:F2} MB\");",
+              "                    Console.WriteLine();",
+              "                    ",
+              "                    // Performance analysis",
+              "                    Console.WriteLine(\"=== OPTIMAL PERFORMANCE ANALYSIS ===\");",
+              "                    var processingEfficiency = (procTime / totalTime) * 100;",
+              "                    Console.WriteLine($\"Processing Efficiency: {processingEfficiency:F1}%\");",
+              "                    ",
+              "                    var throughput = frameCount / totalTime;",
+              "                    Console.WriteLine($\"Throughput: {throughput:F2} frames/second\");",
+              "                    ",
+              "                    var memoryEfficiency = fileInfo.Length / 1024 / 1024 / memoryUsed;",
+              "                    Console.WriteLine($\"Memory Efficiency: {memoryEfficiency:F2} MB video per MB RAM\");",
+              "                    ",
+              "                    // Optimal benefits",
+              "                    Console.WriteLine();",
+              "                    Console.WriteLine(\"=== OPTIMAL BENEFITS ===\");",
+              "                    Console.WriteLine(\"dlib frontal face detector (high accuracy, low false positives)\");",
+              "                    Console.WriteLine(\"OpenCV DNN face detection (fast, GPU-accelerated)\");",
+              "                    Console.WriteLine(\"Reduced package size by ~100MB (no shape predictor)\");",
+              "                    Console.WriteLine(\"Faster initialization (no large model loading)\");",
+              "                    Console.WriteLine(\"Lower memory footprint\");",
+              "                    Console.WriteLine(\"Best balance of accuracy and performance\");",
+              "                    Console.WriteLine(\"Robust face detection (dual approach)\");",
+              "                    ",
+              "                    // Bottleneck analysis",
+              "                    Console.WriteLine();",
+              "                    Console.WriteLine(\"=== BOTTLENECK ANALYSIS (Optimal) ===\");",
+              "                    if (initTime > procTime * 0.1)",
+              "                    {",
+              "                        Console.WriteLine(\"Initialization time is significant (>10% of processing time)\");",
+              "                        Console.WriteLine(\"  - Consider lazy initialization or caching\");",
+              "                    }",
+              "                    ",
+              "                    if (fps < 25)",
+              "                    {",
+              "                        Console.WriteLine(\"Frame rate is below real-time threshold (<25 FPS)\");",
+              "                        Console.WriteLine(\"  - Consider frame skipping or resolution reduction\");",
+              "                    }",
+              "                    ",
+              "                    if (memoryUsed > 1024)",
+              "                    {",
+              "                        Console.WriteLine(\"High memory usage (>1GB)\");",
+              "                        Console.WriteLine(\"  - Consider memory optimization or streaming\");",
+              "                    }",
+              "                    ",
+              "                    // Recommendations",
+              "                    Console.WriteLine();",
+              "                    Console.WriteLine(\"=== RECOMMENDATIONS (Optimal) ===\");",
+              "                    if (processingEfficiency < 80)",
+              "                    {",
+              "                        Console.WriteLine(\"Low processing efficiency detected\");",
+              "                        Console.WriteLine(\"  - Optimize initialization and cleanup\");",
+              "                    }",
+              "                    ",
+              "                    if (throughput < 30)",
+              "                    {",
+              "                        Console.WriteLine(\"Low throughput detected\");",
+              "                        Console.WriteLine(\"  - Consider parallel processing or GPU acceleration\");",
+              "                    }",
+              "                    ",
+              "                    if (memoryEfficiency < 1.0)",
+              "                    {",
+              "                        Console.WriteLine(\"Low memory efficiency detected\");",
+              "                        Console.WriteLine(\"  - Consider memory pooling or streaming\");",
+              "                    }",
+              "                    ",
+              "                    Console.WriteLine();",
+              "                    Console.WriteLine(\"=== OPTIMAL TEST COMPLETED SUCCESSFULLY ===\");",
+              "                }",
+              "                else",
+              "                {",
+              "                    var errorMessage = new StringBuilder(1024);",
+              "                    BloodPressureEstimator.GetLastError(estimator, errorMessage, 1024);",
+              "                    Console.WriteLine($\"ERROR: Blood pressure estimation failed: {errorMessage}\");",
+              "                }",
+              "                ",
+              "                // Cleanup",
+              "                BloodPressureEstimator.DestroyBloodPressureEstimator(estimator);",
+              "            }",
+              "            catch (Exception ex)",
+              "            {",
+              "                Console.WriteLine($\"ERROR: {ex.Message}\");",
+              "                Console.WriteLine($\"Stack trace: {ex.StackTrace}\");",
+              "            }",
+              "            finally",
+              "            {",
+              "                stopwatch.Stop();",
+              "                Console.WriteLine($\"Total test time: {stopwatch.ElapsedMilliseconds / 1000:F2} seconds\");",
+              "            }",
+              "        }",
+              "        ",
+              "        static void CopyRequiredFiles()",
+              "        {",
+              "            // Optimal file list (dlib + OpenCV DNN)",
+              "            var files = new[]",
+              "            {",
+              "                \"BloodPressureDLL.dll\",",
+              "                \"opencv_core4.dll\",",
+              "                \"opencv_dnn4.dll\",",
+              "                \"opencv_imgcodecs4.dll\",",
+              "                \"opencv_imgproc4.dll\",",
+              "                \"opencv_objdetect4.dll\",",
+              "                \"onnxruntime.dll\",",
+              "                \"abseil_dll.dll\",",
+              "                \"jpeg62.dll\",",
+              "                \"libgcc_s_seh-1.dll\",",
+              "                \"libgfortran-5.dll\",",
+              "                \"liblapack.dll\",",
+              "                \"liblzma.dll\",",
+              "                \"libpng16.dll\",",
+              "                \"libprotobuf.dll\",",
+              "                \"libquadmath-0.dll\",",
+              "                \"libsharpyuv.dll\",",
+              "                \"libwebp.dll\",",
+              "                \"libwebpdecoder.dll\",",
+              "                \"libwebpdemux.dll\",",
+              "                \"libwebpmux.dll\",",
+              "                \"libwinpthread-1.dll\",",
+              "                \"openblas.dll\",",
+              "                \"tiff.dll\",",
+              "                \"zlib1.dll\"",
+              "            };",
+              "            ",
+              "            foreach (var file in files)",
+              "            {",
+              "                if (File.Exists(Path.Combine(\"..\", file)))",
+              "                {",
+              "                    File.Copy(Path.Combine(\"..\", file), file, true);",
+              "                    Console.WriteLine($\"Copied: {file}\");",
+              "                }",
+              "                else",
+              "                {",
+              "                    Console.WriteLine($\"Warning: {file} not found\");",
+              "                }",
+              "            }",
+              "            ",
+              "            // Copy models directory (OpenCV DNN models only)",
+              "            var modelsDir = Path.Combine(\"..\", \"CppBloodPressureDLL\", \"models\");",
+              "            if (Directory.Exists(modelsDir))",
+              "            {",
+              "                if (Directory.Exists(\"models\"))",
+              "                    Directory.Delete(\"models\", true);",
+              "                Directory.CreateDirectory(\"models\");",
+              "                ",
+              "                foreach (var file in Directory.GetFiles(modelsDir))",
+              "                {",
+              "                    var fileName = Path.GetFileName(file);",
+              "                    // Skip dlib shape predictor file",
+              "                    if (fileName.Contains(\"shape_predictor_68_face_landmarks.dat\"))",
+              "                    {",
+              "                        Console.WriteLine($\"Skipped dlib shape predictor: {fileName}\");",
+              "                        continue;",
+              "                    }",
+              "                    File.Copy(file, Path.Combine(\"models\", fileName), true);",
+              "                    Console.WriteLine($\"Copied model: {fileName}\");",
+              "                }",
+              "            }",
+              "        }",
+              "    }",
+              "}"
+          )
+
+          # Write Program.cs line by line
+          $programLines | Out-File -FilePath "Program.cs" -Encoding UTF8
                           var result = BloodPressureEstimator.EstimateBloodPressure(estimator, videoPath, 
                               out systolic, out diastolic, out confidence);
                           
@@ -398,23 +603,24 @@ jobs:
           '@
 
           # Create project file
-          $projectFile = @'
-          <Project Sdk="Microsoft.NET.Sdk">
-            <PropertyGroup>
-              <OutputType>Exe</OutputType>
-              <TargetFramework>net6.0</TargetFramework>
-              <PlatformTarget>x64</PlatformTarget>
-              <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-            </PropertyGroup>
-          </Project>
-          '@
+          Write-Host "Creating BloodPressureTestOptimal.csproj content..." -ForegroundColor Yellow
 
-          # Write files
-          Write-Host "Writing Program.cs..." -ForegroundColor Yellow
-          [System.IO.File]::WriteAllText("Program.cs", $testCode)
+          $projectLines = @(
+              "<Project Sdk=\"Microsoft.NET.Sdk\">",
+              "  <PropertyGroup>",
+              "    <OutputType>Exe</OutputType>",
+              "    <TargetFramework>net6.0</TargetFramework>",
+              "    <PlatformTarget>x64</PlatformTarget>",
+              "    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>",
+              "  </PropertyGroup>",
+              "</Project>"
+          )
 
-          Write-Host "Writing BloodPressureTestOptimal.csproj..." -ForegroundColor Yellow
-          [System.IO.File]::WriteAllText("BloodPressureTestOptimal.csproj", $projectFile)
+          # Write project file line by line
+          $projectLines | Out-File -FilePath "BloodPressureTestOptimal.csproj" -Encoding UTF8
+
+                    # Files are already written above
+          Write-Host "Files written successfully" -ForegroundColor Green
 
           # Verify files were created
           Write-Host "Verifying created files..." -ForegroundColor Yellow
