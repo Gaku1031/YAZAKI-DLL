@@ -546,6 +546,17 @@ jobs:
           echo '' >> Program.cs
           echo '        static void Main(string[] args)' >> Program.cs
           echo '        {' >> Program.cs
+          echo '            // Set memory limits for better stability' >> Program.cs
+          echo '            try' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                var gcSettings = new System.Runtime.GCSettings();' >> Program.cs
+          echo '                gcSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
+          echo '                Console.WriteLine("Memory settings configured for stability");' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '            catch (Exception ex)' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Console.WriteLine($"Warning: Could not configure memory settings: {ex.Message}");' >> Program.cs
+          echo '            }' >> Program.cs
           echo '            Console.WriteLine("=== Optimal Blood Pressure Estimation Test ===");' >> Program.cs
           echo '            Console.WriteLine("Configuration: dlib frontal face detector + OpenCV DNN");' >> Program.cs
           echo '            Console.WriteLine("Benefits: High accuracy + Fast processing + Small package + Individual OpenCV DLLs");' >> Program.cs
@@ -838,13 +849,18 @@ jobs:
           echo '                    Console.WriteLine($"Total memory: {GC.GetTotalMemory(true) / 1024 / 1024} MB");' >> Program.cs
           echo '                    Console.WriteLine($"Max memory: {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024} MB");' >> Program.cs
           echo '                    var availableMemory = GC.GetTotalMemory(false) / 1024 / 1024;' >> Program.cs
-          echo '                    if (availableMemory < 100)' >> Program.cs
+          echo '                    Console.WriteLine($"Available memory: {availableMemory} MB");' >> Program.cs
+          echo '                    if (availableMemory < 50)' >> Program.cs
           echo '                    {' >> Program.cs
-          echo '                        Console.WriteLine("WARNING: Low memory detected. Forcing garbage collection...");' >> Program.cs
+          echo '                        Console.WriteLine($"WARNING: Low memory detected ({availableMemory} MB). Forcing garbage collection...");' >> Program.cs
           echo '                        GC.Collect();' >> Program.cs
           echo '                        GC.WaitForPendingFinalizers();' >> Program.cs
           echo '                        GC.Collect();' >> Program.cs
           echo '                        Console.WriteLine($"Memory after GC: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    else' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine("Memory is sufficient for InitializeBP");' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    try' >> Program.cs
           echo '                    {' >> Program.cs
@@ -857,10 +873,16 @@ jobs:
           echo '                        Console.WriteLine($"CRITICAL: AccessViolationException during InitializeBP: {ex.Message}");' >> Program.cs
           echo '                        Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
           echo '                        Console.WriteLine("Attempting with smaller buffer...");' >> Program.cs
+          echo '                        // Force memory cleanup before retry' >> Program.cs
+          echo '                        GC.Collect();' >> Program.cs
+          echo '                        GC.WaitForPendingFinalizers();' >> Program.cs
+          echo '                        GC.Collect();' >> Program.cs
+          echo '                        Console.WriteLine($"Memory after cleanup: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
           echo '                        try' >> Program.cs
           echo '                        {' >> Program.cs
           echo '                            outBuf.Clear();' >> Program.cs
           echo '                            outBuf.Capacity = 512;' >> Program.cs
+          echo '                            Console.WriteLine($"Retrying with buffer capacity: {outBuf.Capacity}");' >> Program.cs
           echo '                            result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
           echo '                            Console.WriteLine($"InitializeBP with smaller buffer result: {result}");' >> Program.cs
           echo '                            Console.WriteLine($"InitializeBP with smaller buffer output: {outBuf}");' >> Program.cs
@@ -868,7 +890,20 @@ jobs:
           echo '                        catch (Exception ex2)' >> Program.cs
           echo '                        {' >> Program.cs
           echo '                            Console.WriteLine($"CRITICAL: Still failing with smaller buffer: {ex2.Message}");' >> Program.cs
-          echo '                            throw; // Re-throw to be caught by outer try-catch' >> Program.cs
+          echo '                            Console.WriteLine("Trying with minimal buffer...");' >> Program.cs
+          echo '                            try' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                outBuf.Clear();' >> Program.cs
+          echo '                                outBuf.Capacity = 256;' >> Program.cs
+          echo '                                result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
+          echo '                                Console.WriteLine($"InitializeBP with minimal buffer result: {result}");' >> Program.cs
+          echo '                                Console.WriteLine($"InitializeBP with minimal buffer output: {outBuf}");' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                            catch (Exception ex3)' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                Console.WriteLine($"CRITICAL: All buffer sizes failed: {ex3.Message}");' >> Program.cs
+          echo '                                throw; // Re-throw to be caught by outer try-catch' >> Program.cs
+          echo '                            }' >> Program.cs
           echo '                        }' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
