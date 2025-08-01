@@ -503,13 +503,14 @@ jobs:
           New-Item -ItemType Directory -Path "test_bp_estimation_optimal" -Force | Out-Null
           cd test_bp_estimation_optimal
 
-          # Create Program.cs with actual blood pressure estimation test
+          # Create Program.cs with enhanced memory management and error handling
           echo 'using System;' > Program.cs
           echo 'using System.Diagnostics;' >> Program.cs
           echo 'using System.IO;' >> Program.cs
           echo 'using System.Runtime.InteropServices;' >> Program.cs
           echo 'using System.Text;' >> Program.cs
           echo 'using System.Threading;' >> Program.cs
+          echo 'using System.Runtime;' >> Program.cs
           echo '' >> Program.cs
           echo 'namespace BloodPressureTestOptimal' >> Program.cs
           echo '{' >> Program.cs
@@ -525,22 +526,22 @@ jobs:
           echo '            [MarshalAs(UnmanagedType.LPStr)] string errorsJson' >> Program.cs
           echo '        );' >> Program.cs
           echo '' >> Program.cs
-          echo '        // DLL imports based on actual BloodPressureDLL.h' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        // DLL imports with enhanced error handling' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
           echo '        public static extern int InitializeBP([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string modelDir);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
           echo '        public static extern int StartBloodPressureAnalysisRequest([Out] StringBuilder outBuf, int bufSize,' >> Program.cs
           echo '            [MarshalAs(UnmanagedType.LPStr)] string requestId, int height, int weight, int sex,' >> Program.cs
           echo '            [MarshalAs(UnmanagedType.LPStr)] string moviePath, BPCallback callback);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
           echo '        public static extern int GetProcessingStatus([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string requestId);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
           echo '        public static extern int GenerateRequestId([Out] StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
           echo '        public static extern int GetVersionInfo([Out] StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '    }' >> Program.cs
           echo '' >> Program.cs
@@ -634,16 +635,23 @@ jobs:
           echo '            // Enhanced memory management for stability' >> Program.cs
           echo '            try' >> Program.cs
           echo '            {' >> Program.cs
-          echo '                // Configure garbage collection for better memory management' >> Program.cs
-          echo '                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
-          echo '                ' >> Program.cs
-          echo '                // Force initial garbage collection' >> Program.cs
-          echo '                System.GC.Collect();' >> Program.cs
-          echo '                System.GC.WaitForPendingFinalizers();' >> Program.cs
-          echo '                System.GC.Collect();' >> Program.cs
-          echo '                ' >> Program.cs
-          echo '                Console.WriteLine("Memory settings configured for stability");' >> Program.cs
-          echo '                Console.WriteLine($"Initial memory usage: {System.GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+                      echo '                // Configure garbage collection for better memory management' >> Program.cs
+            echo '                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
+            echo '                GCSettings.ServerGC = true;' >> Program.cs
+            echo '                ' >> Program.cs
+            echo '                // Force initial garbage collection' >> Program.cs
+            echo '                GC.Collect();' >> Program.cs
+            echo '                GC.WaitForPendingFinalizers();' >> Program.cs
+            echo '                GC.Collect();' >> Program.cs
+            echo '                ' >> Program.cs
+            echo '                // Set memory pressure to help with large object allocation' >> Program.cs
+            echo '                GC.AddMemoryPressure(1024 * 1024 * 100); // 100MB pressure' >> Program.cs
+            echo '                ' >> Program.cs
+            echo '                Console.WriteLine("Memory settings configured for stability");' >> Program.cs
+            echo '                Console.WriteLine($"Initial memory usage: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+            echo '                ' >> Program.cs
+            echo '                // Configure process for better memory handling' >> Program.cs
+            echo '                Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;' >> Program.cs
           echo '            }' >> Program.cs
           echo '            catch (Exception ex)' >> Program.cs
           echo '            {' >> Program.cs
@@ -968,9 +976,31 @@ jobs:
           echo '                        outBuf.Clear();' >> Program.cs
           echo '                        outBuf.Capacity = Math.Min(outBuf.Capacity, 1024); // Limit buffer size' >> Program.cs
           echo '' >> Program.cs
-          echo '                        result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
-          echo '                        Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
-          echo '                        Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+                      echo '                        // Enhanced DLL error checking' >> Program.cs
+            echo '                        var lastError = Marshal.GetLastWin32Error();' >> Program.cs
+            echo '                        if (lastError != 0)' >> Program.cs
+            echo '                        {' >> Program.cs
+            echo '                            Console.WriteLine($"WARNING: Previous Win32 error: {lastError}");' >> Program.cs
+            echo '                        }' >> Program.cs
+            echo '                        ' >> Program.cs
+            echo '                        result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
+            echo '                        ' >> Program.cs
+            echo '                        // Check for Win32 errors after call' >> Program.cs
+            echo '                        lastError = Marshal.GetLastWin32Error();' >> Program.cs
+            echo '                        if (lastError != 0)' >> Program.cs
+            echo '                        {' >> Program.cs
+            echo '                            Console.WriteLine($"WARNING: Win32 error after InitializeBP: {lastError}");' >> Program.cs
+            echo '                        }' >> Program.cs
+            echo '                        ' >> Program.cs
+            echo '                        Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
+            echo '                        Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+            echo '                        ' >> Program.cs
+            echo '                        // Additional validation' >> Program.cs
+            echo '                        if (result != 0)' >> Program.cs
+            echo '                        {' >> Program.cs
+            echo '                            Console.WriteLine($"ERROR: InitializeBP returned non-zero result: {result}");' >> Program.cs
+            echo '                            Console.WriteLine("This usually indicates a problem with model loading or DLL compatibility");' >> Program.cs
+            echo '                        }' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    catch (AccessViolationException ex)' >> Program.cs
           echo '                    {' >> Program.cs
@@ -1292,7 +1322,7 @@ jobs:
           echo '    }' >> Program.cs
           echo '}' >> Program.cs
 
-          # Create project file
+          # Create project file with enhanced settings
           echo '<Project Sdk="Microsoft.NET.Sdk">' > BloodPressureTestOptimal.csproj
           echo '  <PropertyGroup>' >> BloodPressureTestOptimal.csproj
           echo '    <OutputType>Exe</OutputType>' >> BloodPressureTestOptimal.csproj
@@ -1304,8 +1334,23 @@ jobs:
           echo '    <DebugSymbols>false</DebugSymbols>' >> BloodPressureTestOptimal.csproj
           echo '    <ServerGarbageCollection>true</ServerGarbageCollection>' >> BloodPressureTestOptimal.csproj
           echo '    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>' >> BloodPressureTestOptimal.csproj
+          echo '    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>' >> BloodPressureTestOptimal.csproj
+          echo '    <GCLOHThreshold>0</GCLOHThreshold>' >> BloodPressureTestOptimal.csproj
+          echo '    <GCCpuGroup>false</GCCpuGroup>' >> BloodPressureTestOptimal.csproj
+          echo '    <GCLOHCompactionMode>CompactOnce</GCLOHCompactionMode>' >> BloodPressureTestOptimal.csproj
+          echo '    <GCServer>true</GCServer>' >> BloodPressureTestOptimal.csproj
+          echo '    <GCConcurrent>true</GCConcurrent>' >> BloodPressureTestOptimal.csproj
+          echo '    <GCAllowVeryLargeObjects>true</GCAllowVeryLargeObjects>' >> BloodPressureTestOptimal.csproj
+          echo '    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>' >> BloodPressureTestOptimal.csproj
+          echo '    <WarningsAsErrors />' >> BloodPressureTestOptimal.csproj
+          echo '    <WarningsNotAsErrors />' >> BloodPressureTestOptimal.csproj
+          echo '    <NoWarn>CS1591</NoWarn>' >> BloodPressureTestOptimal.csproj
           echo '  </PropertyGroup>' >> BloodPressureTestOptimal.csproj
-
+          echo '' >> BloodPressureTestOptimal.csproj
+          echo '  <ItemGroup>' >> BloodPressureTestOptimal.csproj
+          echo '    <PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />' >> BloodPressureTestOptimal.csproj
+          echo '  </ItemGroup>' >> BloodPressureTestOptimal.csproj
+          echo '' >> BloodPressureTestOptimal.csproj
           echo '</Project>' >> BloodPressureTestOptimal.csproj
 
           Write-Host "Files written successfully" -ForegroundColor Green
@@ -1374,9 +1419,31 @@ jobs:
         run: |
           Write-Host "Copying all required DLLs from package directory..." -ForegroundColor Yellow
 
+          # Enhanced DLL compatibility verification
+          Write-Host "Performing enhanced DLL compatibility verification..." -ForegroundColor Yellow
+
           # Copy built DLL from CppBloodPressureDLL/package directory
           $builtDll = "CppBloodPressureDLL/package/BloodPressureDLL.dll"
           if (Test-Path $builtDll) {
+            # Verify DLL integrity before copying
+            try {
+              $bytes = [System.IO.File]::ReadAllBytes($builtDll)
+              if ($bytes.Length -ge 64) {
+                $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                  if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                    $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+                    $arch = if ($machine -eq 0x8664) { "x64" } elseif ($machine -eq 0x14c) { "x86" } else { "Unknown(0x$($machine.ToString('X'))" }
+                    Write-Host "DLL architecture verified: $arch" -ForegroundColor Green
+                  } else {
+                    Write-Host "WARNING: Invalid PE header in built DLL" -ForegroundColor Red
+                  }
+                }
+              }
+            } catch {
+              Write-Host "WARNING: Could not verify DLL integrity" -ForegroundColor Yellow
+            }
+            
             Copy-Item $builtDll "test_bp_estimation_optimal/" -Force
             $size = [math]::Round((Get-Item $builtDll).Length / 1MB, 2)
             Write-Host "Copied built DLL: BloodPressureDLL.dll ($size MB)" -ForegroundColor Green
