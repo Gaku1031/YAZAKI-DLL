@@ -145,7 +145,8 @@ jobs:
             
             try {
               Write-Host "Downloading $fileName from $url" -ForegroundColor Yellow
-              Invoke-WebRequest -Uri $url -OutFile "CppBloodPressureDLL/models/$fileName" -TimeoutSec 300
+              # Remove TimeoutSec parameter for compatibility with older PowerShell
+              Invoke-WebRequest -Uri $url -OutFile "CppBloodPressureDLL/models/$fileName"
               
               # ファイルサイズをチェック
               $fileSize = (Get-Item "CppBloodPressureDLL/models/$fileName").Length
@@ -164,7 +165,8 @@ jobs:
               $success = $false
               foreach ($altUrl in $alternativeUrls) {
                 try {
-                  Invoke-WebRequest -Uri $altUrl -OutFile "CppBloodPressureDLL/models/$fileName" -TimeoutSec 300
+                  # Remove TimeoutSec parameter for compatibility
+                  Invoke-WebRequest -Uri $altUrl -OutFile "CppBloodPressureDLL/models/$fileName"
                   $fileSize = (Get-Item "CppBloodPressureDLL/models/$fileName").Length
                   Write-Host "Downloaded $fileName from alternative source, size: $fileSize bytes" -ForegroundColor Green
                   $success = $true
@@ -182,6 +184,82 @@ jobs:
           }
 
           Write-Host "OpenCV DNN face detection models downloaded successfully" -ForegroundColor Green
+          Write-Host "Models directory contents:" -ForegroundColor Yellow
+          Get-ChildItem "CppBloodPressureDLL/models/" | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" -ForegroundColor Cyan }
+        shell: powershell
+
+      - name: Download ONNX models for blood pressure estimation
+        run: |
+          Write-Host "Setting up ONNX models for blood pressure estimation..." -ForegroundColor Yellow
+
+          # Create models directory if it doesn't exist
+          if (!(Test-Path "CppBloodPressureDLL/models")) {
+            New-Item -ItemType Directory -Path "CppBloodPressureDLL/models" -Force
+          }
+
+          # Check if models already exist
+          $existingModels = @(
+            "CppBloodPressureDLL/models/systolicbloodpressure.onnx",
+            "CppBloodPressureDLL/models/diastolicbloodpressure.onnx",
+            "CppBloodPressureDLL/models/opencv_face_detector.pbtxt",
+            "CppBloodPressureDLL/models/opencv_face_detector_uint8.pb"
+          )
+
+          $allModelsExist = $true
+          foreach ($model in $existingModels) {
+            if (Test-Path $model) {
+              $size = [math]::Round((Get-Item $model).Length / 1MB, 2)
+              Write-Host "Found existing model: $(Split-Path $model -Leaf) ($size MB)" -ForegroundColor Green
+            } else {
+              Write-Host "Missing model: $(Split-Path $model -Leaf)" -ForegroundColor Red
+              $allModelsExist = $false
+            }
+          }
+
+          if ($allModelsExist) {
+            Write-Host "All required models already exist!" -ForegroundColor Green
+          } else {
+            Write-Host "Some models are missing. Checking alternative locations..." -ForegroundColor Yellow
+            
+            # Check if models exist in the root models directory
+            $rootModels = @(
+              "models/model_sbp.pkl",
+              "models/model_dbp.pkl"
+            )
+            
+            $pklModelsExist = $true
+            foreach ($model in $rootModels) {
+              if (Test-Path $model) {
+                $size = [math]::Round((Get-Item $model).Length / 1MB, 2)
+                Write-Host "Found PKL model: $(Split-Path $model -Leaf) ($size MB)" -ForegroundColor Green
+              } else {
+                Write-Host "Missing PKL model: $(Split-Path $model -Leaf)" -ForegroundColor Red
+                $pklModelsExist = $false
+              }
+            }
+            
+            if ($pklModelsExist) {
+              Write-Host "PKL models found. Converting to ONNX format..." -ForegroundColor Yellow
+              
+              # Convert PKL models to ONNX using the existing conversion script
+              if (Test-Path "CppBloodPressureDLL/models/convert_pkl_to_onnx.py") {
+                try {
+                  cd CppBloodPressureDLL/models
+                  python convert_pkl_to_onnx.py
+                  Write-Host "PKL to ONNX conversion completed" -ForegroundColor Green
+                } catch {
+                  Write-Host "ERROR: Failed to convert PKL to ONNX: $($_.Exception.Message)" -ForegroundColor Red
+                }
+              } else {
+                Write-Host "ERROR: Conversion script not found" -ForegroundColor Red
+              }
+            } else {
+              Write-Host "ERROR: No model files found. Cannot proceed with blood pressure estimation." -ForegroundColor Red
+              exit 1
+            }
+          }
+
+          Write-Host "ONNX models setup completed" -ForegroundColor Green
           Write-Host "Models directory contents:" -ForegroundColor Yellow
           Get-ChildItem "CppBloodPressureDLL/models/" | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" -ForegroundColor Cyan }
         shell: powershell
@@ -502,6 +580,13 @@ jobs:
           echo '            errorMessage = errorsJson;' >> Program.cs
           echo '            measureData = measureRowData;' >> Program.cs
           echo '            analysisCompleted = true;' >> Program.cs
+          echo '            ' >> Program.cs
+          echo '            // Additional logging for debugging' >> Program.cs
+          echo '            Console.WriteLine($"=== BLOOD PRESSURE RESULTS ===");' >> Program.cs
+          echo '            Console.WriteLine($"Systolic Blood Pressure: {systolicResult} mmHg");' >> Program.cs
+          echo '            Console.WriteLine($"Diastolic Blood Pressure: {diastolicResult} mmHg");' >> Program.cs
+          echo '            Console.WriteLine($"Measure Data: {measureData}");' >> Program.cs
+          echo '            Console.WriteLine($"Error Message: {errorMessage}");' >> Program.cs
           echo '        }' >> Program.cs
           echo '' >> Program.cs
           echo '        static void CopyModelFiles()' >> Program.cs
@@ -1123,20 +1208,85 @@ jobs:
           echo '                }' >> Program.cs
           echo '            }' >> Program.cs
           echo '' >> Program.cs
-          echo '            // Copy models directory' >> Program.cs
+          echo '            // Copy models directory with enhanced error handling' >> Program.cs
           echo '            var modelsDir = "../CppBloodPressureDLL/package/models";' >> Program.cs
-          echo '            if (Directory.Exists(modelsDir))' >> Program.cs
+          echo '            var sourceModelsDir = "../CppBloodPressureDLL/models";' >> Program.cs
+          echo '            ' >> Program.cs
+          echo '            // Try package directory first, then source directory' >> Program.cs
+          echo '            var modelsToCopy = new[] { modelsDir, sourceModelsDir };' >> Program.cs
+          echo '            var modelsCopied = false;' >> Program.cs
+          echo '            ' >> Program.cs
+          echo '            foreach (var sourceDir in modelsToCopy)' >> Program.cs
           echo '            {' >> Program.cs
-          echo '                if (Directory.Exists("models"))' >> Program.cs
-          echo '                    Directory.Delete("models", true);' >> Program.cs
-          echo '                Directory.CreateDirectory("models");' >> Program.cs
-          echo '' >> Program.cs
-          echo '                foreach (var file in Directory.GetFiles(modelsDir))' >> Program.cs
+          echo '                if (Directory.Exists(sourceDir))' >> Program.cs
           echo '                {' >> Program.cs
-          echo '                    var fileName = Path.GetFileName(file);' >> Program.cs
-          echo '                    File.Copy(file, Path.Combine("models", fileName), true);' >> Program.cs
-          echo '                    Console.WriteLine($"Copied model: {fileName}");' >> Program.cs
+          echo '                    Console.WriteLine($"Found models directory: {sourceDir}");' >> Program.cs
+          echo '                    ' >> Program.cs
+          echo '                    if (Directory.Exists("models"))' >> Program.cs
+          echo '                        Directory.Delete("models", true);' >> Program.cs
+          echo '                    Directory.CreateDirectory("models");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    var modelFiles = Directory.GetFiles(sourceDir);' >> Program.cs
+          echo '                    Console.WriteLine($"Found {modelFiles.Length} model files in {sourceDir}");' >> Program.cs
+          echo '                    ' >> Program.cs
+          echo '                    // Verify required models exist' >> Program.cs
+          echo '                    var requiredModels = new[] { "systolicbloodpressure.onnx", "diastolicbloodpressure.onnx", "opencv_face_detector.pbtxt", "opencv_face_detector_uint8.pb" };' >> Program.cs
+          echo '                    var allRequiredFound = true;' >> Program.cs
+          echo '                    ' >> Program.cs
+          echo '                    foreach (var requiredModel in requiredModels)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        var modelPath = Path.Combine(sourceDir, requiredModel);' >> Program.cs
+          echo '                        if (File.Exists(modelPath))' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            var fileInfo = new FileInfo(modelPath);' >> Program.cs
+          echo '                            Console.WriteLine($"Found required model: {requiredModel} ({fileInfo.Length / 1024} KB)");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        else' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"ERROR: Required model not found: {requiredModel}");' >> Program.cs
+          echo '                            allRequiredFound = false;' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    ' >> Program.cs
+          echo '                    if (!allRequiredFound)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine($"ERROR: Not all required models found in {sourceDir}");' >> Program.cs
+          echo '                        continue;' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    ' >> Program.cs
+          echo '                    // Copy all model files' >> Program.cs
+          echo '                    foreach (var file in modelFiles)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        try' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            var fileName = Path.GetFileName(file);' >> Program.cs
+          echo '                            var destPath = Path.Combine("models", fileName);' >> Program.cs
+          echo '                            File.Copy(file, destPath, true);' >> Program.cs
+          echo '                            var fileInfo = new FileInfo(file);' >> Program.cs
+          echo '                            Console.WriteLine($"Copied model: {fileName} ({fileInfo.Length / 1024} KB)");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        catch (Exception ex)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"Error copying model {file}: {ex.Message}");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    ' >> Program.cs
+          echo '                    modelsCopied = true;' >> Program.cs
+          echo '                    Console.WriteLine("All required models copied successfully!");' >> Program.cs
+          echo '                    break;' >> Program.cs
           echo '                }' >> Program.cs
+          echo '            }' >> Program.cs
+          echo '            ' >> Program.cs
+          echo '            if (!modelsCopied)' >> Program.cs
+          echo '            {' >> Program.cs
+          echo '                Console.WriteLine("ERROR: No models directory found. Cannot proceed with blood pressure estimation.");' >> Program.cs
+          echo '                Console.WriteLine("Required models:");' >> Program.cs
+          echo '                Console.WriteLine("- systolicbloodpressure.onnx");' >> Program.cs
+          echo '                Console.WriteLine("- diastolicbloodpressure.onnx");' >> Program.cs
+          echo '                Console.WriteLine("- opencv_face_detector.pbtxt");' >> Program.cs
+          echo '                Console.WriteLine("- opencv_face_detector_uint8.pb");' >> Program.cs
+          echo '                Console.WriteLine("Please ensure these files are available in the CppBloodPressureDLL/models directory.");' >> Program.cs
+          echo '                return;' >> Program.cs
           echo '            }' >> Program.cs
           echo '        }' >> Program.cs
           echo '    }' >> Program.cs
@@ -1582,8 +1732,8 @@ jobs:
             # Enhanced test execution with multiple fallback options
             Write-Host "Attempting test execution..." -ForegroundColor Yellow
             
-            # Option 1: Use dotnet run
-            $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release", "--no-restore" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait -TimeoutSec 300
+            # Option 1: Use dotnet run (without TimeoutSec for compatibility)
+            $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release", "--no-restore" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
             $exitCode = $process.ExitCode
             
             # 出力ファイルを読み取り
@@ -1598,7 +1748,7 @@ jobs:
             # If dotnet run fails, try direct executable execution
             if ($exitCode -ne 0) {
               Write-Host "dotnet run failed, trying direct executable..." -ForegroundColor Yellow
-              $process = Start-Process -FilePath $exePath -WorkingDirectory $PWD -RedirectStandardOutput "test_output2.txt" -RedirectStandardError "test_error2.txt" -NoNewWindow -PassThru -Wait -TimeoutSec 300
+              $process = Start-Process -FilePath $exePath -WorkingDirectory $PWD -RedirectStandardOutput "test_output2.txt" -RedirectStandardError "test_error2.txt" -NoNewWindow -PassThru -Wait
               $exitCode = $process.ExitCode
               
               if (Test-Path "test_output2.txt") {
@@ -1710,20 +1860,46 @@ jobs:
           # Extract and display key metrics
           Write-Host "=== EXTRACTED METRICS ===" -ForegroundColor Yellow
 
-          # Extract blood pressure values
+          # Extract blood pressure values with multiple patterns
           $systolicMatch = [regex]::Match($output, "Systolic Blood Pressure: ([\d.]+)")
           $diastolicMatch = [regex]::Match($output, "Diastolic Blood Pressure: ([\d.]+)")
+
+          # Fallback patterns for different output formats
+          if (-not $systolicMatch.Success) {
+            $systolicMatch = [regex]::Match($output, "Systolic \(max\): ([\d.]+)")
+          }
+          if (-not $diastolicMatch.Success) {
+            $diastolicMatch = [regex]::Match($output, "Diastolic \(min\): ([\d.]+)")
+          }
+
+          # Additional fallback patterns
+          if (-not $systolicMatch.Success) {
+            $systolicMatch = [regex]::Match($output, "Systolic.*?(\d+)")
+          }
+          if (-not $diastolicMatch.Success) {
+            $diastolicMatch = [regex]::Match($output, "Diastolic.*?(\d+)")
+          }
 
           if ($systolicMatch.Success) {
             Write-Host "Systolic Blood Pressure: $($systolicMatch.Groups[1].Value) mmHg" -ForegroundColor Cyan
           } else {
             Write-Host "Systolic Blood Pressure: Not found" -ForegroundColor Red
+            # Try to extract from callback output
+            $callbackMatch = [regex]::Match($output, "Systolic.*?(\d+).*?mmHg")
+            if ($callbackMatch.Success) {
+              Write-Host "Found in callback: $($callbackMatch.Groups[1].Value) mmHg" -ForegroundColor Yellow
+            }
           }
 
           if ($diastolicMatch.Success) {
             Write-Host "Diastolic Blood Pressure: $($diastolicMatch.Groups[1].Value) mmHg" -ForegroundColor Cyan
           } else {
             Write-Host "Diastolic Blood Pressure: Not found" -ForegroundColor Red
+            # Try to extract from callback output
+            $callbackMatch = [regex]::Match($output, "Diastolic.*?(\d+).*?mmHg")
+            if ($callbackMatch.Success) {
+              Write-Host "Found in callback: $($callbackMatch.Groups[1].Value) mmHg" -ForegroundColor Yellow
+            }
           }
 
           # Extract timing information
