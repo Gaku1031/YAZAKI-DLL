@@ -637,7 +637,6 @@ jobs:
           echo '            {' >> Program.cs
                       echo '                // Configure garbage collection for better memory management' >> Program.cs
             echo '                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
-            echo '                GCSettings.ServerGC = true;' >> Program.cs
             echo '                ' >> Program.cs
             echo '                // Force initial garbage collection' >> Program.cs
             echo '                GC.Collect();' >> Program.cs
@@ -1334,12 +1333,6 @@ jobs:
           echo '    <DebugSymbols>false</DebugSymbols>' >> BloodPressureTestOptimal.csproj
           echo '    <ServerGarbageCollection>true</ServerGarbageCollection>' >> BloodPressureTestOptimal.csproj
           echo '    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>' >> BloodPressureTestOptimal.csproj
-          echo '    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>' >> BloodPressureTestOptimal.csproj
-          echo '    <GCLOHThreshold>0</GCLOHThreshold>' >> BloodPressureTestOptimal.csproj
-          echo '    <GCCpuGroup>false</GCCpuGroup>' >> BloodPressureTestOptimal.csproj
-          echo '    <GCLOHCompactionMode>CompactOnce</GCLOHCompactionMode>' >> BloodPressureTestOptimal.csproj
-          echo '    <GCServer>true</GCServer>' >> BloodPressureTestOptimal.csproj
-          echo '    <GCConcurrent>true</GCConcurrent>' >> BloodPressureTestOptimal.csproj
           echo '    <GCAllowVeryLargeObjects>true</GCAllowVeryLargeObjects>' >> BloodPressureTestOptimal.csproj
           echo '    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>' >> BloodPressureTestOptimal.csproj
           echo '    <WarningsAsErrors />' >> BloodPressureTestOptimal.csproj
@@ -1799,9 +1792,36 @@ jobs:
             # Enhanced test execution with multiple fallback options
             Write-Host "Attempting test execution..." -ForegroundColor Yellow
             
-            # Option 1: Use dotnet run (without TimeoutSec for compatibility)
-            $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release", "--no-restore" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
-            $exitCode = $process.ExitCode
+                      # Pre-test DLL verification
+          Write-Host "Performing pre-test DLL verification..." -ForegroundColor Yellow
+          $criticalDlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
+          foreach ($dll in $criticalDlls) {
+            if (Test-Path $dll) {
+              try {
+                $bytes = [System.IO.File]::ReadAllBytes($dll)
+                if ($bytes.Length -ge 64) {
+                  $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                  if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                    if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                      $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+                      $arch = if ($machine -eq 0x8664) { "x64" } elseif ($machine -eq 0x14c) { "x86" } else { "Unknown(0x$($machine.ToString('X'))" }
+                      Write-Host "  $dll: $arch architecture" -ForegroundColor Green
+                    } else {
+                      Write-Host "  $dll: Invalid PE header" -ForegroundColor Red
+                    }
+                  }
+                }
+              } catch {
+                Write-Host "  $dll: Error reading PE header" -ForegroundColor Red
+              }
+            } else {
+              Write-Host "  $dll: NOT FOUND" -ForegroundColor Red
+            }
+          }
+
+          # Option 1: Use dotnet run (without TimeoutSec for compatibility)
+          $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release", "--no-restore" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
+          $exitCode = $process.ExitCode
             
             # 出力ファイルを読み取り
             if (Test-Path "test_output.txt") {
@@ -1870,9 +1890,21 @@ jobs:
             }
           }
 
-          # メモリ不足やAccessViolationExceptionが発生した場合の追加診断
-          if ($output -match "AccessViolationException" -or $output -match "Fatal error") {
-            Write-Host "CRITICAL: AccessViolationException detected. Running diagnostic tests..." -ForegroundColor Red
+          # Enhanced error detection and diagnostics
+          if ($output -match "AccessViolationException" -or $output -match "Fatal error" -or $output -match "System\.AccessViolationException") {
+            Write-Host "CRITICAL: AccessViolationException detected. Running comprehensive diagnostic tests..." -ForegroundColor Red
+            
+            # Additional memory diagnostics
+            Write-Host "Memory diagnostics:" -ForegroundColor Yellow
+            $memory = [System.GC]::GetTotalMemory($false)
+            Write-Host "  Current memory usage: $([math]::Round($memory / 1MB, 2)) MB" -ForegroundColor Cyan
+            
+            # Force garbage collection
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+            [System.GC]::Collect()
+            $memoryAfter = [System.GC]::GetTotalMemory($false)
+            Write-Host "  Memory after GC: $([math]::Round($memoryAfter / 1MB, 2)) MB" -ForegroundColor Cyan
             
             # DLLの整合性チェック
             Write-Host "Checking DLL integrity..." -ForegroundColor Yellow
