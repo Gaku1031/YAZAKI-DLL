@@ -1666,7 +1666,7 @@ jobs:
                   $fileInfo = Get-Item $dll
                   $size = $fileInfo.Length
                   $output += "`nDLL Integrity Check:`n"
-                  $output += "  $dll: $size bytes`n"
+                  $output += "  ${dll}: $size bytes`n"
                   
                   # ファイルの最初の数バイトをチェック（PEヘッダー）
                   $bytes = [System.IO.File]::ReadAllBytes($dll)
