@@ -1159,7 +1159,7 @@ jobs:
           echo '    <ServerGarbageCollection>true</ServerGarbageCollection>' >> BloodPressureTestOptimal.csproj
           echo '    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>' >> BloodPressureTestOptimal.csproj
           echo '  </PropertyGroup>' >> BloodPressureTestOptimal.csproj
-          echo '  <PropertyGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|AnyCPU'\''">' >> BloodPressureTestOptimal.csproj
+          echo '  <PropertyGroup Condition="$(Configuration)|$(Platform)==Release|AnyCPU">' >> BloodPressureTestOptimal.csproj
           echo '    <Optimize>true</Optimize>' >> BloodPressureTestOptimal.csproj
           echo '    <DebugType>none</DebugType>' >> BloodPressureTestOptimal.csproj
           echo '    <DebugSymbols>false</DebugSymbols>' >> BloodPressureTestOptimal.csproj
