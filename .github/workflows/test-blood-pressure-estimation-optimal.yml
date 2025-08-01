@@ -546,12 +546,23 @@ jobs:
           echo '' >> Program.cs
           echo '        static void Main(string[] args)' >> Program.cs
           echo '        {' >> Program.cs
-          echo '            // Set memory limits for better stability' >> Program.cs
+          echo '            // Enhanced memory management for stability' >> Program.cs
           echo '            try' >> Program.cs
           echo '            {' >> Program.cs
+          echo '                // Configure garbage collection for better memory management' >> Program.cs
           echo '                var gcSettings = new System.Runtime.GCSettings();' >> Program.cs
           echo '                gcSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                // Set memory pressure threshold' >> Program.cs
+          echo '                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                // Force initial garbage collection' >> Program.cs
+          echo '                System.GC.Collect();' >> Program.cs
+          echo '                System.GC.WaitForPendingFinalizers();' >> Program.cs
+          echo '                System.GC.Collect();' >> Program.cs
+          echo '                ' >> Program.cs
           echo '                Console.WriteLine("Memory settings configured for stability");' >> Program.cs
+          echo '                Console.WriteLine($"Initial memory usage: {System.GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
           echo '            }' >> Program.cs
           echo '            catch (Exception ex)' >> Program.cs
           echo '            {' >> Program.cs
@@ -839,31 +850,43 @@ jobs:
           echo '                    outBuf.Capacity = 1024;' >> Program.cs
           echo '                    Console.WriteLine($"Buffer cleared and capacity set to: {outBuf.Capacity}");' >> Program.cs
           echo '' >> Program.cs
-          echo '                    // Call InitializeBP with proper error handling' >> Program.cs
+          echo '                    // Call InitializeBP with enhanced memory management and error handling' >> Program.cs
           echo '                    Console.WriteLine("Calling InitializeBP...");' >> Program.cs
           echo '                    Console.WriteLine($"Buffer capacity: {outBuf.Capacity}");' >> Program.cs
           echo '                    Console.WriteLine($"Model directory: {absoluteModelDir}");' >> Program.cs
           echo '                    Console.WriteLine("About to call InitializeBP...");' >> Program.cs
           echo '                    Console.WriteLine($"Current working directory: {Directory.GetCurrentDirectory()}");' >> Program.cs
-          echo '                    Console.WriteLine($"Available memory: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
-          echo '                    Console.WriteLine($"Total memory: {GC.GetTotalMemory(true) / 1024 / 1024} MB");' >> Program.cs
-          echo '                    Console.WriteLine($"Max memory: {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024} MB");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    // Enhanced memory monitoring' >> Program.cs
           echo '                    var availableMemory = GC.GetTotalMemory(false) / 1024 / 1024;' >> Program.cs
+          echo '                    var totalMemory = GC.GetTotalMemory(true) / 1024 / 1024;' >> Program.cs
           echo '                    Console.WriteLine($"Available memory: {availableMemory} MB");' >> Program.cs
-          echo '                    if (availableMemory < 50)' >> Program.cs
+          echo '                    Console.WriteLine($"Total memory: {totalMemory} MB");' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    // Force garbage collection if memory is low' >> Program.cs
+          echo '                    if (availableMemory < 100)' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        Console.WriteLine($"WARNING: Low memory detected ({availableMemory} MB). Forcing garbage collection...");' >> Program.cs
           echo '                        GC.Collect();' >> Program.cs
           echo '                        GC.WaitForPendingFinalizers();' >> Program.cs
           echo '                        GC.Collect();' >> Program.cs
-          echo '                        Console.WriteLine($"Memory after GC: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+          echo '                        availableMemory = GC.GetTotalMemory(false) / 1024 / 1024;' >> Program.cs
+          echo '                        Console.WriteLine($"Memory after GC: {availableMemory} MB");' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    else' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        Console.WriteLine("Memory is sufficient for InitializeBP");' >> Program.cs
           echo '                    }' >> Program.cs
+          echo '' >> Program.cs
+          echo '                    // Add delay to ensure system stability' >> Program.cs
+          echo '                    Thread.Sleep(100);' >> Program.cs
+          echo '' >> Program.cs
           echo '                    try' >> Program.cs
           echo '                    {' >> Program.cs
+          echo '                        // Clear buffer before use to prevent memory corruption' >> Program.cs
+          echo '                        outBuf.Clear();' >> Program.cs
+          echo '                        outBuf.Capacity = Math.Min(outBuf.Capacity, 1024); // Limit buffer size' >> Program.cs
+          echo '' >> Program.cs
           echo '                        result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
           echo '                        Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
           echo '                        Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
@@ -1130,6 +1153,16 @@ jobs:
           echo '    <TargetFramework>net6.0</TargetFramework>' >> BloodPressureTestOptimal.csproj
           echo '    <PlatformTarget>x64</PlatformTarget>' >> BloodPressureTestOptimal.csproj
           echo '    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>' >> BloodPressureTestOptimal.csproj
+          echo '    <Optimize>true</Optimize>' >> BloodPressureTestOptimal.csproj
+          echo '    <DebugType>none</DebugType>' >> BloodPressureTestOptimal.csproj
+          echo '    <DebugSymbols>false</DebugSymbols>' >> BloodPressureTestOptimal.csproj
+          echo '    <ServerGarbageCollection>true</ServerGarbageCollection>' >> BloodPressureTestOptimal.csproj
+          echo '    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>' >> BloodPressureTestOptimal.csproj
+          echo '  </PropertyGroup>' >> BloodPressureTestOptimal.csproj
+          echo '  <PropertyGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|AnyCPU'\''">' >> BloodPressureTestOptimal.csproj
+          echo '    <Optimize>true</Optimize>' >> BloodPressureTestOptimal.csproj
+          echo '    <DebugType>none</DebugType>' >> BloodPressureTestOptimal.csproj
+          echo '    <DebugSymbols>false</DebugSymbols>' >> BloodPressureTestOptimal.csproj
           echo '  </PropertyGroup>' >> BloodPressureTestOptimal.csproj
           echo '</Project>' >> BloodPressureTestOptimal.csproj
 
@@ -1493,8 +1526,8 @@ jobs:
           $exitCode = 0
 
           try {
-            # より安全な実行方法
-            $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
+            # より安全な実行方法 - メモリ制限とエラーハンドリングを強化
+            $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release", "--no-restore" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
             $exitCode = $process.ExitCode
             
             # 出力ファイルを読み取り
@@ -1510,7 +1543,7 @@ jobs:
             $exitCode = 1
             $output = "Test execution failed with exception: $($_.Exception.Message)"
             
-            # 代替テスト方法を試行
+            # 代替テスト方法を試行 - DLLの基本機能テストのみ
             Write-Host "Trying alternative test method..." -ForegroundColor Yellow
             try {
               $output = "Alternative test method:`n"
@@ -1546,6 +1579,50 @@ jobs:
             } catch {
               $output += "`nAlternative test also failed: $($_.Exception.Message)"
             }
+          }
+
+          # メモリ不足やAccessViolationExceptionが発生した場合の追加診断
+          if ($output -match "AccessViolationException" -or $output -match "Fatal error") {
+            Write-Host "CRITICAL: AccessViolationException detected. Running diagnostic tests..." -ForegroundColor Red
+            
+            # DLLの整合性チェック
+            Write-Host "Checking DLL integrity..." -ForegroundColor Yellow
+            $dlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
+            foreach ($dll in $dlls) {
+              if (Test-Path $dll) {
+                try {
+                  $fileInfo = Get-Item $dll
+                  $size = $fileInfo.Length
+                  $output += "`nDLL Integrity Check:`n"
+                  $output += "  $dll: $size bytes`n"
+                  
+                  # ファイルの最初の数バイトをチェック（PEヘッダー）
+                  $bytes = [System.IO.File]::ReadAllBytes($dll)
+                  if ($bytes.Length -ge 4) {
+                    $peHeader = [System.Text.Encoding]::ASCII.GetString($bytes, 0, 4)
+                    if ($peHeader -eq "MZ`0`0") {
+                      $output += "    Valid PE header found`n"
+                    } else {
+                      $output += "    WARNING: Invalid PE header`n"
+                    }
+                  }
+                } catch {
+                  $output += "    ERROR: Could not read DLL file`n"
+                }
+              }
+            }
+            
+            # メモリ使用量チェック
+            $output += "`nMemory Check:`n"
+            $memory = [System.GC]::GetTotalMemory($false)
+            $output += "  Current memory usage: $([math]::Round($memory / 1MB, 2)) MB`n"
+            
+            # 強制ガベージコレクション
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+            [System.GC]::Collect()
+            $memoryAfter = [System.GC]::GetTotalMemory($false)
+            $output += "  Memory after GC: $([math]::Round($memoryAfter / 1MB, 2)) MB`n"
           }
 
           $endTime = Get-Date
