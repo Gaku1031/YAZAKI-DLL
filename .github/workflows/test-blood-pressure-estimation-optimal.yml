@@ -790,7 +790,7 @@ jobs:
           echo '' >> Program.cs
           echo '                // InitializeBP with improved memory management' >> Program.cs
           echo '                Console.WriteLine("Attempting InitializeBP with improved memory management...");' >> Program.cs
-          echo '                var outBuf = new StringBuilder(4096); // Further increased buffer size' >> Program.cs
+          echo '                var outBuf = new StringBuilder(1024); // Reduced buffer size for memory efficiency' >> Program.cs
           echo '                int result = 0;' >> Program.cs
           echo '                try' >> Program.cs
           echo '                {' >> Program.cs
@@ -800,6 +800,9 @@ jobs:
           echo '                    Console.WriteLine($"Model directory exists: {Directory.Exists(absoluteModelDir)}");' >> Program.cs
           echo '' >> Program.cs
           echo '                    // Check individual model files' >> Program.cs
+          echo '                    // Force garbage collection before model file check' >> Program.cs
+          echo '                    GC.Collect();' >> Program.cs
+          echo '                    GC.WaitForPendingFinalizers();' >> Program.cs
           echo '                    var modelFiles = new[] { "diastolicbloodpressure.onnx", "systolicbloodpressure.onnx", "opencv_face_detector.pbtxt", "opencv_face_detector_uint8.pb" };' >> Program.cs
           echo '                    var allModelsExist = true;' >> Program.cs
           echo '                    foreach (var modelFile in modelFiles)' >> Program.cs
@@ -822,7 +825,7 @@ jobs:
           echo '' >> Program.cs
           echo '                    // Clear buffer before use' >> Program.cs
           echo '                    outBuf.Clear();' >> Program.cs
-          echo '                    outBuf.Capacity = 4096;' >> Program.cs
+          echo '                    outBuf.Capacity = 1024;' >> Program.cs
           echo '                    Console.WriteLine($"Buffer cleared and capacity set to: {outBuf.Capacity}");' >> Program.cs
           echo '' >> Program.cs
           echo '                    // Call InitializeBP with proper error handling' >> Program.cs
@@ -832,6 +835,17 @@ jobs:
           echo '                    Console.WriteLine("About to call InitializeBP...");' >> Program.cs
           echo '                    Console.WriteLine($"Current working directory: {Directory.GetCurrentDirectory()}");' >> Program.cs
           echo '                    Console.WriteLine($"Available memory: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+          echo '                    Console.WriteLine($"Total memory: {GC.GetTotalMemory(true) / 1024 / 1024} MB");' >> Program.cs
+          echo '                    Console.WriteLine($"Max memory: {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1024 / 1024} MB");' >> Program.cs
+          echo '                    var availableMemory = GC.GetTotalMemory(false) / 1024 / 1024;' >> Program.cs
+          echo '                    if (availableMemory < 100)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine("WARNING: Low memory detected. Forcing garbage collection...");' >> Program.cs
+          echo '                        GC.Collect();' >> Program.cs
+          echo '                        GC.WaitForPendingFinalizers();' >> Program.cs
+          echo '                        GC.Collect();' >> Program.cs
+          echo '                        Console.WriteLine($"Memory after GC: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+          echo '                    }' >> Program.cs
           echo '                    try' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
@@ -842,7 +856,20 @@ jobs:
           echo '                    {' >> Program.cs
           echo '                        Console.WriteLine($"CRITICAL: AccessViolationException during InitializeBP: {ex.Message}");' >> Program.cs
           echo '                        Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
-          echo '                        throw; // Re-throw to be caught by outer try-catch' >> Program.cs
+          echo '                        Console.WriteLine("Attempting with smaller buffer...");' >> Program.cs
+          echo '                        try' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            outBuf.Clear();' >> Program.cs
+          echo '                            outBuf.Capacity = 512;' >> Program.cs
+          echo '                            result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
+          echo '                            Console.WriteLine($"InitializeBP with smaller buffer result: {result}");' >> Program.cs
+          echo '                            Console.WriteLine($"InitializeBP with smaller buffer output: {outBuf}");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        catch (Exception ex2)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"CRITICAL: Still failing with smaller buffer: {ex2.Message}");' >> Program.cs
+          echo '                            throw; // Re-throw to be caught by outer try-catch' >> Program.cs
+          echo '                        }' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
           echo '                catch (AccessViolationException ex)' >> Program.cs
