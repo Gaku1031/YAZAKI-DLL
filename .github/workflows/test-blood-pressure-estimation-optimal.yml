@@ -550,10 +550,6 @@ jobs:
           echo '            try' >> Program.cs
           echo '            {' >> Program.cs
           echo '                // Configure garbage collection for better memory management' >> Program.cs
-          echo '                var gcSettings = new System.Runtime.GCSettings();' >> Program.cs
-          echo '                gcSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
-          echo '                ' >> Program.cs
-          echo '                // Set memory pressure threshold' >> Program.cs
           echo '                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
           echo '                ' >> Program.cs
           echo '                // Force initial garbage collection' >> Program.cs
