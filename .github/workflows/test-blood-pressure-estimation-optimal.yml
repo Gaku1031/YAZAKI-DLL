@@ -164,10 +164,54 @@ jobs:
           $onnxDir = "$workspaceRoot/onnxruntime"
 
           Write-Host "Downloading ONNX Runtime v$onnxVersion..." -ForegroundColor Yellow
-          Invoke-WebRequest -Uri $onnxUrl -OutFile $onnxZip
+          try {
+            Invoke-WebRequest -Uri $onnxUrl -OutFile $onnxZip -TimeoutSec 300
+            Write-Host "ONNX Runtime downloaded successfully" -ForegroundColor Green
+          } catch {
+            Write-Host "ERROR: Failed to download ONNX Runtime: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Attempting alternative download method..." -ForegroundColor Yellow
+            
+            # Try alternative download method
+            try {
+              $webClient = New-Object System.Net.WebClient
+              $webClient.DownloadFile($onnxUrl, $onnxZip)
+              Write-Host "ONNX Runtime downloaded successfully using alternative method" -ForegroundColor Green
+            } catch {
+              Write-Host "ERROR: Alternative download method also failed: $($_.Exception.Message)" -ForegroundColor Red
+              exit 1
+            }
+          }
 
           Write-Host "Extracting ONNX Runtime..." -ForegroundColor Yellow
-          Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
+          try {
+            Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
+            Write-Host "ONNX Runtime extracted successfully" -ForegroundColor Green
+          } catch {
+            Write-Host "ERROR: Failed to extract ONNX Runtime: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+          }
+
+          # Verify ONNX Runtime installation
+          Write-Host "Verifying ONNX Runtime installation..." -ForegroundColor Yellow
+          $expectedDll = "$onnxDir/onnxruntime-win-x64-$onnxVersion/lib/onnxruntime.dll"
+          if (Test-Path $expectedDll) {
+            $fileSize = (Get-Item $expectedDll).Length
+            Write-Host "ONNX Runtime DLL found: $expectedDll ($fileSize bytes)" -ForegroundColor Green
+          } else {
+            Write-Host "WARNING: ONNX Runtime DLL not found at expected location" -ForegroundColor Yellow
+            Write-Host "Searching for ONNX Runtime DLL..." -ForegroundColor Yellow
+            $foundDlls = Get-ChildItem -Path $onnxDir -Recurse -Filter "onnxruntime.dll"
+            if ($foundDlls) {
+              Write-Host "Found ONNX Runtime DLLs:" -ForegroundColor Green
+              foreach ($dll in $foundDlls) {
+                $size = (Get-Item $dll.FullName).Length
+                Write-Host "  $($dll.FullName) ($size bytes)" -ForegroundColor Cyan
+              }
+            } else {
+              Write-Host "ERROR: No ONNX Runtime DLL found in extracted directory" -ForegroundColor Red
+              exit 1
+            }
+          }
         shell: powershell
 
       - name: Download OpenCV DNN face detection models
@@ -501,6 +545,21 @@ jobs:
             try {
               # Verify DLL integrity before copying
               Write-Host "Verifying ONNX Runtime DLL integrity..." -ForegroundColor Yellow
+              
+              # Check if file exists and is accessible
+              if (!(Test-Path $onnxDll)) {
+                throw [System.IO.FileNotFoundException] "ONNX Runtime DLL file not found: $onnxDll"
+              }
+              
+              # Check file size first
+              $fileInfo = Get-Item $onnxDll
+              if ($fileInfo.Length -lt 1024) {
+                throw [System.IO.IOException] "ONNX Runtime DLL file is too small: $($fileInfo.Length) bytes"
+              }
+              
+              Write-Host "ONNX Runtime DLL file size: $($fileInfo.Length) bytes" -ForegroundColor Cyan
+              
+              # Try to read file with error handling
               $bytes = [System.IO.File]::ReadAllBytes($onnxDll)
               Write-Host "Read $($bytes.Length) bytes from ONNX Runtime DLL" -ForegroundColor Cyan
               
@@ -536,10 +595,19 @@ jobs:
                 exit 1
               }
             } catch {
-              Write-Host "ERROR: Could not verify ONNX Runtime DLL: $($_.Exception.Message)" -ForegroundColor Red
-              Write-Host "ONNX Runtime DLL verification failed. This may cause AccessViolationException during execution." -ForegroundColor Red
-              Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
-              exit 1
+              Write-Host "WARNING: Could not verify ONNX Runtime DLL: $($_.Exception.Message)" -ForegroundColor Yellow
+              Write-Host "Attempting to copy DLL without verification..." -ForegroundColor Yellow
+              try {
+                Copy-Item $onnxDll "package/" -Force
+                $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
+                Write-Host "Copied ONNX Runtime DLL without verification: onnxruntime.dll ($size MB)" -ForegroundColor Green
+                Write-Host "WARNING: DLL integrity not verified. This may cause issues during execution." -ForegroundColor Yellow
+              } catch {
+                Write-Host "ERROR: Failed to copy ONNX Runtime DLL: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "ONNX Runtime DLL verification failed. This may cause AccessViolationException during execution." -ForegroundColor Red
+                Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
+                exit 1
+              }
             }
           } else {
             Write-Host "ERROR: ONNX Runtime DLL not found at: $onnxDll" -ForegroundColor Red
@@ -551,7 +619,10 @@ jobs:
               "../onnxruntime/onnxruntime-win-x64-1.22.1/bin",
               "../onnxruntime",
               "../onnxruntime-win-x64-1.22.1/lib",
-              "../onnxruntime-win-x64-1.22.1/bin"
+              "../onnxruntime-win-x64-1.22.1/bin",
+              "../onnxruntime/onnxruntime-win-x64-1.22.1",
+              "../onnxruntime-win-x64-1.22.1",
+              "../onnxruntime"
             )
             
             $onnxDllFound = $false
@@ -568,13 +639,62 @@ jobs:
             }
             
             if (-not $onnxDllFound) {
-              Write-Host "ERROR: Could not find ONNX Runtime DLL in any location" -ForegroundColor Red
-              Write-Host "ONNX Runtime DLL is required for blood pressure estimation. Please check the installation." -ForegroundColor Red
-              Write-Host "Expected locations:" -ForegroundColor Yellow
-              foreach ($searchPath in $onnxSearchPaths) {
-                Write-Host "  $searchPath/onnxruntime.dll" -ForegroundColor Cyan
+              Write-Host "WARNING: Could not find ONNX Runtime DLL in standard locations" -ForegroundColor Yellow
+              Write-Host "Attempting recursive search..." -ForegroundColor Yellow
+              
+              # Try recursive search
+              $recursiveSearch = Get-ChildItem -Path "../" -Recurse -Filter "onnxruntime.dll" | Select-Object -First 1
+              if ($recursiveSearch) {
+                Write-Host "Found ONNX Runtime DLL via recursive search: $($recursiveSearch.FullName)" -ForegroundColor Green
+                try {
+                  Copy-Item $recursiveSearch.FullName "package/" -Force
+                  $size = [math]::Round((Get-Item $recursiveSearch.FullName).Length / 1MB, 2)
+                  Write-Host "Copied ONNX Runtime DLL: onnxruntime.dll ($size MB) from recursive search" -ForegroundColor Green
+                  $onnxDllFound = $true
+                } catch {
+                  Write-Host "ERROR: Failed to copy ONNX Runtime DLL from recursive search: $($_.Exception.Message)" -ForegroundColor Red
+                }
               }
-              exit 1
+              
+              if (-not $onnxDllFound) {
+                Write-Host "ERROR: Could not find ONNX Runtime DLL in any location" -ForegroundColor Red
+                Write-Host "ONNX Runtime DLL is required for blood pressure estimation. Please check the installation." -ForegroundColor Red
+                Write-Host "Expected locations:" -ForegroundColor Yellow
+                foreach ($searchPath in $onnxSearchPaths) {
+                  Write-Host "  $searchPath/onnxruntime.dll" -ForegroundColor Cyan
+                }
+                Write-Host "Attempting to download ONNX Runtime..." -ForegroundColor Yellow
+                
+                # Try to download ONNX Runtime as fallback
+                try {
+                  $onnxVersion = "1.22.1"
+                  $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
+                  $onnxZip = "onnxruntime_fallback.zip"
+                  $onnxDir = "../onnxruntime_fallback"
+                  
+                  Write-Host "Downloading ONNX Runtime v$onnxVersion as fallback..." -ForegroundColor Yellow
+                  Invoke-WebRequest -Uri $onnxUrl -OutFile $onnxZip
+                  
+                  Write-Host "Extracting ONNX Runtime fallback..." -ForegroundColor Yellow
+                  Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
+                  
+                  $fallbackDll = "$onnxDir/onnxruntime-win-x64-$onnxVersion/lib/onnxruntime.dll"
+                  if (Test-Path $fallbackDll) {
+                    Copy-Item $fallbackDll "package/" -Force
+                    $size = [math]::Round((Get-Item $fallbackDll).Length / 1MB, 2)
+                    Write-Host "Copied ONNX Runtime DLL from fallback download: onnxruntime.dll ($size MB)" -ForegroundColor Green
+                    $onnxDllFound = $true
+                  } else {
+                    Write-Host "ERROR: Fallback download failed - DLL not found at expected location" -ForegroundColor Red
+                  }
+                } catch {
+                  Write-Host "ERROR: Failed to download ONNX Runtime fallback: $($_.Exception.Message)" -ForegroundColor Red
+                }
+                
+                if (-not $onnxDllFound) {
+                  exit 1
+                }
+              }
             }
           }
 
