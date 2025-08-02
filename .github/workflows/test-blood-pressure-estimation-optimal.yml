@@ -501,37 +501,6 @@ jobs:
             Write-Host "ERROR: ONNX Runtime DLL not found" -ForegroundColor Red
             exit 1
           }
-                try {
-                  $onnxVersion = "1.22.1"
-                  $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
-                  $onnxZip = "onnxruntime_fallback.zip"
-                  $onnxDir = "../onnxruntime_fallback"
-                  
-                  Write-Host "Downloading ONNX Runtime v$onnxVersion as fallback..." -ForegroundColor Yellow
-                  Invoke-WebRequest -Uri $onnxUrl -OutFile $onnxZip
-                  
-                  Write-Host "Extracting ONNX Runtime fallback..." -ForegroundColor Yellow
-                  Expand-Archive -Path $onnxZip -DestinationPath $onnxDir -Force
-                  
-                  $fallbackDll = "$onnxDir/onnxruntime-win-x64-$onnxVersion/lib/onnxruntime.dll"
-                  if (Test-Path $fallbackDll) {
-                    Copy-Item $fallbackDll "package/" -Force
-                    $size = [math]::Round((Get-Item $fallbackDll).Length / 1MB, 2)
-                    Write-Host "Copied ONNX Runtime DLL from fallback download: onnxruntime.dll ($size MB)" -ForegroundColor Green
-                    $onnxDllFound = $true
-                  } else {
-                    Write-Host "ERROR: Fallback download failed - DLL not found at expected location" -ForegroundColor Red
-                  }
-                } catch {
-                  Write-Host "ERROR: Failed to download ONNX Runtime fallback: $($_.Exception.Message)" -ForegroundColor Red
-                }
-                
-                if (-not $onnxDllFound) {
-                  exit 1
-                }
-              }
-            }
-          }
 
           # Copy ONNX Runtime shared library to package directory
           Write-Host "Copying ONNX Runtime shared library to package directory..." -ForegroundColor Yellow
