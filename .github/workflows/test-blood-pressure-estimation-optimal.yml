@@ -1805,17 +1805,17 @@ jobs:
                     if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
                       $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
                       $arch = if ($machine -eq 0x8664) { "x64" } elseif ($machine -eq 0x14c) { "x86" } else { "Unknown(0x$($machine.ToString('X'))" }
-                      Write-Host "  $dll: $arch architecture" -ForegroundColor Green
+                      Write-Host "  ${dll}: $arch architecture" -ForegroundColor Green
                     } else {
-                      Write-Host "  $dll: Invalid PE header" -ForegroundColor Red
+                      Write-Host "  ${dll}: Invalid PE header" -ForegroundColor Red
                     }
                   }
                 }
               } catch {
-                Write-Host "  $dll: Error reading PE header" -ForegroundColor Red
+                Write-Host "  ${dll}: Error reading PE header" -ForegroundColor Red
               }
             } else {
-              Write-Host "  $dll: NOT FOUND" -ForegroundColor Red
+              Write-Host "  ${dll}: NOT FOUND" -ForegroundColor Red
             }
           }
 
