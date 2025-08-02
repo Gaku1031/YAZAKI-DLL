@@ -312,25 +312,43 @@ jobs:
 
       - name: Build BloodPressureDLL
         run: |
+          # Get workspace root before changing directory
+          $workspaceRoot = (Get-Location).Path
+          Write-Host "Workspace root: $workspaceRoot" -ForegroundColor Cyan
+
           cd CppBloodPressureDLL
+          Write-Host "Changed to directory: $(Get-Location).Path" -ForegroundColor Cyan
 
           # Configure CMake
           Write-Host "Configuring CMake..." -ForegroundColor Yellow
-          $workspaceRoot = (Get-Location).Path
           $env:ONNXRUNTIME_ROOT = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1"
           $env:ONNXRUNTIME_INCLUDE_DIRS = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/include"
           $env:ONNXRUNTIME_LIBRARIES = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib"
 
           # Verify ONNX Runtime files exist
           Write-Host "Verifying ONNX Runtime files..." -ForegroundColor Yellow
-          $workspaceRoot = (Get-Location).Path
           $onnxIncludeDir = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/include"
           $onnxLibDir = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/lib"
+
+          # Check if ONNX Runtime directory exists
+          if (Test-Path "$workspaceRoot/onnxruntime") {
+            Write-Host "ONNX Runtime directory found" -ForegroundColor Green
+            Get-ChildItem "$workspaceRoot/onnxruntime" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+          } else {
+            Write-Host "ERROR: ONNX Runtime directory not found at: $workspaceRoot/onnxruntime" -ForegroundColor Red
+            exit 1
+          }
 
           if (Test-Path "$onnxIncludeDir/onnxruntime_cxx_api.h") {
             Write-Host "ONNX Runtime header found: onnxruntime_cxx_api.h" -ForegroundColor Green
           } else {
             Write-Host "ERROR: ONNX Runtime header not found at: $onnxIncludeDir/onnxruntime_cxx_api.h" -ForegroundColor Red
+            Write-Host "Available files in include directory:" -ForegroundColor Yellow
+            if (Test-Path $onnxIncludeDir) {
+              Get-ChildItem $onnxIncludeDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
+            } else {
+              Write-Host "  Include directory does not exist" -ForegroundColor Red
+            }
             exit 1
           }
 
@@ -338,10 +356,15 @@ jobs:
             Write-Host "ONNX Runtime library found: onnxruntime.lib" -ForegroundColor Green
           } else {
             Write-Host "ERROR: ONNX Runtime library not found at: $onnxLibDir/onnxruntime.lib" -ForegroundColor Red
+            Write-Host "Available files in lib directory:" -ForegroundColor Yellow
+            if (Test-Path $onnxLibDir) {
+              Get-ChildItem $onnxLibDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
+            } else {
+              Write-Host "  Lib directory does not exist" -ForegroundColor Red
+            }
             exit 1
           }
 
-          $workspaceRoot = (Get-Location).Path
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="$workspaceRoot/vcpkg/scripts/buildsystems/vcpkg.cmake" `
