@@ -190,28 +190,151 @@ typedef void(*BPCallback)(const char* requestId, int sbp, int dbp, const char* c
 __declspec(dllexport)
 int InitializeBP(char* outBuf, int bufSize, const char* modelDir) {
     if (!outBuf || bufSize <= 0) return -1;
+    
+    printf("[DLL] Starting InitializeBP\n"); fflush(stdout);
+    printf("[DLL] Model directory: %s\n", modelDir ? modelDir : "NULL"); fflush(stdout);
+    printf("[DLL] Buffer size: %d\n", bufSize); fflush(stdout);
+    
     try {
-        // 既存のインスタンスを解放
-        g_estimator.reset();
-        // モデルファイル存在チェック
-        std::string sbp_path = std::string(modelDir) + "/systolicbloodpressure.onnx";
-        std::string dbp_path = std::string(modelDir) + "/diastolicbloodpressure.onnx";
-        if (!file_exists(sbp_path) || !file_exists(dbp_path)) {
-            std::string msg = "Model file not found: " + sbp_path + " or " + dbp_path;
-            snprintf(outBuf, bufSize, "%s", msg.c_str());
-            FILE* f = fopen("dll_error.log", "a");
-            if (f) { fprintf(f, "%s\n", msg.c_str()); fclose(f); }
+        // Step 1: Parameter validation
+        printf("[DLL] Step 1: Validating parameters\n"); fflush(stdout);
+        if (!modelDir) {
+            printf("[DLL] ERROR: modelDir is NULL\n"); fflush(stdout);
+            snprintf(outBuf, bufSize, "ERROR: modelDir is NULL");
             return 1;
         }
-        // 推論器初期化
-        g_estimator = std::make_unique<BloodPressureEstimator>(modelDir);
-        g_model_dir = modelDir;
+        printf("[DLL] Parameters validated\n"); fflush(stdout);
+        
+        // Step 2: Release existing instance
+        printf("[DLL] Step 2: Releasing existing estimator\n"); fflush(stdout);
+        g_estimator.reset();
+        printf("[DLL] Existing estimator released\n"); fflush(stdout);
+        
+        // Step 3: Model directory validation
+        printf("[DLL] Step 3: Checking model directory\n"); fflush(stdout);
+        std::string model_dir_str(modelDir);
+        if (model_dir_str.empty()) {
+            printf("[DLL] ERROR: Model directory is empty\n"); fflush(stdout);
+            snprintf(outBuf, bufSize, "ERROR: Model directory is empty");
+            return 1;
+        }
+        printf("[DLL] Model directory validated: %s\n", model_dir_str.c_str()); fflush(stdout);
+        
+        // Step 4: Model file existence check
+        printf("[DLL] Step 4: Checking model files\n"); fflush(stdout);
+        std::string sbp_path = model_dir_str + "/systolicbloodpressure.onnx";
+        std::string dbp_path = model_dir_str + "/diastolicbloodpressure.onnx";
+        
+        if (!file_exists(sbp_path)) {
+            printf("[DLL] ERROR: SBP model file not found: %s\n", sbp_path.c_str()); fflush(stdout);
+            std::string msg = "Model file not found: " + sbp_path;
+            snprintf(outBuf, bufSize, "%s", msg.c_str());
+            return 1;
+        }
+        
+        if (!file_exists(dbp_path)) {
+            printf("[DLL] ERROR: DBP model file not found: %s\n", dbp_path.c_str()); fflush(stdout);
+            std::string msg = "Model file not found: " + dbp_path;
+            snprintf(outBuf, bufSize, "%s", msg.c_str());
+            return 1;
+        }
+        printf("[DLL] Model files found\n"); fflush(stdout);
+        
+        // Step 5: File size validation
+        printf("[DLL] Step 5: Checking file sizes\n"); fflush(stdout);
+        std::ifstream sbp_file(sbp_path, std::ios::binary);
+        std::ifstream dbp_file(dbp_path, std::ios::binary);
+        
+        sbp_file.seekg(0, std::ios::end);
+        auto sbp_size = sbp_file.tellg();
+        dbp_file.seekg(0, std::ios::end);
+        auto dbp_size = dbp_file.tellg();
+        
+        printf("[DLL] SBP model size: %ld bytes\n", (long)sbp_size); fflush(stdout);
+        printf("[DLL] DBP model size: %ld bytes\n", (long)dbp_size); fflush(stdout);
+        
+        if (sbp_size == 0) {
+            printf("[DLL] ERROR: SBP model file is empty\n"); fflush(stdout);
+            snprintf(outBuf, bufSize, "ERROR: SBP model file is empty");
+            return 1;
+        }
+        
+        if (dbp_size == 0) {
+            printf("[DLL] ERROR: DBP model file is empty\n"); fflush(stdout);
+            snprintf(outBuf, bufSize, "ERROR: DBP model file is empty");
+            return 1;
+        }
+        
+        sbp_file.close();
+        dbp_file.close();
+        printf("[DLL] File sizes validated\n"); fflush(stdout);
+        
+        // Step 6: Estimator initialization
+        printf("[DLL] Step 6: Creating BloodPressureEstimator\n"); fflush(stdout);
+        try {
+            g_estimator = std::make_unique<BloodPressureEstimator>(model_dir_str);
+            printf("[DLL] BloodPressureEstimator created successfully\n"); fflush(stdout);
+        } catch (const std::exception& e) {
+            printf("[DLL] ERROR: Failed to create BloodPressureEstimator: %s\n", e.what()); fflush(stdout);
+            std::string error_msg = "BloodPressureEstimator creation failed: " + std::string(e.what());
+            snprintf(outBuf, bufSize, "%s", error_msg.c_str());
+            
+            // Error log file recording
+            FILE* f = fopen("dll_error.log", "a");
+            if (f) { 
+                fprintf(f, "InitializeBP: %s\n", error_msg.c_str()); 
+                fclose(f); 
+            }
+            
+            g_estimator.reset();
+            return 1;
+        } catch (...) {
+            printf("[DLL] ERROR: Unknown exception during BloodPressureEstimator creation\n"); fflush(stdout);
+            snprintf(outBuf, bufSize, "ERROR: Unknown exception during BloodPressureEstimator creation");
+            
+            FILE* f = fopen("dll_error.log", "a");
+            if (f) { 
+                fprintf(f, "InitializeBP: Unknown exception\n"); 
+                fclose(f); 
+            }
+            
+            g_estimator.reset();
+            return 1;
+        }
+        
+        // Step 7: Global variable setting
+        printf("[DLL] Step 7: Setting global variables\n"); fflush(stdout);
+        g_model_dir = model_dir_str;
+        printf("[DLL] Global variables set\n"); fflush(stdout);
+        
+        // Step 8: Success message setting
+        printf("[DLL] Step 8: Setting success message\n"); fflush(stdout);
         snprintf(outBuf, bufSize, "ORT_ENV_OK");
+        printf("[DLL] InitializeBP completed successfully\n"); fflush(stdout);
+        
         return 0;
     } catch (const std::exception& e) {
+        printf("[DLL] ERROR: Standard exception in InitializeBP: %s\n", e.what()); fflush(stdout);
         snprintf(outBuf, bufSize, "InitializeBP exception: %s", e.what());
+        
         FILE* f = fopen("dll_error.log", "a");
-        if (f) { fprintf(f, "InitializeBP exception: %s\n", e.what()); fclose(f); }
+        if (f) { 
+            fprintf(f, "InitializeBP exception: %s\n", e.what()); 
+            fclose(f); 
+        }
+        
+        g_estimator.reset();
+        return 1;
+    } catch (...) {
+        printf("[DLL] ERROR: Unknown exception in InitializeBP\n"); fflush(stdout);
+        snprintf(outBuf, bufSize, "InitializeBP: Unknown exception");
+        
+        FILE* f = fopen("dll_error.log", "a");
+        if (f) { 
+            fprintf(f, "InitializeBP: Unknown exception\n"); 
+            fclose(f); 
+        }
+        
         g_estimator.reset();
         return 1;
     }

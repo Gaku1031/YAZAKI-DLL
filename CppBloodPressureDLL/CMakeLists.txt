@@ -83,11 +83,25 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 find_package(dlib REQUIRED)
 
 # ONNX Runtime
-if(DEFINED ONNXRuntime_INCLUDE_DIRS AND DEFINED ONNXRuntime_LIBRARIES)
+if(DEFINED ONNXRUNTIME_INCLUDE_DIRS AND DEFINED ONNXRUNTIME_LIBRARIES)
     # 環境変数から直接設定
-    set(ONNXRuntime_INCLUDE_DIRS ${ONNXRuntime_INCLUDE_DIRS})
-    set(ONNXRuntime_LIBRARIES ${ONNXRuntime_LIBRARIES})
+    set(ONNXRuntime_INCLUDE_DIRS ${ONNXRUNTIME_INCLUDE_DIRS})
+    set(ONNXRuntime_LIBRARIES ${ONNXRUNTIME_LIBRARIES})
     message(STATUS "Using ONNX Runtime from environment variables")
+    message(STATUS "ONNXRuntime_INCLUDE_DIRS: ${ONNXRuntime_INCLUDE_DIRS}")
+    message(STATUS "ONNXRuntime_LIBRARIES: ${ONNXRuntime_LIBRARIES}")
+    
+    # ヘッダーファイルの存在確認
+    if(EXISTS "${ONNXRuntime_INCLUDE_DIRS}/onnxruntime_cxx_api.h")
+        message(STATUS "ONNX Runtime header file found")
+    else()
+        message(FATAL_ERROR "ONNX Runtime header file not found at: ${ONNXRuntime_INCLUDE_DIRS}/onnxruntime_cxx_api.h")
+    endif()
+elseif(DEFINED ONNXRUNTIME_ROOT)
+    # ONNXRUNTIME_ROOTから手動で設定
+    set(ONNXRuntime_INCLUDE_DIRS "${ONNXRUNTIME_ROOT}/include")
+    set(ONNXRuntime_LIBRARIES "${ONNXRUNTIME_ROOT}/lib/onnxruntime.lib")
+    message(STATUS "Using ONNX Runtime from ONNXRUNTIME_ROOT: ${ONNXRUNTIME_ROOT}")
     message(STATUS "ONNXRuntime_INCLUDE_DIRS: ${ONNXRuntime_INCLUDE_DIRS}")
     message(STATUS "ONNXRuntime_LIBRARIES: ${ONNXRuntime_LIBRARIES}")
     
@@ -195,6 +209,12 @@ install(FILES ${HEADERS}
     DESTINATION include
 )
 
-# dlibモデルファイルのコピー
-file(COPY ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat
-     DESTINATION ${CMAKE_BINARY_DIR}/bin) 
+# dlibモデルファイルのコピー（存在する場合のみ）
+if(EXISTS ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat)
+    file(COPY ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat
+         DESTINATION ${CMAKE_BINARY_DIR}/bin)
+    message(STATUS "dlib face landmarks file copied")
+else()
+    message(WARNING "dlib face landmarks file not found: ${CMAKE_SOURCE_DIR}/models/shape_predictor_68_face_landmarks.dat")
+    message(STATUS "This file is optional for dlib face detection")
+endif() 
