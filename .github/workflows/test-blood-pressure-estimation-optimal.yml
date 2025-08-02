@@ -615,7 +615,7 @@ jobs:
                   $onnxSharedDllFound = $true
                   break
                 } catch {
-                  Write-Host "WARNING: Failed to copy ONNX Runtime shared DLL from $searchPath: $($_.Exception.Message)" -ForegroundColor Yellow
+                  Write-Host ("WARNING: Failed to copy ONNX Runtime shared DLL from " + $searchPath + ": " + $_.Exception.Message) -ForegroundColor Yellow
                 }
               }
             }
@@ -729,9 +729,9 @@ jobs:
           # Check sample video
           if (Test-Path "sample-data/$env:TEST_VIDEO") {
             $size = [math]::Round((Get-Item "sample-data/$env:TEST_VIDEO").Length / 1MB, 2)
-            Write-Host "Sample video found: $env:TEST_VIDEO ($size MB)" -ForegroundColor Green
+            Write-Host ("Sample video found: " + $env:TEST_VIDEO + " ($size MB)") -ForegroundColor Green
           } else {
-            Write-Host "ERROR: Sample video not found: sample-data/$env:TEST_VIDEO" -ForegroundColor Red
+                          Write-Host ("ERROR: Sample video not found: sample-data/" + $env:TEST_VIDEO) -ForegroundColor Red
             exit 1
           }
         shell: powershell
@@ -1974,12 +1974,12 @@ jobs:
         run: |
           cd test_bp_estimation_optimal
           Write-Host "Running optimal blood pressure estimation test..." -ForegroundColor Yellow
-          Write-Host "Test video: $env:TEST_VIDEO" -ForegroundColor Cyan
-          Write-Host "Test duration: $env:TEST_DURATION seconds" -ForegroundColor Cyan
-          Write-Host "Performance monitoring: $env:PERFORMANCE_MONITORING" -ForegroundColor Cyan
+          Write-Host ("Test video: " + $env:TEST_VIDEO) -ForegroundColor Cyan
+          Write-Host ("Test duration: " + $env:TEST_DURATION + " seconds") -ForegroundColor Cyan
+          Write-Host ("Performance monitoring: " + $env:PERFORMANCE_MONITORING) -ForegroundColor Cyan
 
           # Check if test video exists
-          $videoPath = "../sample-data/$env:TEST_VIDEO"
+          $videoPath = "../sample-data/" + $env:TEST_VIDEO
           if (Test-Path $videoPath) {
             Write-Host "Test video found: $videoPath" -ForegroundColor Green
           } else {
@@ -2425,7 +2425,7 @@ jobs:
           echo "" >> test-results/summary_report.md
           echo "## Test Information" >> test-results/summary_report.md
           echo "- Test Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> test-results/summary_report.md
-          echo "- Test Video: $env:TEST_VIDEO" >> test-results/summary_report.md
+          echo ("- Test Video: " + $env:TEST_VIDEO) >> test-results/summary_report.md
           echo "- Test Duration: $testDuration seconds" >> test-results/summary_report.md
           echo "- Configuration: dlib + OpenCV DNN" >> test-results/summary_report.md
           echo "" >> test-results/summary_report.md
