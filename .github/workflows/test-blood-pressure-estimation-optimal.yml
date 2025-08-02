@@ -75,11 +75,11 @@ jobs:
           .\vcpkg\vcpkg install dlib:x64-windows
         shell: powershell
 
-      - name: Install OpenCV via vcpkg
+      - name: Install OpenCV via vcpkg with dynamic linking
         run: |
-          Write-Host "Installing OpenCV via vcpkg..." -ForegroundColor Yellow
+          Write-Host "Installing OpenCV via vcpkg with dynamic linking..." -ForegroundColor Yellow
 
-          # vcpkgでOpenCVをインストール
+          # vcpkgでOpenCVを動的リンクでインストール
           .\vcpkg\vcpkg install opencv4:x64-windows
           .\vcpkg\vcpkg install opencv4[contrib]:x64-windows
           .\vcpkg\vcpkg install opencv4[dnn]:x64-windows
@@ -95,9 +95,40 @@ jobs:
             $opencvDlls = Get-ChildItem "vcpkg/installed/x64-windows" -Recurse -Filter "*.dll" | Where-Object { $_.Name -like "*opencv*" }
             if ($opencvDlls) {
               Write-Host "Found OpenCV DLLs:" -ForegroundColor Green
-              $opencvDlls | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+              $opencvDlls | ForEach-Object { 
+                Write-Host "  $($_.FullName)" -ForegroundColor Cyan
+                # Verify DLL integrity
+                try {
+                  $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
+                  if ($bytes.Length -ge 64) {
+                    $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                      if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                        Write-Host "    ✓ Valid PE header" -ForegroundColor Green
+                      } else {
+                        Write-Host "    ✗ Invalid PE header" -ForegroundColor Red
+                      }
+                    }
+                  }
+                } catch {
+                  Write-Host "    ✗ Could not verify" -ForegroundColor Red
+                }
+              }
             } else {
-              Write-Host "No OpenCV DLLs found - might be static build" -ForegroundColor Yellow
+              Write-Host "No OpenCV DLLs found - trying alternative installation" -ForegroundColor Yellow
+              
+              # Try to install with explicit dynamic linking
+              Write-Host "Attempting to install OpenCV with explicit dynamic linking..." -ForegroundColor Yellow
+              .\vcpkg\vcpkg install opencv4:x64-windows --recurse
+              
+              # Check again
+              $opencvDlls = Get-ChildItem "vcpkg/installed/x64-windows" -Recurse -Filter "*.dll" | Where-Object { $_.Name -like "*opencv*" }
+              if ($opencvDlls) {
+                Write-Host "Found OpenCV DLLs after retry:" -ForegroundColor Green
+                $opencvDlls | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
+              } else {
+                Write-Host "WARNING: Still no OpenCV DLLs found" -ForegroundColor Yellow
+              }
             }
           } else {
             Write-Host "OpenCV installation failed" -ForegroundColor Red
@@ -336,8 +367,15 @@ jobs:
             "opencv_objdetect4.dll"
           )
 
-          # Try multiple possible OpenCV paths
+          # Enhanced OpenCV DLL search with verification
+          Write-Host "Searching for OpenCV DLLs with enhanced verification..." -ForegroundColor Yellow
+
+          # Try multiple possible OpenCV paths with verification
           $opencvPaths = @(
+            "../vcpkg/installed/x64-windows/bin",
+            "../vcpkg/installed/x64-windows/debug/bin",
+            "../vcpkg/installed/x64-windows/lib",
+            "../vcpkg/installed/x64-windows/debug/lib",
             "../opencv/opencv/build/x64/vc16/bin",
             "../opencv/build/x64/vc16/bin",
             "../opencv/opencv/build/x64/vc16/lib",
@@ -347,41 +385,101 @@ jobs:
           foreach ($dllName in $opencvDlls) {
             $dllFound = $false
             
-            # Try to find DLL in OpenCV paths
+            # Try to find DLL in OpenCV paths with verification
             foreach ($opencvPath in $opencvPaths) {
               $fullPath = "$opencvPath/$dllName"
               if (Test-Path $fullPath) {
-                Copy-Item $fullPath "package/" -Force
-                $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
-                Write-Host "Copied OpenCV DLL to package: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
-                $dllFound = $true
-                break
+                try {
+                  # Verify DLL integrity before copying
+                  $bytes = [System.IO.File]::ReadAllBytes($fullPath)
+                  if ($bytes.Length -ge 64) {
+                    $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                      if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                        # Valid PE header found
+                        Copy-Item $fullPath "package/" -Force
+                        $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
+                        Write-Host "Copied verified OpenCV DLL: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
+                        $dllFound = $true
+                        break
+                      } else {
+                        Write-Host "WARNING: Invalid PE header in $fullPath" -ForegroundColor Yellow
+                      }
+                    }
+                  }
+                } catch {
+                  Write-Host "WARNING: Could not verify $fullPath" -ForegroundColor Yellow
+                }
               }
             }
             
-            # If not found in OpenCV paths, try recursive search
+            # If not found in OpenCV paths, try recursive search with verification
             if (-not $dllFound) {
+              Write-Host "Searching recursively for $dllName..." -ForegroundColor Yellow
               $opencvDll = Get-ChildItem -Path "../vcpkg" -Recurse -Filter $dllName | Select-Object -First 1
               if ($opencvDll) {
-                Copy-Item $opencvDll.FullName "package/" -Force
-                $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
-                Write-Host "Copied OpenCV DLL to package: $dllName ($size MB) from recursive search" -ForegroundColor Green
-                $dllFound = $true
+                try {
+                  # Verify DLL integrity
+                  $bytes = [System.IO.File]::ReadAllBytes($opencvDll.FullName)
+                  if ($bytes.Length -ge 64) {
+                    $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                      if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                        Copy-Item $opencvDll.FullName "package/" -Force
+                        $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
+                        Write-Host "Copied verified OpenCV DLL: $dllName ($size MB) from recursive search" -ForegroundColor Green
+                        $dllFound = $true
+                      } else {
+                        Write-Host "WARNING: Invalid PE header in $($opencvDll.FullName)" -ForegroundColor Yellow
+                      }
+                    }
+                  }
+                } catch {
+                  Write-Host "WARNING: Could not verify $($opencvDll.FullName)" -ForegroundColor Yellow
+                }
               } else {
                 Write-Host "WARNING: OpenCV DLL not found: $dllName" -ForegroundColor Yellow
               }
             }
+            
+            if (-not $dllFound) {
+              Write-Host "ERROR: Could not find valid OpenCV DLL: $dllName" -ForegroundColor Red
+            }
           }
 
-          # Copy ONNX Runtime DLL to package directory
-          Write-Host "Copying ONNX Runtime DLL to package directory..." -ForegroundColor Yellow
+          # Copy ONNX Runtime DLL to package directory with verification
+          Write-Host "Copying ONNX Runtime DLL to package directory with verification..." -ForegroundColor Yellow
           $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
           if (Test-Path $onnxDll) {
-            Copy-Item $onnxDll "package/" -Force
-            $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
-            Write-Host "Copied ONNX Runtime DLL to package: onnxruntime.dll ($size MB)" -ForegroundColor Green
+            try {
+              # Verify DLL integrity before copying
+              $bytes = [System.IO.File]::ReadAllBytes($onnxDll)
+              if ($bytes.Length -ge 64) {
+                $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                  if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                    Copy-Item $onnxDll "package/" -Force
+                    $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
+                    Write-Host "Copied verified ONNX Runtime DLL: onnxruntime.dll ($size MB)" -ForegroundColor Green
+                  } else {
+                    Write-Host "ERROR: Invalid PE header in ONNX Runtime DLL" -ForegroundColor Red
+                    exit 1
+                  }
+                } else {
+                  Write-Host "ERROR: Invalid PE offset in ONNX Runtime DLL" -ForegroundColor Red
+                  exit 1
+                }
+              } else {
+                Write-Host "ERROR: ONNX Runtime DLL is too small" -ForegroundColor Red
+                exit 1
+              }
+            } catch {
+              Write-Host "ERROR: Could not verify ONNX Runtime DLL" -ForegroundColor Red
+              exit 1
+            }
           } else {
-            Write-Host "WARNING: ONNX Runtime DLL not found" -ForegroundColor Yellow
+            Write-Host "ERROR: ONNX Runtime DLL not found" -ForegroundColor Red
+            exit 1
           }
 
           # Copy ZLIB to package directory
@@ -644,7 +742,10 @@ jobs:
             echo '                GC.Collect();' >> Program.cs
             echo '                ' >> Program.cs
             echo '                // Set memory pressure to help with large object allocation' >> Program.cs
-            echo '                GC.AddMemoryPressure(1024 * 1024 * 100); // 100MB pressure' >> Program.cs
+            echo '                GC.AddMemoryPressure(1024 * 1024 * 50); // Reduced to 50MB pressure' >> Program.cs
+            echo '                ' >> Program.cs
+            echo '                // Configure for better memory management' >> Program.cs
+            echo '                GC.Collect(2, GCCollectionMode.Forced, true, true);' >> Program.cs
             echo '                ' >> Program.cs
             echo '                Console.WriteLine("Memory settings configured for stability");' >> Program.cs
             echo '                Console.WriteLine($"Initial memory usage: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
@@ -754,20 +855,41 @@ jobs:
           echo '' >> Program.cs
           echo '                // Try to load DLL manually to check for issues' >> Program.cs
           echo '                Console.WriteLine("Attempting to load BloodPressureDLL.dll...");' >> Program.cs
-          echo '                try' >> Program.cs
-          echo '                {' >> Program.cs
-          echo '                    var handle = System.Runtime.InteropServices.NativeLibrary.Load("BloodPressureDLL.dll");' >> Program.cs
-          echo '                    Console.WriteLine($"DLL loaded successfully: {handle}");' >> Program.cs
-          echo '                }' >> Program.cs
-          echo '                catch (Exception ex)' >> Program.cs
-          echo '                {' >> Program.cs
-          echo '                    Console.WriteLine($"ERROR loading DLL: {ex.Message}");' >> Program.cs
-          echo '                    Console.WriteLine($"Exception type: {ex.GetType().Name}");' >> Program.cs
-          echo '                    if (ex.InnerException != null)' >> Program.cs
-          echo '                    {' >> Program.cs
-          echo '                        Console.WriteLine($"Inner exception: {ex.InnerException.Message}");' >> Program.cs
-          echo '                    }' >> Program.cs
-          echo '                }' >> Program.cs
+                      echo '                try' >> Program.cs
+            echo '                {' >> Program.cs
+            echo '                    var handle = System.Runtime.InteropServices.NativeLibrary.Load("BloodPressureDLL.dll");' >> Program.cs
+            echo '                    Console.WriteLine($"DLL loaded successfully: {handle}");' >> Program.cs
+            echo '                    ' >> Program.cs
+            echo '                    // Additional DLL validation' >> Program.cs
+            echo '                    Console.WriteLine("Performing additional DLL validation...");' >> Program.cs
+            echo '                    var dllPath = System.IO.Path.GetFullPath("BloodPressureDLL.dll");' >> Program.cs
+            echo '                    var fileInfo = new System.IO.FileInfo(dllPath);' >> Program.cs
+            echo '                    Console.WriteLine($"DLL file size: {fileInfo.Length} bytes");' >> Program.cs
+            echo '                    Console.WriteLine($"DLL last modified: {fileInfo.LastWriteTime}");' >> Program.cs
+            echo '                }' >> Program.cs
+            echo '                catch (Exception ex)' >> Program.cs
+            echo '                {' >> Program.cs
+            echo '                    Console.WriteLine($"ERROR loading DLL: {ex.Message}");' >> Program.cs
+            echo '                    Console.WriteLine($"Exception type: {ex.GetType().Name}");' >> Program.cs
+            echo '                    if (ex.InnerException != null)' >> Program.cs
+            echo '                    {' >> Program.cs
+            echo '                        Console.WriteLine($"Inner exception: {ex.InnerException.Message}");' >> Program.cs
+            echo '                    }' >> Program.cs
+            echo '                    ' >> Program.cs
+            echo '                    // Additional error diagnostics' >> Program.cs
+            echo '                    Console.WriteLine("Additional DLL diagnostics:");' >> Program.cs
+            echo '                    var dllPath = System.IO.Path.GetFullPath("BloodPressureDLL.dll");' >> Program.cs
+            echo '                    if (System.IO.File.Exists(dllPath))' >> Program.cs
+            echo '                    {' >> Program.cs
+            echo '                        var fileInfo = new System.IO.FileInfo(dllPath);' >> Program.cs
+            echo '                        Console.WriteLine($"  File exists: {fileInfo.Length} bytes");' >> Program.cs
+            echo '                        Console.WriteLine($"  File attributes: {fileInfo.Attributes}");' >> Program.cs
+            echo '                    }' >> Program.cs
+            echo '                    else' >> Program.cs
+            echo '                    {' >> Program.cs
+            echo '                        Console.WriteLine("  File does not exist");' >> Program.cs
+            echo '                    }' >> Program.cs
+            echo '                }' >> Program.cs
           echo '' >> Program.cs
           echo '                // Check DLL architecture compatibility' >> Program.cs
           echo '                Console.WriteLine("Checking DLL architecture compatibility...");' >> Program.cs
@@ -1415,10 +1537,10 @@ jobs:
           # Enhanced DLL compatibility verification
           Write-Host "Performing enhanced DLL compatibility verification..." -ForegroundColor Yellow
 
-          # Copy built DLL from CppBloodPressureDLL/package directory
+          # Copy built DLL from CppBloodPressureDLL/package directory with enhanced integrity check
           $builtDll = "CppBloodPressureDLL/package/BloodPressureDLL.dll"
           if (Test-Path $builtDll) {
-            # Verify DLL integrity before copying
+            # Enhanced DLL integrity verification
             try {
               $bytes = [System.IO.File]::ReadAllBytes($builtDll)
               if ($bytes.Length -ge 64) {
@@ -1428,25 +1550,43 @@ jobs:
                     $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
                     $arch = if ($machine -eq 0x8664) { "x64" } elseif ($machine -eq 0x14c) { "x86" } else { "Unknown(0x$($machine.ToString('X'))" }
                     Write-Host "DLL architecture verified: $arch" -ForegroundColor Green
+                    
+                    # Copy DLL with verification
+                    $destPath = "test_bp_estimation_optimal/BloodPressureDLL.dll"
+                    Copy-Item $builtDll $destPath -Force
+                    
+                    # Verify copied DLL
+                    $copiedBytes = [System.IO.File]::ReadAllBytes($destPath)
+                    if ($copiedBytes.Length -eq $bytes.Length) {
+                      $size = [math]::Round((Get-Item $destPath).Length / 1MB, 2)
+                      Write-Host "Copied and verified DLL: BloodPressureDLL.dll ($size MB)" -ForegroundColor Green
+                    } else {
+                      Write-Host "ERROR: DLL copy verification failed" -ForegroundColor Red
+                      exit 1
+                    }
                   } else {
-                    Write-Host "WARNING: Invalid PE header in built DLL" -ForegroundColor Red
+                    Write-Host "ERROR: Invalid PE header in built DLL - cannot proceed" -ForegroundColor Red
+                    exit 1
                   }
+                } else {
+                  Write-Host "ERROR: Invalid PE offset in built DLL - cannot proceed" -ForegroundColor Red
+                  exit 1
                 }
+              } else {
+                Write-Host "ERROR: Built DLL is too small - cannot proceed" -ForegroundColor Red
+                exit 1
               }
             } catch {
-              Write-Host "WARNING: Could not verify DLL integrity" -ForegroundColor Yellow
+              Write-Host "ERROR: Could not verify DLL integrity - cannot proceed" -ForegroundColor Red
+              exit 1
             }
-            
-            Copy-Item $builtDll "test_bp_estimation_optimal/" -Force
-            $size = [math]::Round((Get-Item $builtDll).Length / 1MB, 2)
-            Write-Host "Copied built DLL: BloodPressureDLL.dll ($size MB)" -ForegroundColor Green
           } else {
             Write-Host "ERROR: Built DLL not found at $builtDll" -ForegroundColor Red
             exit 1
           }
 
-          # Copy ALL dependency DLLs from package directory
-          Write-Host "Copying all dependency DLLs from package directory..." -ForegroundColor Yellow
+          # Copy ALL dependency DLLs from package directory with verification
+          Write-Host "Copying all dependency DLLs from package directory with verification..." -ForegroundColor Yellow
           $packageDlls = @(
             "CppBloodPressureDLL/package/abseil_dll.dll",
             "CppBloodPressureDLL/package/jpeg62.dll",
@@ -1471,9 +1611,29 @@ jobs:
 
           foreach ($dllPath in $packageDlls) {
             if (Test-Path $dllPath) {
-              Copy-Item $dllPath "test_bp_estimation_optimal/" -Force
-              $size = [math]::Round((Get-Item $dllPath).Length / 1MB, 2)
-              Write-Host "Copied dependency DLL: $(Split-Path $dllPath -Leaf) ($size MB)" -ForegroundColor Green
+              try {
+                $dllName = Split-Path $dllPath -Leaf
+                $destPath = "test_bp_estimation_optimal/$dllName"
+                
+                # Read source DLL
+                $sourceBytes = [System.IO.File]::ReadAllBytes($dllPath)
+                
+                # Copy DLL
+                Copy-Item $dllPath $destPath -Force
+                
+                # Verify copied DLL
+                $destBytes = [System.IO.File]::ReadAllBytes($destPath)
+                if ($destBytes.Length -eq $sourceBytes.Length) {
+                  $size = [math]::Round((Get-Item $destPath).Length / 1MB, 2)
+                  Write-Host "Copied and verified: $dllName ($size MB)" -ForegroundColor Green
+                } else {
+                  Write-Host "ERROR: Copy verification failed for $dllName" -ForegroundColor Red
+                  exit 1
+                }
+              } catch {
+                Write-Host "ERROR: Failed to copy $dllPath" -ForegroundColor Red
+                exit 1
+              }
             } else {
               Write-Host "WARNING: Dependency DLL not found: $(Split-Path $dllPath -Leaf)" -ForegroundColor Yellow
             }
