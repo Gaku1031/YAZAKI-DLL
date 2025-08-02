@@ -491,36 +491,138 @@ jobs:
           # Copy ONNX Runtime DLL to package directory with verification
           Write-Host "Copying ONNX Runtime DLL to package directory with verification..." -ForegroundColor Yellow
           $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
+          Write-Host "ONNX Runtime DLL path: $onnxDll" -ForegroundColor Cyan
+
           if (Test-Path $onnxDll) {
+            Write-Host "ONNX Runtime DLL found at: $onnxDll" -ForegroundColor Green
+            $fileSize = (Get-Item $onnxDll).Length
+            Write-Host "ONNX Runtime DLL size: $fileSize bytes" -ForegroundColor Cyan
+            
             try {
               # Verify DLL integrity before copying
+              Write-Host "Verifying ONNX Runtime DLL integrity..." -ForegroundColor Yellow
               $bytes = [System.IO.File]::ReadAllBytes($onnxDll)
+              Write-Host "Read $($bytes.Length) bytes from ONNX Runtime DLL" -ForegroundColor Cyan
+              
               if ($bytes.Length -ge 64) {
                 $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                Write-Host "PE offset: $peOffset" -ForegroundColor Cyan
+                
                 if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
-                  if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                  $peSignature = $bytes[$peOffset]
+                  $peSignature2 = $bytes[$peOffset + 1]
+                  Write-Host "PE signature: 0x$($peSignature.ToString('X2')) 0x$($peSignature2.ToString('X2'))" -ForegroundColor Cyan
+                  
+                  if ($peSignature -eq 0x50 -and $peSignature2 -eq 0x45) {
                     Copy-Item $onnxDll "package/" -Force
                     $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
                     Write-Host "Copied verified ONNX Runtime DLL: onnxruntime.dll ($size MB)" -ForegroundColor Green
                   } else {
-                    Write-Host "ERROR: Invalid PE header in ONNX Runtime DLL" -ForegroundColor Red
+                    Write-Host "ERROR: Invalid PE header in ONNX Runtime DLL (0x$($peSignature.ToString('X2')) 0x$($peSignature2.ToString('X2')))" -ForegroundColor Red
+                    Write-Host "ONNX Runtime DLL appears to be corrupted. This may cause AccessViolationException during execution." -ForegroundColor Red
+                    Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
                     exit 1
                   }
                 } else {
-                  Write-Host "ERROR: Invalid PE offset in ONNX Runtime DLL" -ForegroundColor Red
+                  Write-Host "ERROR: Invalid PE offset in ONNX Runtime DLL ($peOffset)" -ForegroundColor Red
+                  Write-Host "ONNX Runtime DLL appears to be corrupted. This may cause AccessViolationException during execution." -ForegroundColor Red
+                  Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
                   exit 1
                 }
               } else {
-                Write-Host "ERROR: ONNX Runtime DLL is too small" -ForegroundColor Red
+                Write-Host "ERROR: ONNX Runtime DLL is too small ($($bytes.Length) bytes)" -ForegroundColor Red
+                Write-Host "ONNX Runtime DLL appears to be corrupted. This may cause AccessViolationException during execution." -ForegroundColor Red
+                Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
                 exit 1
               }
             } catch {
-              Write-Host "ERROR: Could not verify ONNX Runtime DLL" -ForegroundColor Red
+              Write-Host "ERROR: Could not verify ONNX Runtime DLL: $($_.Exception.Message)" -ForegroundColor Red
+              Write-Host "ONNX Runtime DLL verification failed. This may cause AccessViolationException during execution." -ForegroundColor Red
+              Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
               exit 1
             }
           } else {
-            Write-Host "ERROR: ONNX Runtime DLL not found" -ForegroundColor Red
-            exit 1
+            Write-Host "ERROR: ONNX Runtime DLL not found at: $onnxDll" -ForegroundColor Red
+            Write-Host "Checking for ONNX Runtime DLL in other locations..." -ForegroundColor Yellow
+            
+            # Try to find ONNX Runtime DLL in other locations
+            $onnxSearchPaths = @(
+              "../onnxruntime/onnxruntime-win-x64-1.22.1/lib",
+              "../onnxruntime/onnxruntime-win-x64-1.22.1/bin",
+              "../onnxruntime",
+              "../onnxruntime-win-x64-1.22.1/lib",
+              "../onnxruntime-win-x64-1.22.1/bin"
+            )
+            
+            $onnxDllFound = $false
+            foreach ($searchPath in $onnxSearchPaths) {
+              $searchDll = "$searchPath/onnxruntime.dll"
+              if (Test-Path $searchDll) {
+                Write-Host "Found ONNX Runtime DLL at: $searchDll" -ForegroundColor Green
+                Copy-Item $searchDll "package/" -Force
+                $size = [math]::Round((Get-Item $searchDll).Length / 1MB, 2)
+                Write-Host "Copied ONNX Runtime DLL: onnxruntime.dll ($size MB) from $searchPath" -ForegroundColor Green
+                $onnxDllFound = $true
+                break
+              }
+            }
+            
+            if (-not $onnxDllFound) {
+              Write-Host "ERROR: Could not find ONNX Runtime DLL in any location" -ForegroundColor Red
+              Write-Host "ONNX Runtime DLL is required for blood pressure estimation. Please check the installation." -ForegroundColor Red
+              Write-Host "Expected locations:" -ForegroundColor Yellow
+              foreach ($searchPath in $onnxSearchPaths) {
+                Write-Host "  $searchPath/onnxruntime.dll" -ForegroundColor Cyan
+              }
+              exit 1
+            }
+          }
+
+          # Copy ONNX Runtime shared library to package directory
+          Write-Host "Copying ONNX Runtime shared library to package directory..." -ForegroundColor Yellow
+          $onnxSharedDll = "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime_providers_shared.dll"
+          Write-Host "ONNX Runtime shared DLL path: $onnxSharedDll" -ForegroundColor Cyan
+
+          if (Test-Path $onnxSharedDll) {
+            Write-Host "ONNX Runtime shared DLL found at: $onnxSharedDll" -ForegroundColor Green
+            try {
+              Copy-Item $onnxSharedDll "package/" -Force
+              $size = [math]::Round((Get-Item $onnxSharedDll).Length / 1MB, 2)
+              Write-Host "Copied ONNX Runtime shared DLL: onnxruntime_providers_shared.dll ($size MB)" -ForegroundColor Green
+            } catch {
+              Write-Host "WARNING: Failed to copy ONNX Runtime shared DLL: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+          } else {
+            Write-Host "WARNING: ONNX Runtime shared DLL not found at: $onnxSharedDll" -ForegroundColor Yellow
+            # Try to find it in other locations
+            $onnxSharedSearchPaths = @(
+              "../onnxruntime/onnxruntime-win-x64-1.22.1/lib",
+              "../onnxruntime/onnxruntime-win-x64-1.22.1/bin",
+              "../onnxruntime",
+              "../onnxruntime-win-x64-1.22.1/lib",
+              "../onnxruntime-win-x64-1.22.1/bin"
+            )
+            
+            $onnxSharedDllFound = $false
+            foreach ($searchPath in $onnxSharedSearchPaths) {
+              $searchSharedDll = "$searchPath/onnxruntime_providers_shared.dll"
+              if (Test-Path $searchSharedDll) {
+                Write-Host "Found ONNX Runtime shared DLL at: $searchSharedDll" -ForegroundColor Green
+                try {
+                  Copy-Item $searchSharedDll "package/" -Force
+                  $size = [math]::Round((Get-Item $searchSharedDll).Length / 1MB, 2)
+                  Write-Host "Copied ONNX Runtime shared DLL: onnxruntime_providers_shared.dll ($size MB) from $searchPath" -ForegroundColor Green
+                  $onnxSharedDllFound = $true
+                  break
+                } catch {
+                  Write-Host "WARNING: Failed to copy ONNX Runtime shared DLL from $searchPath: $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+              }
+            }
+            
+            if (-not $onnxSharedDllFound) {
+              Write-Host "WARNING: Could not find ONNX Runtime shared DLL in any location" -ForegroundColor Yellow
+            }
           }
 
           # Copy ZLIB to package directory
