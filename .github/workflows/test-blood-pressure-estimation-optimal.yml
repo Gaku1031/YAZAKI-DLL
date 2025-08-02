@@ -135,9 +135,12 @@ jobs:
             exit 1
           }
 
-          $env:OpenCV_DIR = "${{ github.workspace }}/vcpkg/installed/x64-windows/share/opencv4"
+          # Get the workspace root directory (equivalent to github.workspace)
+          $workspaceRoot = (Get-Location).Path
+          $env:OpenCV_DIR = "$workspaceRoot/vcpkg/installed/x64-windows/share/opencv4"
           echo "OpenCV_DIR=$env:OpenCV_DIR" >> $env:GITHUB_ENV
           Write-Host "OpenCV_DIR set to: $env:OpenCV_DIR" -ForegroundColor Green
+          Write-Host "Workspace root: $workspaceRoot" -ForegroundColor Cyan
         shell: powershell
 
       - name: Install ONNX Runtime
@@ -146,7 +149,8 @@ jobs:
           $onnxVersion = "1.22.1"
           $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
           $onnxZip = "onnxruntime.zip"
-          $onnxDir = "${{ github.workspace }}/onnxruntime"
+          $workspaceRoot = (Get-Location).Path
+          $onnxDir = "$workspaceRoot/onnxruntime"
 
           Write-Host "Downloading ONNX Runtime v$onnxVersion..." -ForegroundColor Yellow
           Invoke-WebRequest -Uri $onnxUrl -OutFile $onnxZip
@@ -301,14 +305,16 @@ jobs:
 
           # Configure CMake
           Write-Host "Configuring CMake..." -ForegroundColor Yellow
-          $env:ONNXRUNTIME_ROOT = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1"
-          $env:ONNXRUNTIME_INCLUDE_DIRS = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
-          $env:ONNXRUNTIME_LIBRARIES = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib"
+          $workspaceRoot = (Get-Location).Path
+          $env:ONNXRUNTIME_ROOT = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1"
+          $env:ONNXRUNTIME_INCLUDE_DIRS = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/include"
+          $env:ONNXRUNTIME_LIBRARIES = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib"
 
           # Verify ONNX Runtime files exist
           Write-Host "Verifying ONNX Runtime files..." -ForegroundColor Yellow
-          $onnxIncludeDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include"
-          $onnxLibDir = "${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib"
+          $workspaceRoot = (Get-Location).Path
+          $onnxIncludeDir = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/include"
+          $onnxLibDir = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/lib"
 
           if (Test-Path "$onnxIncludeDir/onnxruntime_cxx_api.h") {
             Write-Host "ONNX Runtime header found: onnxruntime_cxx_api.h" -ForegroundColor Green
@@ -324,16 +330,17 @@ jobs:
             exit 1
           }
 
+          $workspaceRoot = (Get-Location).Path
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DCMAKE_TOOLCHAIN_FILE="$workspaceRoot/vcpkg/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows `
-            -DONNXRUNTIME_ROOT="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1" `
-            -DONNXRUNTIME_INCLUDE_DIRS="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
-            -DONNXRUNTIME_LIBRARIES="${{ github.workspace }}/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib" `
+            -DONNXRUNTIME_ROOT="$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1" `
+            -DONNXRUNTIME_INCLUDE_DIRS="$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/include" `
+            -DONNXRUNTIME_LIBRARIES="$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.lib" `
             -DUSE_INDIVIDUAL_OPENCV_LIBS=ON `
             -DUSE_GITHUB_ACTIONS_OPTIMIZED=ON `
-            -DOpenCV_DIR="${{ github.workspace }}/vcpkg/installed/x64-windows/share/opencv4"
+            -DOpenCV_DIR="$workspaceRoot/vcpkg/installed/x64-windows/share/opencv4"
 
           # Build DLL
           Write-Host "Building BloodPressureDLL..." -ForegroundColor Yellow
