@@ -95,25 +95,29 @@ jobs:
             $opencvDlls = Get-ChildItem "vcpkg/installed/x64-windows" -Recurse -Filter "*.dll" | Where-Object { $_.Name -like "*opencv*" }
             if ($opencvDlls) {
               Write-Host "Found OpenCV DLLs:" -ForegroundColor Green
-              $opencvDlls | ForEach-Object { 
-                Write-Host "  $($_.FullName)" -ForegroundColor Cyan
-                # Verify DLL integrity
-                try {
-                  $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
-                  if ($bytes.Length -ge 64) {
-                    $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
-                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
-                      if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
-                        Write-Host "    ✓ Valid PE header" -ForegroundColor Green
-                      } else {
-                        Write-Host "    ✗ Invalid PE header" -ForegroundColor Red
-                      }
+                          $opencvDlls | ForEach-Object { 
+              Write-Host "  $($_.FullName)" -ForegroundColor Cyan
+              # Verify DLL integrity
+              try {
+                $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
+                if ($bytes.Length -ge 64) {
+                  $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                  if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                    if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                      Write-Host "    [OK] Valid PE header" -ForegroundColor Green
+                    } else {
+                      Write-Host "    [ERROR] Invalid PE header" -ForegroundColor Red
                     }
+                  } else {
+                    Write-Host "    [ERROR] Invalid PE offset" -ForegroundColor Red
                   }
-                } catch {
-                  Write-Host "    ✗ Could not verify" -ForegroundColor Red
+                } else {
+                  Write-Host "    [ERROR] DLL too small" -ForegroundColor Red
                 }
+              } catch {
+                Write-Host "    [ERROR] Could not verify" -ForegroundColor Red
               }
+            }
             } else {
               Write-Host "No OpenCV DLLs found - trying alternative installation" -ForegroundColor Yellow
               
@@ -141,6 +145,13 @@ jobs:
           echo "OpenCV_DIR=$env:OpenCV_DIR" >> $env:GITHUB_ENV
           Write-Host "OpenCV_DIR set to: $env:OpenCV_DIR" -ForegroundColor Green
           Write-Host "Workspace root: $workspaceRoot" -ForegroundColor Cyan
+
+          # Verify OpenCV installation
+          if (Test-Path $env:OpenCV_DIR) {
+            Write-Host "OpenCV installation verified successfully" -ForegroundColor Green
+          } else {
+            Write-Host "WARNING: OpenCV directory not found at expected location" -ForegroundColor Yellow
+          }
         shell: powershell
 
       - name: Install ONNX Runtime
