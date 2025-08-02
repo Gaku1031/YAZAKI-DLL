@@ -59,42 +59,93 @@ struct BloodPressureEstimator::Impl {
           dbp_session(nullptr)
     {
         try {
+            printf("[BP_EST] Starting BloodPressureEstimator initialization\n"); fflush(stdout);
+            printf("[BP_EST] Model directory: %s\n", model_dir.c_str()); fflush(stdout);
+            
+            // Step 1: Model file path construction
+            printf("[BP_EST] Step 1: Building model file paths\n"); fflush(stdout);
             std::string sbp_path = model_dir + "/systolicbloodpressure.onnx";
             std::string dbp_path = model_dir + "/diastolicbloodpressure.onnx";
-            printf("[BP_EST] Loading models from: %s\n", model_dir.c_str()); fflush(stdout);
             printf("[BP_EST] SBP model path: %s\n", sbp_path.c_str()); fflush(stdout);
             printf("[BP_EST] DBP model path: %s\n", dbp_path.c_str()); fflush(stdout);
 
-            // ファイル存在チェック
+            // Step 2: File existence check
+            printf("[BP_EST] Step 2: Checking file existence\n"); fflush(stdout);
             std::ifstream sbp_file(sbp_path, std::ios::binary);
             std::ifstream dbp_file(dbp_path, std::ios::binary);
-            if (!sbp_file.good()) throw std::runtime_error("SBP model file not found");
-            if (!dbp_file.good()) throw std::runtime_error("DBP model file not found");
+            if (!sbp_file.good()) {
+                printf("[BP_EST] ERROR: SBP model file not found: %s\n", sbp_path.c_str()); fflush(stdout);
+                throw std::runtime_error("SBP model file not found: " + sbp_path);
+            }
+            if (!dbp_file.good()) {
+                printf("[BP_EST] ERROR: DBP model file not found: %s\n", dbp_path.c_str()); fflush(stdout);
+                throw std::runtime_error("DBP model file not found: " + dbp_path);
+            }
+            printf("[BP_EST] File existence check passed\n"); fflush(stdout);
 
-            // ファイルサイズチェック
+            // Step 3: File size check
+            printf("[BP_EST] Step 3: Checking file sizes\n"); fflush(stdout);
             sbp_file.seekg(0, std::ios::end);
             auto sbp_size = sbp_file.tellg();
             dbp_file.seekg(0, std::ios::end);
             auto dbp_size = dbp_file.tellg();
             printf("[BP_EST] SBP model size: %ld bytes\n", (long)sbp_size); fflush(stdout);
             printf("[BP_EST] DBP model size: %ld bytes\n", (long)dbp_size); fflush(stdout);
-            if (sbp_size == 0) throw std::runtime_error("SBP model file is empty: " + sbp_path);
-            if (dbp_size == 0) throw std::runtime_error("DBP model file is empty: " + dbp_path);
+            if (sbp_size == 0) {
+                printf("[BP_EST] ERROR: SBP model file is empty\n"); fflush(stdout);
+                throw std::runtime_error("SBP model file is empty: " + sbp_path);
+            }
+            if (dbp_size == 0) {
+                printf("[BP_EST] ERROR: DBP model file is empty\n"); fflush(stdout);
+                throw std::runtime_error("DBP model file is empty: " + dbp_path);
+            }
+            printf("[BP_EST] File size check passed\n"); fflush(stdout);
 
             sbp_file.close();
             dbp_file.close();
 
+            // Step 4: ONNX Runtime environment verification
+            printf("[BP_EST] Step 4: Verifying ONNX Runtime environment\n"); fflush(stdout);
+            printf("[BP_EST] ONNX Runtime environment created successfully\n"); fflush(stdout);
+
+            // Step 5: Session options configuration
+            printf("[BP_EST] Step 5: Configuring session options\n"); fflush(stdout);
             session_options.SetIntraOpNumThreads(1);
-            printf("[BP_EST] Ort::SessionOptions created and threads set.\n"); fflush(stdout);
+            printf("[BP_EST] Session options configured\n"); fflush(stdout);
+
+            // Step 6: Path conversion
+            printf("[BP_EST] Step 6: Converting file paths\n"); fflush(stdout);
             std::wstring sbp_path_w(sbp_path.begin(), sbp_path.end());
             std::wstring dbp_path_w(dbp_path.begin(), dbp_path.end());
-            sbp_session = Ort::Session(env, sbp_path_w.c_str(), session_options);
-            printf("[BP_EST] SBP session created.\n"); fflush(stdout);
-            dbp_session = Ort::Session(env, dbp_path_w.c_str(), session_options);
-            printf("[BP_EST] DBP session created.\n"); fflush(stdout);
+            printf("[BP_EST] Path conversion completed\n"); fflush(stdout);
+
+            // Step 7: SBP session creation
+            printf("[BP_EST] Step 7: Creating SBP session\n"); fflush(stdout);
+            try {
+                sbp_session = Ort::Session(env, sbp_path_w.c_str(), session_options);
+                printf("[BP_EST] SBP session created successfully\n"); fflush(stdout);
+            } catch (const std::exception& e) {
+                printf("[BP_EST] ERROR: Failed to create SBP session: %s\n", e.what()); fflush(stdout);
+                throw std::runtime_error("SBP session creation failed: " + std::string(e.what()));
+            }
+
+            // Step 8: DBP session creation
+            printf("[BP_EST] Step 8: Creating DBP session\n"); fflush(stdout);
+            try {
+                dbp_session = Ort::Session(env, dbp_path_w.c_str(), session_options);
+                printf("[BP_EST] DBP session created successfully\n"); fflush(stdout);
+            } catch (const std::exception& e) {
+                printf("[BP_EST] ERROR: Failed to create DBP session: %s\n", e.what()); fflush(stdout);
+                throw std::runtime_error("DBP session creation failed: " + std::string(e.what()));
+            }
+
+            printf("[BP_EST] BloodPressureEstimator initialization completed successfully\n"); fflush(stdout);
         } catch (const std::exception& e) {
-            printf("[BP_EST] Standard exception in constructor: %s\n", e.what()); fflush(stdout);
+            printf("[BP_EST] ERROR: Standard exception in constructor: %s\n", e.what()); fflush(stdout);
             throw;
+        } catch (...) {
+            printf("[BP_EST] ERROR: Unknown exception in constructor\n"); fflush(stdout);
+            throw std::runtime_error("Unknown exception during BloodPressureEstimator initialization");
         }
     }
     

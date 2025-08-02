@@ -363,7 +363,7 @@ jobs:
           cd CppBloodPressureDLL
           Write-Host "Changed to directory: $(Get-Location).Path" -ForegroundColor Cyan
 
-          # Configure CMake
+          # Configure CMake with enhanced error handling
           Write-Host "Configuring CMake..." -ForegroundColor Yellow
           $env:ONNXRUNTIME_ROOT = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1"
           $env:ONNXRUNTIME_INCLUDE_DIRS = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/include"
@@ -374,38 +374,24 @@ jobs:
           $onnxIncludeDir = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/include"
           $onnxLibDir = "$workspaceRoot/onnxruntime/onnxruntime-win-x64-1.22.1/lib"
 
-          # Check if ONNX Runtime directory exists
           if (Test-Path "$workspaceRoot/onnxruntime") {
             Write-Host "ONNX Runtime directory found" -ForegroundColor Green
-            Get-ChildItem "$workspaceRoot/onnxruntime" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Cyan }
           } else {
-            Write-Host "ERROR: ONNX Runtime directory not found at: $workspaceRoot/onnxruntime" -ForegroundColor Red
+            Write-Host "ERROR: ONNX Runtime directory not found" -ForegroundColor Red
             exit 1
           }
 
           if (Test-Path "$onnxIncludeDir/onnxruntime_cxx_api.h") {
             Write-Host "ONNX Runtime header found: onnxruntime_cxx_api.h" -ForegroundColor Green
           } else {
-            Write-Host "ERROR: ONNX Runtime header not found at: $onnxIncludeDir/onnxruntime_cxx_api.h" -ForegroundColor Red
-            Write-Host "Available files in include directory:" -ForegroundColor Yellow
-            if (Test-Path $onnxIncludeDir) {
-              Get-ChildItem $onnxIncludeDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
-            } else {
-              Write-Host "  Include directory does not exist" -ForegroundColor Red
-            }
+            Write-Host "ERROR: ONNX Runtime header not found" -ForegroundColor Red
             exit 1
           }
 
           if (Test-Path "$onnxLibDir/onnxruntime.lib") {
             Write-Host "ONNX Runtime library found: onnxruntime.lib" -ForegroundColor Green
           } else {
-            Write-Host "ERROR: ONNX Runtime library not found at: $onnxLibDir/onnxruntime.lib" -ForegroundColor Red
-            Write-Host "Available files in lib directory:" -ForegroundColor Yellow
-            if (Test-Path $onnxLibDir) {
-              Get-ChildItem $onnxLibDir | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
-            } else {
-              Write-Host "  Lib directory does not exist" -ForegroundColor Red
-            }
+            Write-Host "ERROR: ONNX Runtime library not found" -ForegroundColor Red
             exit 1
           }
 
@@ -470,202 +456,51 @@ jobs:
           foreach ($dllName in $opencvDlls) {
             $dllFound = $false
             
-            # Try to find DLL in OpenCV paths with verification
+            # Try to find DLL in OpenCV paths
             foreach ($opencvPath in $opencvPaths) {
               $fullPath = "$opencvPath/$dllName"
               if (Test-Path $fullPath) {
-                try {
-                  # Verify DLL integrity before copying
-                  $bytes = [System.IO.File]::ReadAllBytes($fullPath)
-                  if ($bytes.Length -ge 64) {
-                    $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
-                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
-                      if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
-                        # Valid PE header found
-                        Copy-Item $fullPath "package/" -Force
-                        $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
-                        Write-Host "Copied verified OpenCV DLL: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
-                        $dllFound = $true
-                        break
-                      } else {
-                        Write-Host "WARNING: Invalid PE header in $fullPath" -ForegroundColor Yellow
-                      }
-                    }
-                  }
-                } catch {
-                  Write-Host "WARNING: Could not verify $fullPath" -ForegroundColor Yellow
-                }
+                Copy-Item $fullPath "package/" -Force
+                $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
+                Write-Host "Copied OpenCV DLL: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
+                $dllFound = $true
+                break
               }
             }
             
-            # If not found in OpenCV paths, try recursive search with verification
+            # If not found in OpenCV paths, try recursive search
             if (-not $dllFound) {
               Write-Host "Searching recursively for $dllName..." -ForegroundColor Yellow
               $opencvDll = Get-ChildItem -Path "../vcpkg" -Recurse -Filter $dllName | Select-Object -First 1
               if ($opencvDll) {
-                try {
-                  # Verify DLL integrity
-                  $bytes = [System.IO.File]::ReadAllBytes($opencvDll.FullName)
-                  if ($bytes.Length -ge 64) {
-                    $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
-                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
-                      if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
-                        Copy-Item $opencvDll.FullName "package/" -Force
-                        $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
-                        Write-Host "Copied verified OpenCV DLL: $dllName ($size MB) from recursive search" -ForegroundColor Green
-                        $dllFound = $true
-                      } else {
-                        Write-Host "WARNING: Invalid PE header in $($opencvDll.FullName)" -ForegroundColor Yellow
-                      }
-                    }
-                  }
-                } catch {
-                  Write-Host "WARNING: Could not verify $($opencvDll.FullName)" -ForegroundColor Yellow
-                }
+                Copy-Item $opencvDll.FullName "package/" -Force
+                $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
+                Write-Host "Copied OpenCV DLL: $dllName ($size MB) from recursive search" -ForegroundColor Green
+                $dllFound = $true
               } else {
                 Write-Host "WARNING: OpenCV DLL not found: $dllName" -ForegroundColor Yellow
               }
             }
             
             if (-not $dllFound) {
-              Write-Host "ERROR: Could not find valid OpenCV DLL: $dllName" -ForegroundColor Red
+              Write-Host "ERROR: Could not find OpenCV DLL: $dllName" -ForegroundColor Red
             }
           }
 
-          # Copy ONNX Runtime DLL to package directory with verification
-          Write-Host "Copying ONNX Runtime DLL to package directory with verification..." -ForegroundColor Yellow
+          # Copy ONNX Runtime DLL to package directory
+          Write-Host "Copying ONNX Runtime DLL to package directory..." -ForegroundColor Yellow
           $onnxDll = "../onnxruntime/onnxruntime-win-x64-1.22.1/lib/onnxruntime.dll"
-          Write-Host "ONNX Runtime DLL path: $onnxDll" -ForegroundColor Cyan
 
           if (Test-Path $onnxDll) {
-            Write-Host "ONNX Runtime DLL found at: $onnxDll" -ForegroundColor Green
             $fileSize = (Get-Item $onnxDll).Length
-            Write-Host "ONNX Runtime DLL size: $fileSize bytes" -ForegroundColor Cyan
-            
-            try {
-              # Verify DLL integrity before copying
-              Write-Host "Verifying ONNX Runtime DLL integrity..." -ForegroundColor Yellow
-              
-              # Check if file exists and is accessible
-              if (!(Test-Path $onnxDll)) {
-                throw [System.IO.FileNotFoundException] "ONNX Runtime DLL file not found: $onnxDll"
-              }
-              
-              # Check file size first
-              $fileInfo = Get-Item $onnxDll
-              if ($fileInfo.Length -lt 1024) {
-                throw [System.IO.IOException] "ONNX Runtime DLL file is too small: $($fileInfo.Length) bytes"
-              }
-              
-              Write-Host "ONNX Runtime DLL file size: $($fileInfo.Length) bytes" -ForegroundColor Cyan
-              
-              # Try to read file with error handling
-              $bytes = [System.IO.File]::ReadAllBytes($onnxDll)
-              Write-Host "Read $($bytes.Length) bytes from ONNX Runtime DLL" -ForegroundColor Cyan
-              
-              if ($bytes.Length -ge 64) {
-                $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
-                Write-Host "PE offset: $peOffset" -ForegroundColor Cyan
-                
-                if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
-                  $peSignature = $bytes[$peOffset]
-                  $peSignature2 = $bytes[$peOffset + 1]
-                  Write-Host "PE signature: 0x$($peSignature.ToString('X2')) 0x$($peSignature2.ToString('X2'))" -ForegroundColor Cyan
-                  
-                  if ($peSignature -eq 0x50 -and $peSignature2 -eq 0x45) {
-                    Copy-Item $onnxDll "package/" -Force
-                    $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
-                    Write-Host "Copied verified ONNX Runtime DLL: onnxruntime.dll ($size MB)" -ForegroundColor Green
-                  } else {
-                    Write-Host "ERROR: Invalid PE header in ONNX Runtime DLL (0x$($peSignature.ToString('X2')) 0x$($peSignature2.ToString('X2')))" -ForegroundColor Red
-                    Write-Host "ONNX Runtime DLL appears to be corrupted. This may cause AccessViolationException during execution." -ForegroundColor Red
-                    Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
-                    exit 1
-                  }
-                } else {
-                  Write-Host "ERROR: Invalid PE offset in ONNX Runtime DLL ($peOffset)" -ForegroundColor Red
-                  Write-Host "ONNX Runtime DLL appears to be corrupted. This may cause AccessViolationException during execution." -ForegroundColor Red
-                  Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
-                  exit 1
-                }
-              } else {
-                Write-Host "ERROR: ONNX Runtime DLL is too small ($($bytes.Length) bytes)" -ForegroundColor Red
-                Write-Host "ONNX Runtime DLL appears to be corrupted. This may cause AccessViolationException during execution." -ForegroundColor Red
-                Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
-                exit 1
-              }
-            } catch {
-              Write-Host "WARNING: Could not verify ONNX Runtime DLL: $($_.Exception.Message)" -ForegroundColor Yellow
-              Write-Host "Attempting to copy DLL without verification..." -ForegroundColor Yellow
-              try {
-                Copy-Item $onnxDll "package/" -Force
-                $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
-                Write-Host "Copied ONNX Runtime DLL without verification: onnxruntime.dll ($size MB)" -ForegroundColor Green
-                Write-Host "WARNING: DLL integrity not verified. This may cause issues during execution." -ForegroundColor Yellow
-              } catch {
-                Write-Host "ERROR: Failed to copy ONNX Runtime DLL: $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "ONNX Runtime DLL verification failed. This may cause AccessViolationException during execution." -ForegroundColor Red
-                Write-Host "Please check the ONNX Runtime installation and try again." -ForegroundColor Red
-                exit 1
-              }
-            }
+                        Write-Host "ONNX Runtime DLL found: $fileSize bytes" -ForegroundColor Green
+            Copy-Item $onnxDll "package/" -Force
+            $size = [math]::Round((Get-Item $onnxDll).Length / 1MB, 2)
+            Write-Host "Copied ONNX Runtime DLL: onnxruntime.dll ($size MB)" -ForegroundColor Green
           } else {
-            Write-Host "ERROR: ONNX Runtime DLL not found at: $onnxDll" -ForegroundColor Red
-            Write-Host "Checking for ONNX Runtime DLL in other locations..." -ForegroundColor Yellow
-            
-            # Try to find ONNX Runtime DLL in other locations
-            $onnxSearchPaths = @(
-              "../onnxruntime/onnxruntime-win-x64-1.22.1/lib",
-              "../onnxruntime/onnxruntime-win-x64-1.22.1/bin",
-              "../onnxruntime",
-              "../onnxruntime-win-x64-1.22.1/lib",
-              "../onnxruntime-win-x64-1.22.1/bin",
-              "../onnxruntime/onnxruntime-win-x64-1.22.1",
-              "../onnxruntime-win-x64-1.22.1",
-              "../onnxruntime"
-            )
-            
-            $onnxDllFound = $false
-            foreach ($searchPath in $onnxSearchPaths) {
-              $searchDll = "$searchPath/onnxruntime.dll"
-              if (Test-Path $searchDll) {
-                Write-Host "Found ONNX Runtime DLL at: $searchDll" -ForegroundColor Green
-                Copy-Item $searchDll "package/" -Force
-                $size = [math]::Round((Get-Item $searchDll).Length / 1MB, 2)
-                Write-Host "Copied ONNX Runtime DLL: onnxruntime.dll ($size MB) from $searchPath" -ForegroundColor Green
-                $onnxDllFound = $true
-                break
-              }
-            }
-            
-            if (-not $onnxDllFound) {
-              Write-Host "WARNING: Could not find ONNX Runtime DLL in standard locations" -ForegroundColor Yellow
-              Write-Host "Attempting recursive search..." -ForegroundColor Yellow
-              
-              # Try recursive search
-              $recursiveSearch = Get-ChildItem -Path "../" -Recurse -Filter "onnxruntime.dll" | Select-Object -First 1
-              if ($recursiveSearch) {
-                Write-Host "Found ONNX Runtime DLL via recursive search: $($recursiveSearch.FullName)" -ForegroundColor Green
-                try {
-                  Copy-Item $recursiveSearch.FullName "package/" -Force
-                  $size = [math]::Round((Get-Item $recursiveSearch.FullName).Length / 1MB, 2)
-                  Write-Host "Copied ONNX Runtime DLL: onnxruntime.dll ($size MB) from recursive search" -ForegroundColor Green
-                  $onnxDllFound = $true
-                } catch {
-                  Write-Host "ERROR: Failed to copy ONNX Runtime DLL from recursive search: $($_.Exception.Message)" -ForegroundColor Red
-                }
-              }
-              
-              if (-not $onnxDllFound) {
-                Write-Host "ERROR: Could not find ONNX Runtime DLL in any location" -ForegroundColor Red
-                Write-Host "ONNX Runtime DLL is required for blood pressure estimation. Please check the installation." -ForegroundColor Red
-                Write-Host "Expected locations:" -ForegroundColor Yellow
-                foreach ($searchPath in $onnxSearchPaths) {
-                  Write-Host "  $searchPath/onnxruntime.dll" -ForegroundColor Cyan
-                }
-                Write-Host "Attempting to download ONNX Runtime..." -ForegroundColor Yellow
-                
-                # Try to download ONNX Runtime as fallback
+            Write-Host "ERROR: ONNX Runtime DLL not found" -ForegroundColor Red
+            exit 1
+          }
                 try {
                   $onnxVersion = "1.22.1"
                   $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/onnxruntime-win-x64-$onnxVersion.zip"
@@ -887,22 +722,22 @@ jobs:
           echo '            [MarshalAs(UnmanagedType.LPStr)] string errorsJson' >> Program.cs
           echo '        );' >> Program.cs
           echo '' >> Program.cs
-          echo '        // DLL imports with enhanced error handling' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
+          echo '        // DLL imports with enhanced error handling and memory safety' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true, BestFitMapping = false, ThrowOnUnmappableChar = false)]' >> Program.cs
           echo '        public static extern int InitializeBP([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string modelDir);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true, BestFitMapping = false, ThrowOnUnmappableChar = false)]' >> Program.cs
           echo '        public static extern int StartBloodPressureAnalysisRequest([Out] StringBuilder outBuf, int bufSize,' >> Program.cs
           echo '            [MarshalAs(UnmanagedType.LPStr)] string requestId, int height, int weight, int sex,' >> Program.cs
           echo '            [MarshalAs(UnmanagedType.LPStr)] string moviePath, BPCallback callback);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true, BestFitMapping = false, ThrowOnUnmappableChar = false)]' >> Program.cs
           echo '        public static extern int GetProcessingStatus([Out] StringBuilder outBuf, int bufSize, [MarshalAs(UnmanagedType.LPStr)] string requestId);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true, BestFitMapping = false, ThrowOnUnmappableChar = false)]' >> Program.cs
           echo '        public static extern int GenerateRequestId([Out] StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '' >> Program.cs
-          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true)]' >> Program.cs
+          echo '        [DllImport("BloodPressureDLL.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, SetLastError = true, BestFitMapping = false, ThrowOnUnmappableChar = false)]' >> Program.cs
           echo '        public static extern int GetVersionInfo([Out] StringBuilder outBuf, int bufSize);' >> Program.cs
           echo '    }' >> Program.cs
           echo '' >> Program.cs
@@ -996,25 +831,31 @@ jobs:
           echo '            // Enhanced memory management for stability' >> Program.cs
           echo '            try' >> Program.cs
           echo '            {' >> Program.cs
-                      echo '                // Configure garbage collection for better memory management' >> Program.cs
-            echo '                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
-            echo '                ' >> Program.cs
-            echo '                // Force initial garbage collection' >> Program.cs
-            echo '                GC.Collect();' >> Program.cs
-            echo '                GC.WaitForPendingFinalizers();' >> Program.cs
-            echo '                GC.Collect();' >> Program.cs
-            echo '                ' >> Program.cs
-            echo '                // Set memory pressure to help with large object allocation' >> Program.cs
-            echo '                GC.AddMemoryPressure(1024 * 1024 * 50); // Reduced to 50MB pressure' >> Program.cs
-            echo '                ' >> Program.cs
-            echo '                // Configure for better memory management' >> Program.cs
-            echo '                GC.Collect(2, GCCollectionMode.Forced, true, true);' >> Program.cs
-            echo '                ' >> Program.cs
-            echo '                Console.WriteLine("Memory settings configured for stability");' >> Program.cs
-            echo '                Console.WriteLine($"Initial memory usage: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
-            echo '                ' >> Program.cs
-            echo '                // Configure process for better memory handling' >> Program.cs
-            echo '                Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;' >> Program.cs
+          echo '                // Configure garbage collection for better memory management' >> Program.cs
+          echo '                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                // Force initial garbage collection' >> Program.cs
+          echo '                GC.Collect();' >> Program.cs
+          echo '                GC.WaitForPendingFinalizers();' >> Program.cs
+          echo '                GC.Collect();' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                // Simple memory management without excessive pressure' >> Program.cs
+          echo '                GC.Collect();' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                Console.WriteLine("Memory settings configured for stability");' >> Program.cs
+          echo '                Console.WriteLine($"Initial memory usage: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                // Configure process for better memory handling' >> Program.cs
+          echo '                Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                // Set thread priority for better stability' >> Program.cs
+          echo '                Thread.CurrentThread.Priority = ThreadPriority.Normal;' >> Program.cs
+          echo '                ' >> Program.cs
+          echo '                // Configure for better memory handling' >> Program.cs
+          echo '                AppDomain.CurrentDomain.UnhandledException += (sender, e) =>' >> Program.cs
+          echo '                {' >> Program.cs
+          echo '                    Console.WriteLine($"Unhandled exception: {e.ExceptionObject}");' >> Program.cs
+          echo '                };' >> Program.cs
           echo '            }' >> Program.cs
           echo '            catch (Exception ex)' >> Program.cs
           echo '            {' >> Program.cs
@@ -1283,9 +1124,9 @@ jobs:
           echo '                    return;' >> Program.cs
           echo '                }' >> Program.cs
           echo '' >> Program.cs
-          echo '                // InitializeBP with improved memory management' >> Program.cs
-          echo '                Console.WriteLine("Attempting InitializeBP with improved memory management...");' >> Program.cs
-          echo '                var outBuf = new StringBuilder(1024); // Reduced buffer size for memory efficiency' >> Program.cs
+                    echo '                // InitializeBP with enhanced memory management and error handling' >> Program.cs
+          echo '                Console.WriteLine("Attempting InitializeBP with enhanced memory management...");' >> Program.cs
+          echo '                var outBuf = new StringBuilder(2048); // Increased buffer size for stability' >> Program.cs
           echo '                int result = 0;' >> Program.cs
           echo '                try' >> Program.cs
           echo '                {' >> Program.cs
@@ -1294,10 +1135,11 @@ jobs:
           echo '                    Console.WriteLine($"Using absolute model directory: {absoluteModelDir}");' >> Program.cs
           echo '                    Console.WriteLine($"Model directory exists: {Directory.Exists(absoluteModelDir)}");' >> Program.cs
           echo '' >> Program.cs
-          echo '                    // Check individual model files' >> Program.cs
+          echo '                    // Check individual model files with enhanced verification' >> Program.cs
           echo '                    // Force garbage collection before model file check' >> Program.cs
           echo '                    GC.Collect();' >> Program.cs
           echo '                    GC.WaitForPendingFinalizers();' >> Program.cs
+          echo '                    GC.Collect();' >> Program.cs
           echo '                    var modelFiles = new[] { "diastolicbloodpressure.onnx", "systolicbloodpressure.onnx", "opencv_face_detector.pbtxt", "opencv_face_detector_uint8.pb" };' >> Program.cs
           echo '                    var allModelsExist = true;' >> Program.cs
           echo '                    foreach (var modelFile in modelFiles)' >> Program.cs
@@ -1310,6 +1152,27 @@ jobs:
           echo '                        {' >> Program.cs
           echo '                            allModelsExist = false;' >> Program.cs
           echo '                        }' >> Program.cs
+          echo '                        else' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            // Verify model file integrity' >> Program.cs
+          echo '                            try' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                var modelBytes = File.ReadAllBytes(modelPath);' >> Program.cs
+          echo '                                if (modelBytes.Length < 1024)' >> Program.cs
+          echo '                                {' >> Program.cs
+          echo '                                    Console.WriteLine($"    WARNING: Model file {modelFile} is too small ({modelBytes.Length} bytes)");' >> Program.cs
+          echo '                                }' >> Program.cs
+          echo '                                else' >> Program.cs
+          echo '                                {' >> Program.cs
+          echo '                                    Console.WriteLine($"    Model file {modelFile} verified ({modelBytes.Length} bytes)");' >> Program.cs
+          echo '                                }' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                            catch (Exception ex)' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                Console.WriteLine($"    ERROR: Could not verify model file {modelFile}: {ex.Message}");' >> Program.cs
+          echo '                                allModelsExist = false;' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                        }' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    Console.WriteLine($"All model files exist: {allModelsExist}");' >> Program.cs
           echo '                    if (!allModelsExist)' >> Program.cs
@@ -1318,9 +1181,9 @@ jobs:
           echo '                        return;' >> Program.cs
           echo '                    }' >> Program.cs
           echo '' >> Program.cs
-          echo '                    // Clear buffer before use' >> Program.cs
+          echo '                    // Clear buffer before use with enhanced memory management' >> Program.cs
           echo '                    outBuf.Clear();' >> Program.cs
-          echo '                    outBuf.Capacity = 1024;' >> Program.cs
+          echo '                    outBuf.Capacity = 2048; // Increased for stability' >> Program.cs
           echo '                    Console.WriteLine($"Buffer cleared and capacity set to: {outBuf.Capacity}");' >> Program.cs
           echo '' >> Program.cs
           echo '                    // Call InitializeBP with enhanced memory management and error handling' >> Program.cs
@@ -1330,19 +1193,19 @@ jobs:
           echo '                    Console.WriteLine("About to call InitializeBP...");' >> Program.cs
           echo '                    Console.WriteLine($"Current working directory: {Directory.GetCurrentDirectory()}");' >> Program.cs
           echo '' >> Program.cs
-          echo '                    // Enhanced memory monitoring' >> Program.cs
+          echo '                    // Enhanced memory monitoring with better thresholds' >> Program.cs
           echo '                    var availableMemory = GC.GetTotalMemory(false) / 1024 / 1024;' >> Program.cs
           echo '                    var totalMemory = GC.GetTotalMemory(true) / 1024 / 1024;' >> Program.cs
           echo '                    Console.WriteLine($"Available memory: {availableMemory} MB");' >> Program.cs
           echo '                    Console.WriteLine($"Total memory: {totalMemory} MB");' >> Program.cs
           echo '' >> Program.cs
-          echo '                    // Force garbage collection if memory is low' >> Program.cs
-          echo '                    if (availableMemory < 100)' >> Program.cs
+          echo '                    // Force garbage collection if memory is low with better threshold' >> Program.cs
+          echo '                    if (availableMemory < 200)' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        Console.WriteLine($"WARNING: Low memory detected ({availableMemory} MB). Forcing garbage collection...");' >> Program.cs
-          echo '                        GC.Collect();' >> Program.cs
+          echo '                        GC.Collect(2, GCCollectionMode.Forced, true, true);' >> Program.cs
           echo '                        GC.WaitForPendingFinalizers();' >> Program.cs
-          echo '                        GC.Collect();' >> Program.cs
+          echo '                        GC.Collect(2, GCCollectionMode.Forced, true, true);' >> Program.cs
           echo '                        availableMemory = GC.GetTotalMemory(false) / 1024 / 1024;' >> Program.cs
           echo '                        Console.WriteLine($"Memory after GC: {availableMemory} MB");' >> Program.cs
           echo '                    }' >> Program.cs
@@ -1352,54 +1215,64 @@ jobs:
           echo '                    }' >> Program.cs
           echo '' >> Program.cs
           echo '                    // Add delay to ensure system stability' >> Program.cs
-          echo '                    Thread.Sleep(100);' >> Program.cs
+          echo '                    Thread.Sleep(200);' >> Program.cs
           echo '' >> Program.cs
           echo '                    try' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        // Clear buffer before use to prevent memory corruption' >> Program.cs
           echo '                        outBuf.Clear();' >> Program.cs
-          echo '                        outBuf.Capacity = Math.Min(outBuf.Capacity, 1024); // Limit buffer size' >> Program.cs
+          echo '                        outBuf.Capacity = Math.Min(outBuf.Capacity, 2048); // Increased limit' >> Program.cs
           echo '' >> Program.cs
-                      echo '                        // Enhanced DLL error checking' >> Program.cs
-            echo '                        var lastError = Marshal.GetLastWin32Error();' >> Program.cs
-            echo '                        if (lastError != 0)' >> Program.cs
-            echo '                        {' >> Program.cs
-            echo '                            Console.WriteLine($"WARNING: Previous Win32 error: {lastError}");' >> Program.cs
-            echo '                        }' >> Program.cs
-            echo '                        ' >> Program.cs
-            echo '                        result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
-            echo '                        ' >> Program.cs
-            echo '                        // Check for Win32 errors after call' >> Program.cs
-            echo '                        lastError = Marshal.GetLastWin32Error();' >> Program.cs
-            echo '                        if (lastError != 0)' >> Program.cs
-            echo '                        {' >> Program.cs
-            echo '                            Console.WriteLine($"WARNING: Win32 error after InitializeBP: {lastError}");' >> Program.cs
-            echo '                        }' >> Program.cs
-            echo '                        ' >> Program.cs
-            echo '                        Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
-            echo '                        Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
-            echo '                        ' >> Program.cs
-            echo '                        // Additional validation' >> Program.cs
-            echo '                        if (result != 0)' >> Program.cs
-            echo '                        {' >> Program.cs
-            echo '                            Console.WriteLine($"ERROR: InitializeBP returned non-zero result: {result}");' >> Program.cs
-            echo '                            Console.WriteLine("This usually indicates a problem with model loading or DLL compatibility");' >> Program.cs
-            echo '                        }' >> Program.cs
+          echo '                        // Enhanced DLL error checking' >> Program.cs
+          echo '                        var lastError = Marshal.GetLastWin32Error();' >> Program.cs
+          echo '                        if (lastError != 0)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"WARNING: Previous Win32 error: {lastError}");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        ' >> Program.cs
+          echo '                        // Set process priority for better stability' >> Program.cs
+          echo '                        try' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        catch (Exception ex)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"Warning: Could not set process priority: {ex.Message}");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        ' >> Program.cs
+          echo '                        result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
+          echo '                        ' >> Program.cs
+          echo '                        // Check for Win32 errors after call' >> Program.cs
+          echo '                        lastError = Marshal.GetLastWin32Error();' >> Program.cs
+          echo '                        if (lastError != 0)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"WARNING: Win32 error after InitializeBP: {lastError}");' >> Program.cs
+          echo '                        }' >> Program.cs
+          echo '                        ' >> Program.cs
+          echo '                        Console.WriteLine($"InitializeBP result: {result}");' >> Program.cs
+          echo '                        Console.WriteLine($"InitializeBP output: {outBuf}");' >> Program.cs
+          echo '                        ' >> Program.cs
+          echo '                        // Additional validation' >> Program.cs
+          echo '                        if (result != 0)' >> Program.cs
+          echo '                        {' >> Program.cs
+          echo '                            Console.WriteLine($"ERROR: InitializeBP returned non-zero result: {result}");' >> Program.cs
+          echo '                            Console.WriteLine("This usually indicates a problem with model loading or DLL compatibility");' >> Program.cs
+          echo '                        }' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    catch (AccessViolationException ex)' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        Console.WriteLine($"CRITICAL: AccessViolationException during InitializeBP: {ex.Message}");' >> Program.cs
           echo '                        Console.WriteLine($"Stack trace: {ex.StackTrace}");' >> Program.cs
-          echo '                        Console.WriteLine("Attempting with smaller buffer...");' >> Program.cs
+          echo '                        Console.WriteLine("Attempting with smaller buffer and enhanced error handling...");' >> Program.cs
           echo '                        // Force memory cleanup before retry' >> Program.cs
-          echo '                        GC.Collect();' >> Program.cs
+          echo '                        GC.Collect(2, GCCollectionMode.Forced, true, true);' >> Program.cs
           echo '                        GC.WaitForPendingFinalizers();' >> Program.cs
-          echo '                        GC.Collect();' >> Program.cs
+          echo '                        GC.Collect(2, GCCollectionMode.Forced, true, true);' >> Program.cs
           echo '                        Console.WriteLine($"Memory after cleanup: {GC.GetTotalMemory(false) / 1024 / 1024} MB");' >> Program.cs
           echo '                        try' >> Program.cs
           echo '                        {' >> Program.cs
           echo '                            outBuf.Clear();' >> Program.cs
-          echo '                            outBuf.Capacity = 512;' >> Program.cs
+          echo '                            outBuf.Capacity = 1024;' >> Program.cs
           echo '                            Console.WriteLine($"Retrying with buffer capacity: {outBuf.Capacity}");' >> Program.cs
           echo '                            result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
           echo '                            Console.WriteLine($"InitializeBP with smaller buffer result: {result}");' >> Program.cs
@@ -1408,18 +1281,21 @@ jobs:
           echo '                        catch (Exception ex2)' >> Program.cs
           echo '                        {' >> Program.cs
           echo '                            Console.WriteLine($"CRITICAL: Still failing with smaller buffer: {ex2.Message}");' >> Program.cs
-          echo '                            Console.WriteLine("Trying with minimal buffer...");' >> Program.cs
+          echo '                            Console.WriteLine("Trying with minimal buffer and different approach...");' >> Program.cs
           echo '                            try' >> Program.cs
           echo '                            {' >> Program.cs
           echo '                                outBuf.Clear();' >> Program.cs
-          echo '                                outBuf.Capacity = 256;' >> Program.cs
-          echo '                                result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, absoluteModelDir);' >> Program.cs
-          echo '                                Console.WriteLine($"InitializeBP with minimal buffer result: {result}");' >> Program.cs
-          echo '                                Console.WriteLine($"InitializeBP with minimal buffer output: {outBuf}");' >> Program.cs
+          echo '                                outBuf.Capacity = 512;' >> Program.cs
+          echo '                                // Try with different model directory path' >> Program.cs
+          echo '                                var alternativeModelDir = Path.Combine(Directory.GetCurrentDirectory(), "models");' >> Program.cs
+          echo '                                Console.WriteLine($"Trying alternative model directory: {alternativeModelDir}");' >> Program.cs
+          echo '                                result = BloodPressureEstimator.InitializeBP(outBuf, outBuf.Capacity, alternativeModelDir);' >> Program.cs
+          echo '                                Console.WriteLine($"InitializeBP with alternative path result: {result}");' >> Program.cs
+          echo '                                Console.WriteLine($"InitializeBP with alternative path output: {outBuf}");' >> Program.cs
           echo '                            }' >> Program.cs
           echo '                            catch (Exception ex3)' >> Program.cs
           echo '                            {' >> Program.cs
-          echo '                                Console.WriteLine($"CRITICAL: All buffer sizes failed: {ex3.Message}");' >> Program.cs
+          echo '                                Console.WriteLine($"CRITICAL: All approaches failed: {ex3.Message}");' >> Program.cs
           echo '                                throw; // Re-throw to be caught by outer try-catch' >> Program.cs
           echo '                            }' >> Program.cs
           echo '                        }' >> Program.cs
@@ -1622,12 +1498,13 @@ jobs:
           echo '                }' >> Program.cs
           echo '            }' >> Program.cs
           echo '' >> Program.cs
-          echo '            // Copy models directory with enhanced error handling' >> Program.cs
+          echo '            // Copy models directory with enhanced error handling and verification' >> Program.cs
           echo '            var modelsDir = "../CppBloodPressureDLL/package/models";' >> Program.cs
           echo '            var sourceModelsDir = "../CppBloodPressureDLL/models";' >> Program.cs
+          echo '            var rootModelsDir = "../models";' >> Program.cs
           echo '            ' >> Program.cs
-          echo '            // Try package directory first, then source directory' >> Program.cs
-          echo '            var modelsToCopy = new[] { modelsDir, sourceModelsDir };' >> Program.cs
+          echo '            // Try multiple possible model directories' >> Program.cs
+          echo '            var modelsToCopy = new[] { modelsDir, sourceModelsDir, rootModelsDir };' >> Program.cs
           echo '            var modelsCopied = false;' >> Program.cs
           echo '            ' >> Program.cs
           echo '            foreach (var sourceDir in modelsToCopy)' >> Program.cs
@@ -1643,7 +1520,7 @@ jobs:
           echo '                    var modelFiles = Directory.GetFiles(sourceDir);' >> Program.cs
           echo '                    Console.WriteLine($"Found {modelFiles.Length} model files in {sourceDir}");' >> Program.cs
           echo '                    ' >> Program.cs
-          echo '                    // Verify required models exist' >> Program.cs
+          echo '                    // Verify required models exist with enhanced checking' >> Program.cs
           echo '                    var requiredModels = new[] { "systolicbloodpressure.onnx", "diastolicbloodpressure.onnx", "opencv_face_detector.pbtxt", "opencv_face_detector_uint8.pb" };' >> Program.cs
           echo '                    var allRequiredFound = true;' >> Program.cs
           echo '                    ' >> Program.cs
@@ -1654,6 +1531,25 @@ jobs:
           echo '                        {' >> Program.cs
           echo '                            var fileInfo = new FileInfo(modelPath);' >> Program.cs
           echo '                            Console.WriteLine($"Found required model: {requiredModel} ({fileInfo.Length / 1024} KB)");' >> Program.cs
+          echo '                            ' >> Program.cs
+          echo '                            // Verify model file integrity' >> Program.cs
+          echo '                            try' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                var modelBytes = File.ReadAllBytes(modelPath);' >> Program.cs
+          echo '                                if (modelBytes.Length < 1024)' >> Program.cs
+          echo '                                {' >> Program.cs
+          echo '                                    Console.WriteLine($"  WARNING: Model file {requiredModel} is too small ({modelBytes.Length} bytes)");' >> Program.cs
+          echo '                                }' >> Program.cs
+          echo '                                else' >> Program.cs
+          echo '                                {' >> Program.cs
+          echo '                                    Console.WriteLine($"  Model file {requiredModel} verified ({modelBytes.Length} bytes)");' >> Program.cs
+          echo '                                }' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                            catch (Exception ex)' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                Console.WriteLine($"  ERROR: Could not verify model file {requiredModel}: {ex.Message}");' >> Program.cs
+          echo '                                allRequiredFound = false;' >> Program.cs
+          echo '                            }' >> Program.cs
           echo '                        }' >> Program.cs
           echo '                        else' >> Program.cs
           echo '                        {' >> Program.cs
@@ -1668,38 +1564,66 @@ jobs:
           echo '                        continue;' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    ' >> Program.cs
-          echo '                    // Copy all model files' >> Program.cs
+          echo '                    // Copy all model files with verification' >> Program.cs
           echo '                    foreach (var file in modelFiles)' >> Program.cs
           echo '                    {' >> Program.cs
           echo '                        try' >> Program.cs
           echo '                        {' >> Program.cs
           echo '                            var fileName = Path.GetFileName(file);' >> Program.cs
           echo '                            var destPath = Path.Combine("models", fileName);' >> Program.cs
+          echo '                            ' >> Program.cs
+          echo '                            // Read source file for verification' >> Program.cs
+          echo '                            var sourceBytes = File.ReadAllBytes(file);' >> Program.cs
+          echo '                            ' >> Program.cs
+          echo '                            // Copy file' >> Program.cs
           echo '                            File.Copy(file, destPath, true);' >> Program.cs
-          echo '                            var fileInfo = new FileInfo(file);' >> Program.cs
-          echo '                            Console.WriteLine($"Copied model: {fileName} ({fileInfo.Length / 1024} KB)");' >> Program.cs
+          echo '                            ' >> Program.cs
+          echo '                            // Verify copied file' >> Program.cs
+          echo '                            var destBytes = File.ReadAllBytes(destPath);' >> Program.cs
+          echo '                            if (destBytes.Length == sourceBytes.Length)' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                var fileInfo = new FileInfo(file);' >> Program.cs
+          echo '                                Console.WriteLine($"Copied model: {fileName} ({fileInfo.Length / 1024} KB)");' >> Program.cs
+          echo '                            }' >> Program.cs
+          echo '                            else' >> Program.cs
+          echo '                            {' >> Program.cs
+          echo '                                Console.WriteLine($"ERROR: Model file copy verification failed for {fileName}");' >> Program.cs
+          echo '                                allRequiredFound = false;' >> Program.cs
+          echo '                            }' >> Program.cs
           echo '                        }' >> Program.cs
           echo '                        catch (Exception ex)' >> Program.cs
           echo '                        {' >> Program.cs
           echo '                            Console.WriteLine($"Error copying model {file}: {ex.Message}");' >> Program.cs
+          echo '                            allRequiredFound = false;' >> Program.cs
           echo '                        }' >> Program.cs
           echo '                    }' >> Program.cs
           echo '                    ' >> Program.cs
-          echo '                    modelsCopied = true;' >> Program.cs
-          echo '                    Console.WriteLine("All required models copied successfully!");' >> Program.cs
-          echo '                    break;' >> Program.cs
+          echo '                    if (allRequiredFound)' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        modelsCopied = true;' >> Program.cs
+          echo '                        Console.WriteLine("All required models copied successfully!");' >> Program.cs
+          echo '                        break;' >> Program.cs
+          echo '                    }' >> Program.cs
+          echo '                    else' >> Program.cs
+          echo '                    {' >> Program.cs
+          echo '                        Console.WriteLine("ERROR: Model copy verification failed");' >> Program.cs
+          echo '                        continue;' >> Program.cs
+          echo '                    }' >> Program.cs
           echo '                }' >> Program.cs
           echo '            }' >> Program.cs
           echo '            ' >> Program.cs
           echo '            if (!modelsCopied)' >> Program.cs
           echo '            {' >> Program.cs
-          echo '                Console.WriteLine("ERROR: No models directory found. Cannot proceed with blood pressure estimation.");' >> Program.cs
+          echo '                Console.WriteLine("ERROR: No valid models directory found. Cannot proceed with blood pressure estimation.");' >> Program.cs
           echo '                Console.WriteLine("Required models:");' >> Program.cs
           echo '                Console.WriteLine("- systolicbloodpressure.onnx");' >> Program.cs
           echo '                Console.WriteLine("- diastolicbloodpressure.onnx");' >> Program.cs
           echo '                Console.WriteLine("- opencv_face_detector.pbtxt");' >> Program.cs
           echo '                Console.WriteLine("- opencv_face_detector_uint8.pb");' >> Program.cs
-          echo '                Console.WriteLine("Please ensure these files are available in the CppBloodPressureDLL/models directory.");' >> Program.cs
+          echo '                Console.WriteLine("Please ensure these files are available in one of the following directories:");' >> Program.cs
+          echo '                Console.WriteLine("- CppBloodPressureDLL/package/models");' >> Program.cs
+          echo '                Console.WriteLine("- CppBloodPressureDLL/models");' >> Program.cs
+          echo '                Console.WriteLine("- models/");' >> Program.cs
           echo '                return;' >> Program.cs
           echo '            }' >> Program.cs
           echo '        }' >> Program.cs
@@ -1723,6 +1647,10 @@ jobs:
           echo '    <WarningsAsErrors />' >> BloodPressureTestOptimal.csproj
           echo '    <WarningsNotAsErrors />' >> BloodPressureTestOptimal.csproj
           echo '    <NoWarn>CS1591</NoWarn>' >> BloodPressureTestOptimal.csproj
+          echo '    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>' >> BloodPressureTestOptimal.csproj
+          echo '    <Optimize>true</Optimize>' >> BloodPressureTestOptimal.csproj
+          echo '    <DebugType>none</DebugType>' >> BloodPressureTestOptimal.csproj
+          echo '    <DebugSymbols>false</DebugSymbols>' >> BloodPressureTestOptimal.csproj
           echo '  </PropertyGroup>' >> BloodPressureTestOptimal.csproj
           echo '' >> BloodPressureTestOptimal.csproj
           echo '  <ItemGroup>' >> BloodPressureTestOptimal.csproj
@@ -1902,8 +1830,8 @@ jobs:
             }
           }
 
-          # Copy OpenCV runtime DLL from OpenCV installation
-          Write-Host "Copying OpenCV runtime DLL..." -ForegroundColor Yellow
+          # Copy OpenCV runtime DLL from OpenCV installation with enhanced verification
+          Write-Host "Copying OpenCV runtime DLL with enhanced verification..." -ForegroundColor Yellow
 
           # First, try to find OpenCV DLLs in the extracted OpenCV directory
           $opencvDlls = @(
@@ -1914,7 +1842,7 @@ jobs:
             "opencv_objdetect4.dll"
           )
 
-          # Try multiple possible OpenCV paths
+          # Try multiple possible OpenCV paths with verification
           $opencvPaths = @(
             "vcpkg/installed/x64-windows/bin",
             "vcpkg/installed/x64-windows/debug/bin",
@@ -1925,26 +1853,103 @@ jobs:
           foreach ($dllName in $opencvDlls) {
             $dllFound = $false
             
-            # Try to find DLL in OpenCV paths
+            # Try to find DLL in OpenCV paths with enhanced verification
             foreach ($opencvPath in $opencvPaths) {
               $fullPath = "$opencvPath/$dllName"
               if (Test-Path $fullPath) {
-                Copy-Item $fullPath "test_bp_estimation_optimal/" -Force
-                $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
-                Write-Host "Copied OpenCV DLL: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
-                $dllFound = $true
-                break
+                try {
+                  # Read source DLL for verification
+                  $sourceBytes = [System.IO.File]::ReadAllBytes($fullPath)
+                  
+                  # Verify PE header
+                  if ($sourceBytes.Length -ge 64) {
+                    $peOffset = [System.BitConverter]::ToInt32($sourceBytes, 60)
+                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $sourceBytes.Length) {
+                      if ($sourceBytes[$peOffset] -eq 0x50 -and $sourceBytes[$peOffset + 1] -eq 0x45) {
+                        # Valid PE header found - verify machine type
+                        $machine = [System.BitConverter]::ToUInt16($sourceBytes, $peOffset + 4)
+                        if ($machine -eq 0x8664) { # x64
+                          # Copy with verification
+                          Copy-Item $fullPath "test_bp_estimation_optimal/" -Force
+                          
+                          # Verify copied DLL
+                          $destPath = "test_bp_estimation_optimal/$dllName"
+                          if (Test-Path $destPath) {
+                            $destBytes = [System.IO.File]::ReadAllBytes($destPath)
+                            if ($destBytes.Length -eq $sourceBytes.Length) {
+                              $size = [math]::Round((Get-Item $fullPath).Length / 1MB, 2)
+                              Write-Host "Copied verified OpenCV DLL: $dllName ($size MB) from $opencvPath" -ForegroundColor Green
+                              $dllFound = $true
+                              break
+                            } else {
+                              Write-Host "ERROR: Copy verification failed for $dllName" -ForegroundColor Red
+                              Remove-Item $destPath -Force -ErrorAction SilentlyContinue
+                            }
+                          }
+                        } else {
+                          Write-Host "WARNING: Wrong architecture for $dllName (0x$($machine.ToString('X')))" -ForegroundColor Yellow
+                        }
+                      } else {
+                        Write-Host "WARNING: Invalid PE header in $fullPath" -ForegroundColor Yellow
+                      }
+                    } else {
+                      Write-Host "WARNING: Invalid PE offset in $fullPath" -ForegroundColor Yellow
+                    }
+                  } else {
+                    Write-Host "WARNING: DLL too small: $fullPath" -ForegroundColor Yellow
+                  }
+                } catch {
+                  Write-Host "WARNING: Could not verify $fullPath: $($_.Exception.Message)" -ForegroundColor Yellow
+                }
               }
             }
             
-            # If not found in OpenCV paths, try recursive search
+            # If not found in OpenCV paths, try recursive search with verification
             if (-not $dllFound) {
-              $opencvDll = Get-ChildItem -Path "opencv" -Recurse -Filter $dllName | Select-Object -First 1
+              Write-Host "Searching recursively for $dllName..." -ForegroundColor Yellow
+              $opencvDll = Get-ChildItem -Path "vcpkg" -Recurse -Filter $dllName | Select-Object -First 1
               if ($opencvDll) {
-                Copy-Item $opencvDll.FullName "test_bp_estimation_optimal/" -Force
-                $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
-                Write-Host "Copied OpenCV DLL: $dllName ($size MB) from recursive search" -ForegroundColor Green
-                $dllFound = $true
+                try {
+                  # Enhanced DLL integrity verification
+                  $sourceBytes = [System.IO.File]::ReadAllBytes($opencvDll.FullName)
+                  
+                  # Verify PE header
+                  if ($sourceBytes.Length -ge 64) {
+                    $peOffset = [System.BitConverter]::ToInt32($sourceBytes, 60)
+                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $sourceBytes.Length) {
+                      if ($sourceBytes[$peOffset] -eq 0x50 -and $sourceBytes[$peOffset + 1] -eq 0x45) {
+                        $machine = [System.BitConverter]::ToUInt16($sourceBytes, $peOffset + 4)
+                        if ($machine -eq 0x8664) { # x64
+                          Copy-Item $opencvDll.FullName "test_bp_estimation_optimal/" -Force
+                          
+                          # Verify copied DLL
+                          $destPath = "test_bp_estimation_optimal/$dllName"
+                          if (Test-Path $destPath) {
+                            $destBytes = [System.IO.File]::ReadAllBytes($destPath)
+                            if ($destBytes.Length -eq $sourceBytes.Length) {
+                              $size = [math]::Round((Get-Item $opencvDll.FullName).Length / 1MB, 2)
+                              Write-Host "Copied verified OpenCV DLL: $dllName ($size MB) from recursive search" -ForegroundColor Green
+                              $dllFound = $true
+                            } else {
+                              Write-Host "ERROR: Copy verification failed for $dllName from recursive search" -ForegroundColor Red
+                              Remove-Item $destPath -Force -ErrorAction SilentlyContinue
+                            }
+                          }
+                        } else {
+                          Write-Host "WARNING: Wrong architecture for $dllName from recursive search (0x$($machine.ToString('X')))" -ForegroundColor Yellow
+                        }
+                      } else {
+                        Write-Host "WARNING: Invalid PE header in $($opencvDll.FullName)" -ForegroundColor Yellow
+                      }
+                    } else {
+                      Write-Host "WARNING: Invalid PE offset in $($opencvDll.FullName)" -ForegroundColor Yellow
+                    }
+                  } else {
+                    Write-Host "WARNING: DLL too small: $($opencvDll.FullName)" -ForegroundColor Yellow
+                  }
+                } catch {
+                  Write-Host "WARNING: Could not verify $($opencvDll.FullName): $($_.Exception.Message)" -ForegroundColor Yellow
+                }
               } else {
                 Write-Host "WARNING: OpenCV DLL not found: $dllName" -ForegroundColor Yellow
               }
@@ -2215,38 +2220,72 @@ jobs:
             # Enhanced test execution with multiple fallback options
             Write-Host "Attempting test execution..." -ForegroundColor Yellow
             
-                      # Pre-test DLL verification
-          Write-Host "Performing pre-test DLL verification..." -ForegroundColor Yellow
-          $criticalDlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
-          foreach ($dll in $criticalDlls) {
-            if (Test-Path $dll) {
-              try {
-                $bytes = [System.IO.File]::ReadAllBytes($dll)
-                if ($bytes.Length -ge 64) {
-                  $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
-                  if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
-                    if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
-                      $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
-                      $arch = if ($machine -eq 0x8664) { "x64" } elseif ($machine -eq 0x14c) { "x86" } else { "Unknown(0x$($machine.ToString('X'))" }
-                      Write-Host "  ${dll}: $arch architecture" -ForegroundColor Green
+            # Pre-test DLL verification with enhanced integrity checking
+            Write-Host "Performing pre-test DLL verification..." -ForegroundColor Yellow
+            $criticalDlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
+            $dllVerificationPassed = $true
+            foreach ($dll in $criticalDlls) {
+              if (Test-Path $dll) {
+                try {
+                  $bytes = [System.IO.File]::ReadAllBytes($dll)
+                  if ($bytes.Length -ge 64) {
+                    $peOffset = [System.BitConverter]::ToInt32($bytes, 60)
+                    if ($peOffset -ge 0 -and $peOffset + 6 -lt $bytes.Length) {
+                      if ($bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45) {
+                        $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+                        $arch = if ($machine -eq 0x8664) { "x64" } elseif ($machine -eq 0x14c) { "x86" } else { "Unknown(0x$($machine.ToString('X'))" }
+                        Write-Host "  ${dll}: $arch architecture" -ForegroundColor Green
+                      } else {
+                        Write-Host "  ${dll}: Invalid PE header" -ForegroundColor Red
+                        $dllVerificationPassed = $false
+                      }
                     } else {
-                      Write-Host "  ${dll}: Invalid PE header" -ForegroundColor Red
+                      Write-Host "  ${dll}: Invalid PE offset" -ForegroundColor Red
+                      $dllVerificationPassed = $false
                     }
+                  } else {
+                    Write-Host "  ${dll}: File too small" -ForegroundColor Red
+                    $dllVerificationPassed = $false
                   }
+                } catch {
+                  Write-Host "  ${dll}: Error reading PE header" -ForegroundColor Red
+                  $dllVerificationPassed = $false
                 }
-              } catch {
-                Write-Host "  ${dll}: Error reading PE header" -ForegroundColor Red
+              } else {
+                Write-Host "  ${dll}: NOT FOUND" -ForegroundColor Red
+                $dllVerificationPassed = $false
               }
-            } else {
-              Write-Host "  ${dll}: NOT FOUND" -ForegroundColor Red
             }
-          }
 
-          # Option 1: Use dotnet run (without TimeoutSec for compatibility)
-          $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release", "--no-restore" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
-          $exitCode = $process.ExitCode
+            if (-not $dllVerificationPassed) {
+              Write-Host "WARNING: DLL verification failed. Test may fail." -ForegroundColor Yellow
+            }
+
+            # Check model files before test
+            Write-Host "Checking model files before test..." -ForegroundColor Yellow
+            $modelFiles = @("models/diastolicbloodpressure.onnx", "models/systolicbloodpressure.onnx", "models/opencv_face_detector.pbtxt", "models/opencv_face_detector_uint8.pb")
+            $modelVerificationPassed = $true
+            foreach ($model in $modelFiles) {
+              if (Test-Path $model) {
+                $size = [math]::Round((Get-Item $model).Length / 1KB, 2)
+                Write-Host "  Found: $model ($size KB)" -ForegroundColor Green
+              } else {
+                Write-Host "  ERROR: $model not found" -ForegroundColor Red
+                $modelVerificationPassed = $false
+              }
+            }
+
+            if (-not $modelVerificationPassed) {
+              Write-Host "ERROR: Model verification failed. Cannot proceed with test." -ForegroundColor Red
+              exit 1
+            }
+
+            # Option 1: Use dotnet run with enhanced error handling
+            Write-Host "Attempting dotnet run..." -ForegroundColor Yellow
+            $process = Start-Process -FilePath "dotnet" -ArgumentList "run", "-c", "Release", "--no-restore" -WorkingDirectory $PWD -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt" -NoNewWindow -PassThru -Wait
+            $exitCode = $process.ExitCode
             
-            # 出力ファイルを読み取り
+            # Read output files with enhanced error handling
             if (Test-Path "test_output.txt") {
               $output = Get-Content "test_output.txt" -Raw
             }
@@ -2275,41 +2314,46 @@ jobs:
             $exitCode = 1
             $output = "Test execution failed with exception: $($_.Exception.Message)"
             
-            # Fallback: DLL existence test only
-            Write-Host "Running fallback DLL existence test..." -ForegroundColor Yellow
+            # Enhanced fallback: DLL existence test with detailed diagnostics
+            Write-Host "Running enhanced fallback DLL existence test..." -ForegroundColor Yellow
             try {
-              $output = "Fallback test method:`n"
+              $output = "Enhanced fallback test method:`n"
               $output += "Testing DLL existence and basic functionality...`n"
               
-              # DLLファイルの存在確認
+              # DLLファイルの存在確認 with enhanced diagnostics
               $dlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
               foreach ($dll in $dlls) {
                 if (Test-Path $dll) {
                   $size = [math]::Round((Get-Item $dll).Length / 1MB, 2)
                   $output += "  Found: $dll ($size MB)`n"
+                  
+                  # Additional DLL diagnostics
+                  try {
+                    $fileInfo = Get-Item $dll
+                    $output += "    Last modified: $($fileInfo.LastWriteTime)`n"
+                    $output += "    Attributes: $($fileInfo.Attributes)`n"
+                  } catch {
+                    $output += "    Error getting file info: $($_.Exception.Message)`n"
+                  }
                 } else {
                   $output += "  ERROR: $dll not found`n"
                 }
               }
               
-              # 簡単なテストを実行（DLLの存在確認のみ）
-              $output += "`nSimple test output:`n"
-              $output += "Testing DLL existence and basic file operations...`n"
-              
-              # DLLファイルの詳細情報を取得
-              $dlls = @("BloodPressureDLL.dll", "opencv_core4.dll", "opencv_dnn4.dll", "onnxruntime.dll")
-              foreach ($dll in $dlls) {
-                if (Test-Path $dll) {
-                  $fileInfo = Get-Item $dll
-                  $size = [math]::Round($fileInfo.Length / 1MB, 2)
-                  $output += "  Found: $dll ($size MB) - Last modified: $($fileInfo.LastWriteTime)`n"
+              # Model file diagnostics
+              $output += "`nModel file diagnostics:`n"
+              $modelFiles = @("models/diastolicbloodpressure.onnx", "models/systolicbloodpressure.onnx", "models/opencv_face_detector.pbtxt", "models/opencv_face_detector_uint8.pb")
+              foreach ($model in $modelFiles) {
+                if (Test-Path $model) {
+                  $size = [math]::Round((Get-Item $model).Length / 1KB, 2)
+                  $output += "  Found: $model ($size KB)`n"
                 } else {
-                  $output += "  ERROR: $dll not found`n"
+                  $output += "  ERROR: $model not found`n"
                 }
               }
               
             } catch {
-              $output += "`nFallback test also failed: $($_.Exception.Message)"
+              $output += "`nEnhanced fallback test also failed: $($_.Exception.Message)"
             }
           }
 
